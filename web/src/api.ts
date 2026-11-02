@@ -315,6 +315,51 @@ export interface SupabaseResponse {
   notCreated: Array<{ projectId: string; localPath: string; localDir: string; ports: { api?: number; db?: number; studio?: number } }>;
 }
 
+export interface DockerPort { private: number; public: number; type: string; http: boolean }
+export interface DockerContainer {
+  id: string;
+  name: string;
+  image: string;
+  state: string;
+  status: string;
+  health: 'healthy' | 'unhealthy' | 'starting' | null;
+  exitCode: number | null;
+  createdAt: string;
+  since: string | null;
+  ports: DockerPort[];
+  group: string | null;
+  service: string | null;
+  workingDir: string | null;
+  supabaseProject: string | null;
+  project: { id: string; name: string } | null;
+}
+export interface DockerStats {
+  id: string;
+  cpu: number | null;
+  memUsed: number;
+  memLimit: number;
+  netRx: number | null;
+  netTx: number | null;
+  blkRead: number | null;
+  blkWrite: number | null;
+  pids: number | null;
+}
+export interface DockerOverview {
+  engine: {
+    status: 'ok' | 'absent' | 'stopped' | 'error';
+    error?: string;
+    name: string | null;
+    version: string | null;
+    cpus: number | null;
+    memTotal: number | null;
+    app: 'Docker' | 'OrbStack' | null;
+  };
+  containers: DockerContainer[];
+  images: { count: number; size: number } | null;
+  volumes: { count: number; size: number | null } | null;
+}
+export type DockerAction = 'start' | 'stop' | 'restart';
+
 export interface GithubRepo {
   fullName: string;
   name: string;
@@ -412,6 +457,11 @@ export const api = {
   killTerminal: (sid: string) => request(`/api/terminals/${sid}/kill`, { method: 'POST' }),
   closeTerminal: (sid: string) => request(`/api/terminals/${sid}`, { method: 'DELETE' }),
   supabase: () => request<SupabaseResponse>('/api/supabase'),
+  docker: () => request<DockerOverview>('/api/docker'),
+  dockerStats: () => request<DockerStats[]>('/api/docker/stats'),
+  dockerAction: (id: string, action: DockerAction) => request<{ ok: true; ids: string[] }>(`/api/docker/containers/${encodeURIComponent(id)}/${action}`, { method: 'POST' }),
+  dockerGroupAction: (group: string, action: DockerAction) => request<{ ok: true; ids: string[] }>(`/api/docker/groups/${encodeURIComponent(group)}/${action}`, { method: 'POST' }),
+  dockerOpen: () => request<{ ok: true; app: string }>('/api/docker/open', { method: 'POST' }),
   github: (force = false) => request<GithubResponse>(`/api/github${force ? '?force=1' : ''}`),
   ports: () => request<PortsResponse>('/api/ports'),
   freePorts: () => request<FreeReport>('/api/ports/free', { method: 'POST' }),

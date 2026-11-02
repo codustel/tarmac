@@ -4,7 +4,7 @@ import os from 'node:os';
 import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
 import { fileURLToPath } from 'node:url';
-import Fastify from 'fastify';
+import Fastify, { type FastifyReply } from 'fastify';
 import fastifyStatic from '@fastify/static';
 import fastifyWebsocket from '@fastify/websocket';
 import type { WebSocket } from 'ws';
@@ -13,6 +13,7 @@ import { displayPath, scan, type Project, type ScanResult } from './scanner.js';
 import { gitFetch, gitStatus, pool, type GitStatus } from './git.js';
 import { cachedGithubRepos, invalidateGithubCache, listGithubRepos } from './github.js';
 import { listSupabase } from './supabase.js';
+import { dockerAct, dockerOverview, dockerStats, isComposeProject, isContainerId, isDockerAction, openDockerApp, setDockerProjects } from './docker.js';
 import { processes } from './processes.js';
 import { SYSTEM_ID, terminals } from './terminals.js';
 import { EDITOR_APPS, matchOpen, openEditorFolders } from './editors.js';
@@ -690,6 +691,34 @@ app.get('/api/supabase', async () => {
       .filter((c) => !res.instances.some((i) => i.projectId === c.projectId))
       .map((c) => ({ projectId: c.projectId, localPath: c.relPath, localDir: c.dir, ports: c.ports })),
   };
+});
+
+// ─── API : Docker ───────────────────────────────────────────────────────────
+// Lecture : moteur, conteneurs, stats (sondées par l'UI seulement quand la vue est affichée).
+// Actions : liste blanche start / stop / restart, identifiant ou projet compose vérifiés dans la liste du moteur.
+setDockerProjects(() => lastScan.projects);
+app.get('/api/docker', async () => dockerOverview());
+app.get('/api/docker/stats', async () => dockerStats());
+const dockerFail = (reply: FastifyReply, e: any) => {
+  if (e.code === 'ENOTFOUND') return reply.code(404).send({ error: msg('api.dockerUnknownContainer') });
+  if (e.code === 'ENOENT' || e.code === 'ECONNREFUSED') return reply.code(503).send({ error: msg('api.dockerUnavailable') });
+  if (e.code === 'ENOAPP') return reply.code(404).send({ error: msg('api.dockerNoApp') });
+  return reply.code(502).send({ error: msg('api.dockerFailed', { error: e.message }) });
+};
+app.post<{ Params: { id: string; action: string } }>('/api/docker/containers/:id/:action', async (req, reply) => {
+  const { id, action } = req.params;
+  if (!isDockerAction(action)) return reply.code(400).send({ error: msg('api.unknownAction') });
+  if (!isContainerId(id)) return reply.code(400).send({ error: msg('api.badRequest') });
+  try { return await dockerAct(action, { id }); } catch (e) { return dockerFail(reply, e); }
+});
+app.post<{ Params: { group: string; action: string } }>('/api/docker/groups/:group/:action', async (req, reply) => {
+  const { group, action } = req.params;
+  if (!isDockerAction(action)) return reply.code(400).send({ error: msg('api.unknownAction') });
+  if (!isComposeProject(group)) return reply.code(400).send({ error: msg('api.badRequest') });
+  try { return await dockerAct(action, { group }); } catch (e) { return dockerFail(reply, e); }
+});
+app.post('/api/docker/open', async (_req, reply) => {
+  try { return await openDockerApp(); } catch (e) { return dockerFail(reply, e); }
 });
 
 app.get<{ Querystring: { force?: string } }>('/api/github', async (req, reply) => {

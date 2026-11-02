@@ -161,3 +161,8 @@ body {
 @media (prefers-reduced-motion: reduce) { .tl .tl-bar > i { transition: none; } }
 .ide-progress > div { width: 30%; height: 100%; animation: ide-progress 1.2s linear infinite; }
 @keyframes ide-progress { from { transform: translateX(-100%); } to { transform: translateX(340%); } }
+
+/* Logo de la barre latérale : dans l'espace libre sous la navigation, masqué quand il ne tient pas
+   (fenêtre basse) plutôt que de pousser la navigation ou de faire défiler la barre. */
+.sidebar-logo { container-type: size; }
+@container (max-height: 76px) { .sidebar-logo > img { display: none !important; } }

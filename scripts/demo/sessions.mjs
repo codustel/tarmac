@@ -272,6 +272,21 @@ export function fixtures(home) {
         },
       ],
     },
+    // Vue Docker : conteneurs compose de rocket-api et launch-queue, un conteneur isolé ; les stacks Supabase
+    // (mission-control, orbit-insights) sont ajoutées par le serveur à partir de `supabase.instances`.
+    docker: {
+      engine: { name: 'Docker Desktop 4.40.0', version: '28.0.4', cpus: 12, memTotalGb: 16 },
+      images: { count: 23, sizeGb: 9.6 },
+      volumes: { count: 9, sizeGb: 1.8 },
+      containers: [
+        { name: 'rocket-api-postgres-1', image: 'postgres:17-alpine', project: 'rocket-api', service: 'postgres', workingDir: '~/Developer/rocket-api', state: 'running', health: 'healthy', since: '-5h', ports: [[5432, 55432]], cpu: 1.6, memMb: 74, netMb: [38, 52] },
+        { name: 'rocket-api-redis-1', image: 'redis:7-alpine', project: 'rocket-api', service: 'redis', workingDir: '~/Developer/rocket-api', state: 'running', health: 'healthy', since: '-5h', ports: [[6379, 56379]], cpu: 0.7, memMb: 12, memLimitMb: 256, netMb: [9, 14] },
+        { name: 'rocket-api-adminer-1', image: 'adminer:5', project: 'rocket-api', service: 'adminer', workingDir: '~/Developer/rocket-api', state: 'running', since: '-5h', ports: [[8080, 8088]], cpu: 0.1, memMb: 21, netMb: [2, 6] },
+        { name: 'launch-queue-redis-1', image: 'redis:7-alpine', project: 'launch-queue', service: 'redis', workingDir: '~/Developer/launch-queue', state: 'running', health: 'healthy', since: '-26h', ports: [[6379, 56380]], cpu: 2.3, memMb: 18, memLimitMb: 512, netMb: [212, 188] },
+        { name: 'launch-queue-worker-1', image: 'orbit/launch-queue-worker:0.9.0', project: 'launch-queue', service: 'worker', workingDir: '~/Developer/launch-queue', state: 'exited', exitCode: 1, since: '-40m' },
+        { name: 'mailpit', image: 'axllent/mailpit:v1.21', state: 'running', since: '-2d', ports: [[8025, 8025], [1025, 1025]], cpu: 0.2, memMb: 23, netMb: [1, 1] },
+      ],
+    },
     android: {
       sdk: '~/Library/Android/sdk',
       checks: [

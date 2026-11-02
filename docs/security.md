@@ -30,6 +30,7 @@ you. To use your projects from another device, use Claude Code's Remote Control 
 | Consoles | An interactive shell (PTY) as your user, in the project folder. This is the reason Tarmac must stay local. |
 | Git menu | Only the ~30 listed commands go through the API (no free command); branch names are validated and commit messages are length-limited, then both are shell-quoted. Destructive commands ask for confirmation in the UI. |
 | Supabase menu | Only the listed `supabase` CLI commands, with the same validation. |
+| Docker view | Reads the engine socket (containers, stats, disk usage). Actions are limited to start, stop and restart, on a container ID or compose project that must appear in the engine's own list; nothing else (no `exec`, `rm`, prune, pull). Stop and restart ask for confirmation. |
 | Editor, README, files | Reads and writes are confined to the project folder; the README image route only serves image files of the project. |
 | Ports | "Free ports" stops what still listens on ports Tarmac assigned to apps (never Docker or Tarmac itself). |
 | Clone | `gh repo clone` or `git clone` into the clone folder. |

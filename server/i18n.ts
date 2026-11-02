@@ -39,6 +39,10 @@ const M = {
   'api.demoMode': { en: 'Not available in demo mode', fr: 'Indisponible en mode démo' },
   'api.outsideRoots': { en: 'Path outside the scanned folders', fr: 'Chemin hors des dossiers scannés' },
   'api.openFailed': { en: 'Could not open: {error}', fr: 'Ouverture impossible : {error}' },
+  'api.dockerUnavailable': { en: 'Docker is not running', fr: 'Docker n’est pas démarré' },
+  'api.dockerUnknownContainer': { en: 'Unknown container', fr: 'Conteneur inconnu' },
+  'api.dockerFailed': { en: 'Docker: {error}', fr: 'Docker : {error}' },
+  'api.dockerNoApp': { en: 'Neither Docker Desktop nor OrbStack is installed', fr: 'Ni Docker Desktop ni OrbStack ne sont installés' },
   'api.notRunning': { en: 'The project is not running.', fr: 'Le projet n’est pas lancé.' },
   'api.notFound': { en: 'Not found', fr: 'Introuvable' },
   // ── Réglages

@@ -52,6 +52,8 @@ are `git fetch` on your repositories and the GitHub API with your own token, to 
   and the `/suivi` skill, mirrored in a claude.ai artifact and in a `Todolist/` copy in the repo.
 - **GitHub**: your repositories and organizations, which ones are cloned, "Clone" in one click (`gh` or SSH).
 - **Local Supabase**: running instances, Studio, Mailpit, API and Postgres URLs, linked project.
+- **Docker**: containers grouped by compose project with state, health, ports, CPU and memory, linked project,
+  start / stop / restart (Docker Desktop, OrbStack, Colima).
 - **And**: README rendering, built-in editor and source control view, open in VS Code / Cursor / Zed / WebStorm,
   projects open in VS Code flagged, production URL per app, favorites, Android emulators, light / dark theme,
   English and French interface.
@@ -60,7 +62,7 @@ are `git fetch` on your repositories and the GitHub API with your own token, to 
 
 - macOS (Apple silicon or Intel).
 - [Node.js](https://nodejs.org) **22.13 or later** (Tarmac uses the built-in `node:sqlite`).
-- Optional: [GitHub CLI](https://cli.github.com) (`gh`), Docker Desktop / OrbStack / Colima (local Supabase),
+- Optional: [GitHub CLI](https://cli.github.com) (`gh`), Docker Desktop / OrbStack / Colima (Docker view, local Supabase),
   [Claude Code](https://claude.com/claude-code) (sessions and Claude Todolist).
 
 ## Install
@@ -117,6 +119,7 @@ are not affected by an update.
 - [Claude Code](docs/claude-code.md): sessions, Remote Control, MCP server, Claude Todolist and `/suivi`.
 - [Security](docs/security.md): what Tarmac listens on, what it can run, what needs `sudo` and why.
 - [Troubleshooting](docs/troubleshooting.md): `~/Documents` access, port 80, installed app, migration.
+- [Windows (WSL 2)](docs/windows.md): running Tarmac on Windows, and what does not work there.
 - [Uninstall](docs/uninstall.md).
 
 ## FAQ
@@ -124,7 +127,8 @@ are not affected by an update.
 **Why `tarmac.localhost`?** Browsers treat `localhost` and `*.localhost` as secure contexts, which the installed app
 (PWA), the service worker and the clipboard need. `http://tarmac.test` also works and redirects there.
 
-**Does it work on Linux or Windows?** No: Tarmac relies on launchd, `lsof` and macOS paths.
+**Does it work on Windows or Linux?** Tarmac is built for macOS and `tarmac setup` only runs there. On Windows it
+runs inside WSL 2, started by hand, with a few features missing: see [Windows (WSL 2)](docs/windows.md).
 
 **Port 80 is already used.** Tarmac then stays on `http://tarmac.localhost:7777`; nothing else changes.
 

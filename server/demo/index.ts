@@ -8,9 +8,11 @@
  * (Finder, éditeur) et la connexion `gh` ne font rien ; le clonage (`gh`) et Claude Code sont de faux outils.
  * Sans la variable, toutes les fonctions de ce module renvoient `null` : aucun changement de comportement.
  */
+import crypto from 'node:crypto';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
+import type { DockerAction, DockerContainer, DockerOverview, DockerStats } from '../docker.js';
 
 export interface DemoRepo {
   name: string;
@@ -41,6 +43,35 @@ export interface DemoAvd {
   serial: string | null;
 }
 
+/** Conteneur Docker factice (hors stacks Supabase, déduites de `supabase.instances`). */
+export interface DemoContainer {
+  name: string;
+  image: string;
+  /** Projet compose et service ; `workingDir` (`~` accepté) relie le conteneur au projet Tarmac. */
+  project?: string;
+  service?: string;
+  workingDir?: string;
+  state: 'running' | 'exited';
+  health?: 'healthy' | 'unhealthy' | 'starting';
+  exitCode?: number;
+  /** Démarrage (en cours) ou arrêt : ISO ou décalage (`-3h`). */
+  since: string;
+  /** [port interne, port publié]. */
+  ports?: Array<[number, number]>;
+  /** CPU moyen (% d'un cœur), mémoire utilisée et limite (Mo), réseau reçu / envoyé (Mo). */
+  cpu?: number;
+  memMb?: number;
+  memLimitMb?: number;
+  netMb?: [number, number];
+}
+
+export interface DemoDocker {
+  engine: { name: string; version: string; cpus: number; memTotalGb: number };
+  containers: DemoContainer[];
+  images: { count: number; sizeGb: number };
+  volumes: { count: number; sizeGb: number };
+}
+
 export interface DemoFixtures {
   machine: string;
   hostname: string;
@@ -48,6 +79,8 @@ export interface DemoFixtures {
   github: { login: string; repos: DemoRepo[] };
   ghCli: { installed: boolean; loggedIn: boolean; user: string | null };
   supabase: { instances: DemoSupabaseInstance[] };
+  /** Vue Docker (facultatif : sans elle, seules les stacks Supabase apparaissent). */
+  docker?: DemoDocker;
   android: {
     sdk: string;
     checks: Array<{ id: string; label: string; ok: boolean; detail: string }>;
@@ -163,3 +196,119 @@ export function demoBinDir(d: DemoFixtures, tool: 'claude' | 'gh'): string {
   if (!fs.statSync(bin).isFile()) throw new Error(`Demo mode: ${bin} missing`);
   return path.dirname(claude);
 }
+
+// ─── Docker ─────────────────────────────────────────────────────────────────
+const MB = 1024 * 1024;
+const GB = 1024 * MB;
+const demoId = (name: string) => crypto.createHash('sha256').update(`tarmac-demo:${name}`).digest('hex');
+/** Actions faites dans la démo (démarrer / arrêter) : gardées en mémoire, jamais transmises au moteur. */
+const dockerOverrides = new Map<string, { state: 'running' | 'exited'; since: string }>();
+
+/** Ports internes des services Supabase (même correspondance que la détection réelle). */
+const SB_PORTS: Record<string, Array<[number, keyof DemoSupabaseInstance['ports']]>> = {
+  studio: [[3000, 'studio']], kong: [[8000, 'api']], db: [[5432, 'db']], inbucket: [[9000, 'mail']],
+};
+/** Charge crédible des services Supabase au repos (CPU %, Mo). */
+const SB_LOAD: Record<string, [number, number]> = {
+  db: [1.2, 182], analytics: [2.4, 312], studio: [0.4, 148], kong: [0.3, 96], realtime: [0.8, 164], storage: [0.2, 88],
+  auth: [0.1, 24], rest: [0.1, 18], meta: [0.2, 92], pooler: [0.6, 132], edge_runtime: [0.3, 78], vector: [0.5, 46], inbucket: [0.1, 14],
+};
+
+/** Tous les conteneurs factices : ceux des fixtures, plus les stacks Supabase (`supabase_<service>_<projet>`). */
+export function demoContainers(d: DemoFixtures): DemoContainer[] {
+  const sb = d.supabase.instances.flatMap((i) => i.services.map((s): DemoContainer => {
+    const running = s.state === 'running';
+    const [cpu, mem] = SB_LOAD[s.name] ?? [0.2, 40];
+    return {
+      name: `supabase_${s.name}_${i.projectId}`,
+      image: s.image,
+      project: i.projectId,
+      service: s.name,
+      state: running ? 'running' : 'exited',
+      ...(s.status.includes('(healthy)') ? { health: 'healthy' as const } : {}),
+      ...(running ? {} : { exitCode: 0 }),
+      since: running ? '-3h' : '-2d',
+      ports: (SB_PORTS[s.name] ?? []).map(([priv, key]) => [priv, i.ports[key]] as [number, number]),
+      cpu, memMb: mem, netMb: [mem / 9, mem / 14],
+    };
+  }));
+  return [...(d.docker?.containers ?? []), ...sb];
+}
+
+const supabaseOf = (d: DemoFixtures, c: DemoContainer) => (d.supabase.instances.some((i) => i.projectId === c.project && c.name.startsWith('supabase_')) ? c.project! : null);
+
+/** Vue d'ensemble factice, au format de `dockerOverview` (avec les montages pour relier les projets). */
+export function demoDockerOverview(d: DemoFixtures, now = Date.now()): Omit<DockerOverview, 'containers'> & { containers: Array<DockerContainer & { mounts: string[] }> } {
+  const e = d.docker?.engine ?? { name: 'Docker Desktop 4.40.0', version: '28.0.4', cpus: 12, memTotalGb: 16 };
+  return {
+    engine: { status: 'ok', name: e.name, version: e.version, cpus: e.cpus, memTotal: Math.round(e.memTotalGb * GB), app: 'Docker' },
+    containers: demoContainers(d).map((c) => {
+      const id = demoId(c.name);
+      const o = dockerOverrides.get(id);
+      const state = o?.state ?? c.state;
+      const since = demoDate(o?.since ?? c.since, now);
+      const health = state === 'running' ? c.health ?? null : null;
+      const exitCode = state === 'exited' ? (o ? 0 : c.exitCode ?? 0) : null;
+      const supabaseProject = supabaseOf(d, c);
+      return {
+        id,
+        name: c.name,
+        image: c.image,
+        state,
+        status: state === 'running' ? `Up${health ? ` (${health === 'starting' ? 'health: starting' : health})` : ''}` : `Exited (${exitCode})`,
+        health,
+        exitCode,
+        createdAt: demoDate('-30d', now),
+        since,
+        // `http` : calculé par server/docker.ts (même règle que pour le vrai moteur).
+        ports: state === 'running' ? (c.ports ?? []).map(([priv, pub]) => ({ private: priv, public: pub, type: 'tcp', http: false })) : [],
+        group: c.project ?? null,
+        service: c.service ?? null,
+        workingDir: c.workingDir ? expand(c.workingDir) : null,
+        supabaseProject,
+        project: null,
+        mounts: [],
+      };
+    }),
+    images: d.docker ? { count: d.docker.images.count, size: Math.round(d.docker.images.sizeGb * GB) } : null,
+    volumes: d.docker ? { count: d.docker.volumes.count, size: Math.round(d.docker.volumes.sizeGb * GB) } : null,
+  };
+}
+
+/** Statistiques factices des conteneurs en cours : valeurs des fixtures avec une légère variation dans le temps. */
+export function demoDockerStats(d: DemoFixtures, now = Date.now()): DockerStats[] {
+  const t = now / 1000;
+  return demoContainers(d).flatMap((c, i) => {
+    const id = demoId(c.name);
+    if ((dockerOverrides.get(id)?.state ?? c.state) !== 'running') return [];
+    const wave = (k: number, amp: number) => 1 + amp * Math.sin(t / (6 + k) + i * 1.7);
+    const mem = (c.memMb ?? 40) * wave(3, 0.04);
+    const [rx, tx] = c.netMb ?? [mem / 10, mem / 15];
+    const uptime = Math.max(60, (now - Date.parse(demoDate(dockerOverrides.get(id)?.since ?? c.since, now))) / 1000);
+    const grow = Math.min(1, uptime / (6 * 3600));
+    return [{
+      id,
+      cpu: Math.round((c.cpu ?? 0.3) * wave(0, 0.35) * 100) / 100,
+      memUsed: Math.round(mem * MB),
+      memLimit: Math.round((c.memLimitMb ?? (d.docker?.engine.memTotalGb ?? 16) * 1024) * MB),
+      netRx: Math.round(rx * grow * MB + (t % 600) * 1024),
+      netTx: Math.round(tx * grow * MB + (t % 600) * 700),
+      blkRead: Math.round(mem * 0.6 * MB),
+      blkWrite: Math.round(mem * 0.25 * grow * MB),
+      pids: 4 + (i % 9),
+    }];
+  });
+}
+
+/** Action factice : change l'état affiché, sans aucun appel au moteur réel. */
+export function demoDockerAction(d: DemoFixtures, action: DockerAction, target: { id: string } | { group: string }) {
+  const all = demoContainers(d).map((c) => ({ c, id: demoId(c.name) }));
+  const hits = 'id' in target ? all.filter((x) => x.id === target.id || (target.id.length >= 12 && x.id.startsWith(target.id))) : all.filter((x) => x.c.project === target.group);
+  if (!hits.length) throw Object.assign(new Error('unknown container'), { code: 'ENOTFOUND', status: 404 });
+  const at = new Date().toISOString();
+  for (const { id } of hits) dockerOverrides.set(id, { state: action === 'stop' ? 'exited' : 'running', since: at });
+  return { ok: true as const, ids: hits.map((x) => x.id) };
+}
+
+/** Réinitialise les actions de démo (tests). */
+export const resetDemoDocker = () => dockerOverrides.clear();

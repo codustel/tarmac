@@ -1,12 +1,13 @@
 import { Suspense, lazy, useCallback, useEffect, useRef, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { Boxes, Code2, Database, FolderTree, Languages, ListChecks, Monitor, Moon, Network, RefreshCw, Search, Settings2, Smartphone, Sun } from 'lucide-react';
+import { Boxes, Code2, Container, Database, FolderTree, Languages, ListChecks, Monitor, Moon, Network, RefreshCw, Search, Settings2, Smartphone, Sun } from 'lucide-react';
 import { api } from './api';
 import { useConnected } from './socket';
 import { Button, GithubIcon, Kbd, copy, cx, tildify, timeAgo, useToast } from './ui';
 import { ProjectsView, isActive } from './views/ProjectsView';
 import { ProjectPanel, defaultTab, hasBrowser, type PanelTab } from './views/ProjectPanel';
 import { SupabaseView } from './views/SupabaseView';
+import { DockerView } from './views/DockerView';
 import { GithubView } from './views/GithubView';
 import { PortsView } from './views/PortsView';
 import { AndroidView } from './views/AndroidView';
@@ -20,9 +21,9 @@ import { useLanguageSetting, useT, type TKey } from './i18n';
 // Monaco est lourd : chargé seulement à la première ouverture de l'IDE.
 const IdeView = lazy(() => import('./ide/IdeView'));
 
-type Tab = 'projects' | 'ide' | 'todolist' | 'claude' | 'supabase' | 'github' | 'ports' | 'android' | 'settings';
+type Tab = 'projects' | 'ide' | 'todolist' | 'claude' | 'supabase' | 'docker' | 'github' | 'ports' | 'android' | 'settings';
 type Theme = 'light' | 'dark' | 'system';
-const TABS: Tab[] = ['projects', 'ide', 'todolist', 'claude', 'supabase', 'github', 'ports', 'android', 'settings'];
+const TABS: Tab[] = ['projects', 'ide', 'todolist', 'claude', 'supabase', 'docker', 'github', 'ports', 'android', 'settings'];
 
 /** Titre et sous-titre de chaque onglet : clés common.title.<tab> / common.sub.<tab>. */
 const TITLES = Object.fromEntries(TABS.map((t) => [t, [`common.title.${t}`, `common.sub.${t}`]])) as Record<Tab, [TKey, TKey]>;
@@ -179,6 +180,8 @@ function Main({ terminals }: { terminals: import('./api').TerminalSession[] }) {
     { id: 'todolist', label: t('common.nav.todolist'), icon: <ListChecks className="size-4" />, count: suivi.data ? suivi.data.reduce((a, p) => a + p.counts.toTest, 0) || undefined : undefined },
     { id: 'claude', label: t('common.nav.claude'), icon: <ClaudeIcon size={15} />, count: terminals.filter((x) => x.kind === 'claude').length || undefined, live: terminals.filter((x) => x.kind === 'claude' && x.status === 'running').length },
     { id: 'supabase', label: t('common.nav.supabase'), icon: <Database className="size-4" />, count: supabase.data?.instances.length, live: supabase.data?.instances.filter((i) => i.status !== 'stopped').length },
+    // Pas de compteur : la vue Docker n'interroge le moteur que lorsqu'elle est affichée.
+    { id: 'docker', label: t('common.nav.docker'), icon: <Container className="size-4" /> },
     { id: 'github', label: t('common.nav.github'), icon: <GithubIcon className="size-4" />, count: github.data?.remoteOnly.length },
     { id: 'ports', label: t('common.nav.ports'), icon: <Network className="size-4" />, count: ports.data?.assigned.length },
     { id: 'android', label: t('common.nav.android'), icon: <Smartphone className="size-4" />, count: android.data?.avds.length, live: android.data?.avds.filter((a) => a.state !== 'stopped').length },
@@ -221,11 +224,16 @@ function Main({ terminals }: { terminals: import('./api').TerminalSession[] }) {
             )}
           </div>
         </div>
-        <nav className="flex-1 p-2 space-y-0.5">
+        <nav className="shrink-0 p-2 space-y-0.5">
           {nav.map((n) => <NavButton key={n.id} n={n} />)}
           <div className="my-2 border-t border-line" />
           <NavButton n={{ id: 'settings', label: t('common.nav.settings'), icon: <Settings2 className="size-4" /> }} />
         </nav>
+        {/* Logo discret dans l'espace libre ; masqué (index.css) quand la fenêtre est trop basse. */}
+        <div className="sidebar-logo flex min-h-0 flex-1 items-end justify-center overflow-hidden px-6" aria-hidden="true">
+          <img src="/tarmac-logo-light.svg" alt="" draggable={false} className="mb-4 w-[116px] select-none opacity-35 dark:hidden" />
+          <img src="/tarmac-logo-dark.svg" alt="" draggable={false} className="mb-4 hidden w-[116px] select-none opacity-30 dark:block" />
+        </div>
         <div className="border-t border-line p-3 space-y-3">
           <div className="space-y-1 text-[11px] text-faint">
             {meta.data?.roots.map((r) => (
@@ -296,6 +304,7 @@ function Main({ terminals }: { terminals: import('./api').TerminalSession[] }) {
             {tab === 'projects' && <ProjectsView projects={list} query={query} onOpen={openProject} selectedId={selected?.id ?? null} />}
             {tab === 'claude' && <ClaudeSessionsView terminals={terminals} activeId={claudeTab} onActive={setClaudeTab} projects={list} />}
             {tab === 'supabase' && <SupabaseView data={supabase.data} query={query} />}
+            {tab === 'docker' && <DockerView query={query} onOpenProject={(id) => { openProject(id); setTab('projects'); }} />}
             {tab === 'github' && <GithubView data={github.data} error={github.error} query={query} />}
             {tab === 'ports' && <PortsView data={ports.data} apps={list} />}
             {tab === 'android' && <AndroidView data={android.data} />}

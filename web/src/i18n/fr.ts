@@ -6,9 +6,10 @@ import projects from './fr/projects';
 import ide from './fr/ide';
 import github from './fr/github';
 import supabase from './fr/supabase';
+import docker from './fr/docker';
 import android from './fr/android';
 
 /** Dictionnaire français : référence des clés (`en` est typé dessus). Un fichier par espace de noms. */
-export const fr = { ...common, ...settings, ...claude, ...todolist, ...projects, ...ide, ...github, ...supabase, ...android };
+export const fr = { ...common, ...settings, ...claude, ...todolist, ...projects, ...ide, ...github, ...supabase, ...docker, ...android };
 export type Dict = typeof fr;
 export type TKey = keyof Dict;
