@@ -267,7 +267,10 @@ function Main({ terminals }: { terminals: import('./api').TerminalSession[] }) {
             </div>
           </div>
           <div className="text-center text-[10px] leading-relaxed text-faint">
-            {t('common.license')}<br />© 2026 Ismaël Belaaouad
+            {t('common.license')}<br />© 2026 Ismaël Belaaouad · Codustel<br />
+            <a href="https://www.linkedin.com/in/codustel/" target="_blank" rel="noreferrer" className="hover:text-fg">LinkedIn</a>
+            {' · '}
+            <a href="https://x.com/ismael_b_ai" target="_blank" rel="noreferrer" className="hover:text-fg">X</a>
           </div>
         </div>
       </aside>

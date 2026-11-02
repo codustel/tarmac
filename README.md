@@ -13,6 +13,8 @@
   <img src="https://img.shields.io/badge/platform-macOS-lightgrey" alt="macOS">
 </p>
 
+<p align="center">Created by <strong>Ismaël Belaaouad</strong> · Codustel — <a href="https://www.linkedin.com/in/codustel/">LinkedIn</a> · <a href="https://x.com/ismael_b_ai">X</a></p>
+
 <p align="center"><a href="README.fr.md">Version française</a></p>
 
 **Tarmac for Claude Code** is a local dashboard for macOS. It finds every project in your code folders, starts and
@@ -145,6 +147,6 @@ security issues privately ([SECURITY.md](SECURITY.md)).
 
 ## License
 
-[MIT](LICENSE) — © 2026 Ismaël Belaaouad
+[MIT](LICENSE) — © 2026 Ismaël Belaaouad ([Codustel](https://www.linkedin.com/in/codustel/)). Follow the project on [LinkedIn](https://www.linkedin.com/in/codustel/) and [X](https://x.com/ismael_b_ai).
 
 Not affiliated with Anthropic. Claude and Claude Code are trademarks of Anthropic.

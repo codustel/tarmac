@@ -29,7 +29,10 @@
     "url": "git+https://github.com/codustel/tarmac.git"
   },
   "license": "MIT",
-  "author": "Ismaël Belaaouad",
+  "author": {
+    "name": "Ismaël Belaaouad (Codustel)",
+    "url": "https://www.linkedin.com/in/codustel/"
+  },
   "bin": {
     "tarmac": "dist/cli/tarmac.js"
   },

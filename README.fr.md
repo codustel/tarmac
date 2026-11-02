@@ -7,6 +7,8 @@
 
 <p align="center"><strong>Tarmac — la piste locale de vos projets et de vos sessions Claude Code</strong></p>
 
+<p align="center">Créé par <strong>Ismaël Belaaouad</strong> · Codustel — <a href="https://www.linkedin.com/in/codustel/">LinkedIn</a> · <a href="https://x.com/ismael_b_ai">X</a></p>
+
 <p align="center"><a href="README.md">English version</a></p>
 
 **Tarmac for Claude Code** est un tableau de bord local pour macOS. Il trouve tous les projets de vos dossiers de
@@ -148,6 +150,6 @@ failles de sécurité se signalent en privé ([SECURITY.md](SECURITY.md)).
 
 ## Licence
 
-[MIT](LICENSE) — © 2026 Ismaël Belaaouad
+[MIT](LICENSE) — © 2026 Ismaël Belaaouad ([Codustel](https://www.linkedin.com/in/codustel/)). Suivez le projet sur [LinkedIn](https://www.linkedin.com/in/codustel/) et [X](https://x.com/ismael_b_ai).
 
 Projet indépendant, non affilié à Anthropic. Claude et Claude Code sont des marques d'Anthropic.
