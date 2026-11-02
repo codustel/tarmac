@@ -1,0 +1,33 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  check:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 9
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm typecheck
+      - name: Test
+        run: DATA_DIR="$RUNNER_TEMP/tarmac-data" pnpm test
+      - run: pnpm build
+      - name: Package and smoke-test the CLI
+        run: |
+          npm pack
+          npm install -g --prefix "$RUNNER_TEMP/prefix" codustel-tarmac-*.tgz
+          "$RUNNER_TEMP/prefix/bin/tarmac" --version
+          "$RUNNER_TEMP/prefix/bin/tarmac" setup --dry-run --no-claude

@@ -1,0 +1,99 @@
+{
+  "name": "@codustel/tarmac",
+  "version": "1.0.0",
+  "private": false,
+  "type": "module",
+  "description": "The local runway for your projects and your Claude Code sessions: a macOS dashboard to run and watch your dev apps, local Supabase, GitHub repos and Claude Code sessions.",
+  "keywords": [
+    "tarmac",
+    "dashboard",
+    "developer-tools",
+    "dev-server",
+    "localhost",
+    "macos",
+    "launchd",
+    "monorepo",
+    "claude",
+    "claude-code",
+    "mcp",
+    "supabase",
+    "github",
+    "pwa"
+  ],
+  "homepage": "https://github.com/codustel/tarmac#readme",
+  "bugs": {
+    "url": "https://github.com/codustel/tarmac/issues"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/codustel/tarmac.git"
+  },
+  "license": "MIT",
+  "author": "Ismaël Belaaouad",
+  "bin": {
+    "tarmac": "dist/cli/tarmac.js"
+  },
+  "files": [
+    "dist/",
+    "scripts/mcp-install.sh",
+    "scripts/suivi-install.sh",
+    "templates/",
+    "claude/",
+    "LICENSE",
+    "README.md"
+  ],
+  "os": [
+    "darwin"
+  ],
+  "engines": {
+    "node": ">=22.13"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "scripts": {
+    "dev": "concurrently -k -n api,web -c blue,magenta \"tsx watch server/index.ts\" \"vite\"",
+    "build": "vite build && tsup",
+    "start": "node dist/server/index.js",
+    "typecheck": "tsc --noEmit",
+    "test": "node --import tsx --test \"server/**/*.test.ts\" \"web/src/**/*.test.ts\" \"cli/**/*.test.ts\"",
+    "tarmac": "node dist/cli/tarmac.js",
+    "prepack": "npm run build"
+  },
+  "dependencies": {
+    "@fastify/static": "^10.1.8",
+    "@fastify/websocket": "^11.3.4",
+    "@lydell/node-pty": "1.2.0-beta.18",
+    "@modelcontextprotocol/sdk": "1.32.2",
+    "fastify": "^5.12.7",
+    "smol-toml": "^1.9.1",
+    "zod": "^4.6.7"
+  },
+  "devDependencies": {
+    "@tailwindcss/typography": "^0.5.20",
+    "@tailwindcss/vite": "^4.3.3",
+    "@tanstack/react-query": "^5.105.0",
+    "@types/node": "^26.6.6",
+    "@types/react": "^19.3.0",
+    "@types/react-dom": "^19.3.0",
+    "@types/ws": "^8.18.2",
+    "@vitejs/plugin-react": "^6.1.2",
+    "@xterm/addon-fit": "^0.11.0",
+    "@xterm/xterm": "^6.0.0",
+    "ansi_up": "^6.0.6",
+    "clsx": "^2.1.1",
+    "concurrently": "^10.0.6",
+    "dompurify": "^3.4.17",
+    "lucide-react": "^1.65.0",
+    "marked": "^18.1.2",
+    "monaco-editor": "0.57.0",
+    "react": "^19.3.1",
+    "react-dom": "^19.3.1",
+    "simple-icons": "^16.36.0",
+    "tailwindcss": "^4.3.3",
+    "tsup": "^9.0.0",
+    "tsx": "^4.23.15",
+    "typescript": "^7.0.2",
+    "vite": "^8.3.5"
+  }
+}

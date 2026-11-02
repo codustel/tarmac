@@ -1,0 +1,42 @@
+name: Bug report
+description: Something does not work as expected
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for the report! Security issue? Please report it privately instead (see SECURITY.md).
+        Before posting logs, check that they contain no token, private path or project name you want to keep private.
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened
+      description: What you did, what you expected, what happened instead.
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      placeholder: |
+        1. …
+        2. …
+  - type: textarea
+    id: doctor
+    attributes:
+      label: Output of `tarmac doctor`
+      render: text
+    validations:
+      required: true
+  - type: textarea
+    id: logs
+    attributes:
+      label: End of `tarmac logs` (if relevant)
+      render: text
+  - type: input
+    id: versions
+    attributes:
+      label: Versions
+      placeholder: Tarmac 1.0.0, macOS 15.x, Node 22.x, Chrome / Safari / Firefox
+    validations:
+      required: true

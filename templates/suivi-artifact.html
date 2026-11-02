@@ -1,0 +1,527 @@
+<title>__TITLE__</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+__FONTS__
+<!-- Gabarit commun des artefacts de suivi (Tarmac, templates/suivi-artifact.html). Le projet, sa marque
+     et son thème sont injectés ci-dessous ; les tâches vivent dans la db de l'artefact (collection `tasks`). -->
+<script type="application/json" id="suivi-config">__CONFIG__</script>
+<!-- Textes de l'interface en français et en anglais (le contenu des tâches n'est pas traduit). -->
+<script type="application/json" id="suivi-i18n">
+{
+"fr":{
+  "theme.label":"Thème",
+  "theme.auto":"Auto",
+  "theme.light":"Clair",
+  "theme.dark":"Sombre",
+  "summary.label":"Avancement global",
+  "summary.pct":"{n} %",
+  "summary.loading":"Chargement des tâches…",
+  "summary.count_one":"{done} étape faite sur {total}",
+  "summary.count_other":"{done} étapes faites sur {total}",
+  "summary.none":"Aucune tâche pour l’instant",
+  "summary.left":"Reste environ {time}",
+  "toTest.count":"À tester : {n}",
+  "toTest.countTitle":"Traitées, en attente de ton test",
+  "sync.connecting":"Connexion à Tarmac…",
+  "sync.on":"Synchronisé avec Tarmac · {ago}",
+  "sync.err":"Tarmac injoignable pour l’instant : les coches restent ici et repartiront à la prochaine synchro.",
+  "sync.off":"Hors Tarmac (téléphone ou navigateur) : les coches seront reprises au prochain /suivi sync.",
+  "ago.now":"à l’instant",
+  "ago.min":"il y a {n} min",
+  "ago.h":"il y a {n} h",
+  "backup.hint":"Une copie du suivi est gardée dans le dépôt, sous <code>Todolist/{file}</code>. Ce bouton t’en télécharge une à toi, telle qu’elle est maintenant.",
+  "backup.button":"⬇ Sauvegarder en JSON",
+  "backup.saved":"✓ Sauvegardé",
+  "backup.empty":"Rien à sauvegarder : les tâches ne sont pas encore chargées.",
+  "backup.failed":"La sauvegarde n’a pas abouti ({code}). Réessaie, ou demande-la à Claude.",
+  "error":"erreur",
+  "next.label":"Prochaine étape",
+  "next.open":"Voir la procédure",
+  "filters.label":"Filtres",
+  "filters.all":"Toutes",
+  "filters.todo":"À faire",
+  "filters.totest":"À tester",
+  "filters.done":"Faites",
+  "filters.everyone":"Tout le monde",
+  "who.toi":"👤 Toi",
+  "who.ensemble":"🤝 Ensemble",
+  "who.claude":"🤖 Claude",
+  "phases.placeholder":"Les tâches du suivi vont s'afficher ici.",
+  "phases.none":"Aucune tâche pour l’instant : Claude les ajoute au fil des demandes.",
+  "phase.complete":"✓ terminée",
+  "task.markDone":"Marquer {num} comme faite",
+  "task.toTest":"À tester",
+  "task.toTestTitle":"Traitée, en attente de ton test — clique quand tu l'as testée",
+  "task.tested":"✓ Testé",
+  "task.testedTitle":"Testée — clique pour la remettre à tester",
+  "task.testedOnTitle":"Testée le {date} — clique pour la remettre à tester",
+  "task.why":"Pourquoi : {text}",
+  "task.check":"✓ Vérifier",
+  "task.note":"Note (optionnel)",
+  "task.notePlaceholder":"Ex. : valeur saisie le…",
+  "task.doneAt":"Fait le {date}",
+  "time.min":"{n} min",
+  "time.h":"{h} h",
+  "time.hm":"{h} h {m}",
+  "filter.banner_one":"Filtre actif : {n} tâche affichée sur {total}.",
+  "filter.banner_other":"Filtre actif : {n} tâches affichées sur {total}.",
+  "filter.clear":"Tout afficher",
+  "filter.none":"Aucune tâche ne correspond à ces filtres.",
+  "save.unavailable":"Enregistrement indisponible dans cette vue : ouvre la page dans claude.ai.",
+  "save.unavailableCheck":"Enregistrement indisponible dans cette vue : ouvre la page dans claude.ai pour cocher.",
+  "save.testFailed":"Le test n’a pas pu être enregistré ({code}). Réessaie.",
+  "save.checkFailed":"La case n’a pas pu être enregistrée ({code}). Réessaie dans un instant.",
+  "save.noteFailed":"La note n’a pas pu être enregistrée. Réessaie.",
+  "load.slow":"Le suivi met du temps à se charger…",
+  "load.unavailable":"Avancement non disponible dans cette vue (aperçu ou accès en lecture seule).",
+  "load.lost":"Connexion à l’avancement perdue ({code}). Recharge la page."
+},
+"en":{
+  "theme.label":"Theme",
+  "theme.auto":"Auto",
+  "theme.light":"Light",
+  "theme.dark":"Dark",
+  "summary.label":"Overall progress",
+  "summary.pct":"{n}%",
+  "summary.loading":"Loading tasks…",
+  "summary.count_one":"{done} step done of {total}",
+  "summary.count_other":"{done} steps done of {total}",
+  "summary.none":"No tasks yet",
+  "summary.left":"About {time} left",
+  "toTest.count":"To test: {n}",
+  "toTest.countTitle":"Done, waiting for you to test",
+  "sync.connecting":"Connecting to Tarmac…",
+  "sync.on":"Synced with Tarmac · {ago}",
+  "sync.err":"Can’t reach Tarmac right now: your checks stay here and will go out with the next sync.",
+  "sync.off":"Outside Tarmac (phone or browser): your checks will be picked up by the next /suivi sync.",
+  "ago.now":"just now",
+  "ago.min":"{n} min ago",
+  "ago.h":"{n} h ago",
+  "backup.hint":"A copy of the tracker is kept in the repository, under <code>Todolist/{file}</code>. This button downloads one for you, exactly as it is now.",
+  "backup.button":"⬇ Save as JSON",
+  "backup.saved":"✓ Saved",
+  "backup.empty":"Nothing to save: the tasks haven’t loaded yet.",
+  "backup.failed":"The backup didn’t go through ({code}). Try again, or ask Claude for it.",
+  "error":"error",
+  "next.label":"Next step",
+  "next.open":"Show the steps",
+  "filters.label":"Filters",
+  "filters.all":"All",
+  "filters.todo":"To do",
+  "filters.totest":"To test",
+  "filters.done":"Done",
+  "filters.everyone":"Everyone",
+  "who.toi":"👤 You",
+  "who.ensemble":"🤝 Together",
+  "who.claude":"🤖 Claude",
+  "phases.placeholder":"The tracker’s tasks will show up here.",
+  "phases.none":"No tasks yet: Claude adds them as you make requests.",
+  "phase.complete":"✓ complete",
+  "task.markDone":"Mark {num} as done",
+  "task.toTest":"To test",
+  "task.toTestTitle":"Done, waiting for you to test — click once you’ve tested it",
+  "task.tested":"✓ Tested",
+  "task.testedTitle":"Tested — click to put it back to test",
+  "task.testedOnTitle":"Tested on {date} — click to put it back to test",
+  "task.why":"Why: {text}",
+  "task.check":"✓ Check",
+  "task.note":"Note (optional)",
+  "task.notePlaceholder":"E.g. value entered on…",
+  "task.doneAt":"Done on {date}",
+  "time.min":"{n} min",
+  "time.h":"{h}h",
+  "time.hm":"{h}h {m}m",
+  "filter.banner_one":"Filter on: {n} task shown of {total}.",
+  "filter.banner_other":"Filter on: {n} tasks shown of {total}.",
+  "filter.clear":"Show all",
+  "filter.none":"No tasks match these filters.",
+  "save.unavailable":"Saving isn’t available in this view: open the page on claude.ai.",
+  "save.unavailableCheck":"Saving isn’t available in this view: open the page on claude.ai to check tasks off.",
+  "save.testFailed":"The test couldn’t be saved ({code}). Try again.",
+  "save.checkFailed":"The checkbox couldn’t be saved ({code}). Try again in a moment.",
+  "save.noteFailed":"The note couldn’t be saved. Try again.",
+  "load.slow":"The tracker is taking a while to load…",
+  "load.unavailable":"Progress isn’t available in this view (preview or read-only access).",
+  "load.lost":"Lost the connection to progress ({code}). Reload the page."
+}
+}
+</script>
+<style id="suivi-theme">__THEME__</style>
+<style>
+*{box-sizing:border-box}
+body{background:var(--bg);color:var(--fg);font-family:var(--body);font-size:15px;line-height:1.5;margin:0}
+.wrap{max-width:920px;margin:0 auto;padding-block:28px 64px;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));display:flex;flex-direction:column;gap:24px}
+header{display:flex;flex-direction:column;gap:6px;border-top:4px solid var(--primary);padding-top:20px}
+.top{display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap}
+.brand{font-family:var(--display);font-weight:800;letter-spacing:.32em;font-size:13px;color:var(--primary)}
+.modes{display:inline-flex;border:1px solid var(--line);border-radius:99px;padding:2px;background:var(--surface)}
+.modes button{font:500 12px var(--body);color:var(--muted);background:none;border:0;border-radius:99px;padding:4px 10px;cursor:pointer}
+.modes button[aria-pressed="true"]{background:var(--primary-soft);color:var(--primary-text)}
+h1{font-family:var(--display);font-weight:700;font-size:clamp(24px,4vw,32px);line-height:1.15;margin:0;text-wrap:balance}
+.sub{color:var(--muted);margin:0;max-width:62ch}
+.summary{display:grid;grid-template-columns:1fr auto;gap:12px 20px;align-items:center;background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:18px 20px}
+.bar{grid-column:1/-1;height:10px;background:var(--surface-2);border-radius:99px;overflow:hidden}
+.bar>i{display:block;height:100%;background:linear-gradient(90deg,var(--primary),color-mix(in srgb,var(--primary) 70%,#fff));width:0;transition:width .4s}
+.big{font-family:var(--display);font-weight:700;font-size:22px;font-variant-numeric:tabular-nums}
+.meta{color:var(--muted);font-size:13px;font-variant-numeric:tabular-nums;text-align:right}
+.tcount{margin-top:8px;font:600 13px var(--body);color:var(--amber);background:var(--amber-soft);border:1px solid var(--amber-line);border-radius:6px;padding:3px 10px;cursor:pointer;font-variant-numeric:tabular-nums}
+.tcount:hover{border-color:var(--amber)}
+.sync{grid-column:1/-1;display:flex;gap:8px;align-items:center;font-size:12.5px;color:var(--muted)}
+.sync i{width:8px;height:8px;border-radius:99px;background:var(--muted);flex:none}
+.sync.on i{background:var(--ok)}.sync.err i{background:var(--amber)}
+.next{background:var(--primary-soft);border:1px solid color-mix(in srgb,var(--primary) 35%,transparent);border-radius:14px;padding:16px 18px;display:flex;flex-direction:column;gap:8px}
+.next .lbl{font-size:12px;letter-spacing:.12em;text-transform:uppercase;color:var(--primary-text);font-weight:600}
+.next .t{font-family:var(--display);font-weight:700;font-size:18px}
+.next button{align-self:flex-start}
+.filters{display:flex;flex-wrap:wrap;gap:8px}
+.chip{font:500 13px var(--body);color:var(--muted);background:var(--surface);border:1px solid var(--line);border-radius:99px;padding:6px 12px;cursor:pointer}
+.chip[aria-pressed="true"]{color:var(--fg);border-color:var(--primary);background:var(--primary-soft)}
+.chip.chip-totest[aria-pressed="true"]{color:var(--amber);border-color:var(--amber);background:var(--amber-soft)}
+.chip:focus-visible,button:focus-visible,summary:focus-visible,input:focus-visible,textarea:focus-visible{outline:2px solid var(--cyan);outline-offset:2px}
+.phase{background:var(--surface);border:1px solid var(--line);border-radius:14px;overflow:hidden}
+.phase+.phase{margin-top:12px}
+.phase>summary{list-style:none;cursor:pointer;display:grid;grid-template-columns:auto 1fr auto;gap:14px;align-items:center;padding:14px 18px}
+.phase>summary::-webkit-details-marker{display:none}
+.pnum{font-family:var(--display);font-weight:800;font-size:24px;color:var(--primary);font-variant-numeric:tabular-nums;min-width:1.4em}
+.ptitle{font-family:var(--display);font-weight:700;font-size:16px;min-width:0}
+.pcount{font-size:13px;color:var(--muted);font-variant-numeric:tabular-nums;white-space:nowrap}
+.phase.complete .pcount{color:var(--ok)}
+.tasks{border-top:1px solid var(--line)}
+.task{border-bottom:1px solid var(--line)}
+.task:last-child{border-bottom:none}
+.row{display:grid;grid-template-columns:auto auto 1fr auto;gap:12px;align-items:center;padding:12px 18px}
+.row input[type=checkbox]{width:22px;height:22px;accent-color:var(--primary);cursor:pointer;margin:0}
+.num{font-family:var(--mono);font-size:14px;font-weight:600;color:var(--primary-text);background:var(--primary-soft);border-radius:6px;padding:2px 7px;min-width:3.2em;text-align:center;white-space:nowrap}
+.ttl{min-width:0;background:none;border:0;color:var(--fg);font:500 15px var(--body);text-align:left;cursor:pointer;padding:0}
+.task.done .ttl{color:var(--muted);text-decoration:line-through;text-decoration-color:color-mix(in srgb,var(--muted) 60%,transparent)}
+.tags{display:flex;gap:6px;align-items:center;flex-wrap:wrap;justify-content:flex-end}
+.pill{font-size:12px;font-weight:600;border-radius:99px;padding:3px 9px;white-space:nowrap}
+.who-toi{background:var(--primary-soft);color:var(--primary-text)}
+.who-ensemble{background:var(--amber-soft);color:var(--amber)}
+.who-claude{background:var(--cyan-soft);color:var(--cyan)}
+/* Badge « À tester » : contour ambre et coins carrés, pour ne pas se confondre avec la pastille pleine « Ensemble ». */
+.badge-totest{font-size:11px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--amber);border:1px solid var(--amber);border-radius:6px;padding:2px 7px;white-space:nowrap}
+button.badge-totest{background:none;font-family:var(--body);cursor:pointer}
+button.badge-totest:hover{background:var(--amber-soft)}
+/* Badge « Testé » : même forme, en vert ; un clic sur « À tester » le pose, un clic sur « Testé » l'enlève. */
+.badge-tested{font:700 11px var(--body);letter-spacing:.06em;text-transform:uppercase;color:var(--ok);background:var(--ok-soft);border:1px solid var(--ok);border-radius:6px;padding:2px 7px;white-space:nowrap;cursor:pointer}
+.time{color:var(--muted);font-size:12px;font-variant-numeric:tabular-nums;white-space:nowrap}
+.detail{padding:4px 18px 18px 68px;display:flex;flex-direction:column;gap:12px}
+.detail[hidden]{display:none!important}
+.why{color:var(--muted);margin:0}
+.detail ol{margin:0;padding-left:1.3em;display:flex;flex-direction:column;gap:6px;max-width:72ch;overflow-wrap:anywhere}
+code{font-family:var(--mono);font-size:13px;background:var(--surface-2);border:1px solid var(--line);border-radius:6px;padding:1px 5px;overflow-wrap:anywhere}
+.check{background:var(--ok-soft);border:1px solid var(--ok-line);border-radius:10px;padding:10px 12px;display:flex;gap:10px;align-items:flex-start}
+.check b{color:var(--ok);font-weight:600;white-space:nowrap}
+label.note{display:flex;flex-direction:column;gap:6px;font-size:13px;color:var(--muted)}
+textarea{font:14px var(--body);color:var(--fg);background:var(--surface-2);border:1px solid var(--line);border-radius:10px;padding:8px 10px;min-height:56px;resize:vertical;width:100%}
+.doneat{font-size:12px;color:var(--ok)}
+button.btn{font:600 14px var(--body);color:#fff;background:var(--primary);border:0;border-radius:10px;padding:8px 14px;cursor:pointer}
+button.btn.ghost{background:transparent;color:var(--muted);border:1px solid var(--line)}
+button.btn.ghost:hover{color:var(--fg);border-color:var(--primary)}
+button.btn[disabled]{opacity:.55;cursor:default}
+.backup{grid-column:1/-1;display:flex;gap:12px;align-items:center;flex-wrap:wrap;justify-content:space-between;border-top:1px solid var(--line);padding-top:12px}
+.backup .hint{color:var(--muted);font-size:13px;max-width:52ch}
+.empty,.status{background:var(--surface);border:1px dashed var(--line);border-radius:14px;padding:20px;color:var(--muted)}
+.status{border-style:solid;font-size:13px;padding:10px 14px}
+@media (max-width:560px){
+  .row{grid-template-columns:auto auto 1fr;grid-template-areas:"cb num ttl" ". . tags"}
+  .row input{grid-area:cb}.num{grid-area:num}.ttl{grid-area:ttl}.tags{grid-area:tags;justify-content:flex-start}
+  .detail{padding-left:18px}
+}
+@media (prefers-reduced-motion:reduce){.bar>i{transition:none}}
+</style>
+
+<div class="wrap">
+  <header>
+    <div class="top">
+      <div class="brand" id="brand"></div>
+      <div class="modes" role="group" data-i18n-aria="theme.label">
+        <button type="button" data-mode="auto" data-i18n="theme.auto"></button><button type="button" data-mode="light" data-i18n="theme.light"></button><button type="button" data-mode="dark" data-i18n="theme.dark"></button>
+      </div>
+    </div>
+    <h1 id="title"></h1>
+    <p class="sub" id="subtitle"></p>
+  </header>
+
+  <section class="summary" data-i18n-aria="summary.label">
+    <div><div class="big" id="pct"></div><div class="meta" style="text-align:left" id="countline" data-i18n="summary.loading"></div><button class="tcount" id="tcount" type="button" hidden data-i18n-title="toTest.countTitle"></button></div>
+    <div class="meta" id="timeline"></div>
+    <div class="bar" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0" id="bar"><i></i></div>
+    <div class="sync" id="sync"><i></i><span id="syncText"></span></div>
+    <div class="backup">
+      <span class="hint" id="backupHint"></span>
+      <button class="btn ghost" id="backup" type="button" data-i18n="backup.button"></button>
+    </div>
+  </section>
+
+  <section class="next" id="next" hidden aria-live="polite">
+    <div class="lbl" data-i18n="next.label"></div>
+    <div class="t" id="nextTitle"></div>
+    <button class="btn" id="nextOpen" type="button" data-i18n="next.open"></button>
+  </section>
+
+  <div class="filters" role="group" data-i18n-aria="filters.label">
+    <button class="chip" data-f="status" data-v="all" aria-pressed="true" type="button" data-i18n="filters.all"></button>
+    <button class="chip" data-f="status" data-v="todo" aria-pressed="false" type="button" data-i18n="filters.todo"></button>
+    <button class="chip chip-totest" data-f="status" data-v="totest" aria-pressed="false" type="button" data-i18n="filters.totest"></button>
+    <button class="chip" data-f="status" data-v="done" aria-pressed="false" type="button" data-i18n="filters.done"></button>
+    <span style="width:8px"></span>
+    <button class="chip" data-f="who" data-v="all" aria-pressed="true" type="button" data-i18n="filters.everyone"></button>
+    <button class="chip" data-f="who" data-v="toi" aria-pressed="false" type="button" data-i18n="who.toi"></button>
+    <button class="chip" data-f="who" data-v="ensemble" aria-pressed="false" type="button" data-i18n="who.ensemble"></button>
+    <button class="chip" data-f="who" data-v="claude" aria-pressed="false" type="button" data-i18n="who.claude"></button>
+  </div>
+
+  <div class="status" id="status" hidden></div>
+  <div id="phases"><div class="empty" data-i18n="phases.placeholder"></div></div>
+</div>
+
+<script>
+(function(){
+  const CFG=JSON.parse(document.getElementById('suivi-config').textContent);
+  // Serveur MCP de Tarmac ; `app-manager` (ancien nom) en repli tant que Claude desktop le déclare encore.
+  const HOSTS=['host:tarmac','host:app-manager'];let hostIdx=0;
+  // ─── Langue : celle du navigateur (fr* → français, sinon anglais) ───
+  const I18N=JSON.parse(document.getElementById('suivi-i18n').textContent);
+  let navLang='';try{navLang=String((navigator.languages&&navigator.languages[0])||navigator.language||'');}catch(e){}
+  const LANG=/^fr\b/i.test(navLang)?'fr':'en';
+  const LOCALE=LANG==='fr'?'fr-FR':(/^en\b/i.test(navLang)?navLang:'en-US');
+  const DICT=I18N[LANG];
+  document.documentElement.lang=LANG;
+  // t('clé',{param}) : texte de la langue choisie, `{param}` remplacés (valeurs déjà échappées si besoin).
+  const t=(k,p)=>String(DICT[k]??I18N.fr[k]??k).replace(/\{(\w+)\}/g,(m,n)=>p&&n in p?String(p[n]):m);
+  // tp('clé',n,{param}) : variante au pluriel (`clé_one` / `clé_other`) selon les règles de la langue.
+  let plural=null;try{plural=new Intl.PluralRules(LOCALE);}catch(e){}
+  const tp=(k,n,p)=>{const c=plural?plural.select(n):(n===1?'one':'other');return t(DICT[k+'_'+c]!==undefined?k+'_'+c:k+'_other',{n,...p});};
+  document.querySelectorAll('[data-i18n]').forEach(el=>{el.textContent=t(el.dataset.i18n);});
+  document.querySelectorAll('[data-i18n-title]').forEach(el=>{el.title=t(el.dataset.i18nTitle);});
+  document.querySelectorAll('[data-i18n-aria]').forEach(el=>{el.setAttribute('aria-label',t(el.dataset.i18nAria));});
+  const WHO={toi:t('who.toi'),ensemble:t('who.ensemble'),claude:t('who.claude')};
+  const UI_KEY=CFG.uiKey||('suivi-ui:'+CFG.projectId);
+  let tasks=[], db=null, mcp=null, filters={status:'all',who:'all'}, open=new Set(), openPhases=new Set();
+  // Pont Tarmac (canal A) : état, curseur du journal, dernière synchro réussie.
+  const bridge={state:'pending',cursor:0,at:null,timer:null,started:false};
+  try{const s=JSON.parse(localStorage.getItem(UI_KEY)||'{}');(s.openPhases||[]).forEach(p=>openPhases.add(p));}catch(e){}
+  const saveUi=()=>{try{localStorage.setItem(UI_KEY,JSON.stringify({openPhases:[...openPhases]}))}catch(e){}};
+  const $=id=>document.getElementById(id);
+  const esc=s=>String(s??'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+  const fmtMin=m=>!m?'':m>=60?(m%60?t('time.hm',{h:Math.floor(m/60),m:String(m%60).padStart(2,'0')}):t('time.h',{h:Math.floor(m/60)})):t('time.min',{n:m});
+  const rich=s=>esc(s).replace(/`([^`]+)`/g,'<code>$1</code>');
+  // « À tester » : traitée mais pas encore validée. Une tâche cochée (done) n'est plus à tester.
+  const isToTest=t=>!!t.toTest&&!t.done;
+  const visible=()=>tasks.filter(t=>!t.archived);
+
+  $('brand').textContent=CFG.brand;
+  $('title').textContent=CFG.title;
+  $('subtitle').textContent=CFG.subtitle||'';
+  $('subtitle').hidden=!CFG.subtitle;
+  $('backupHint').innerHTML=t('backup.hint',{file:esc(CFG.copyFile)});
+
+  // ─── Thème : Auto (système) / Clair / Sombre, mémorisé dans ce navigateur ───
+  // « Auto » rend la main au thème choisi dans le visualiseur (attribut posé par lui au chargement, ou aucun).
+  const hostTheme=document.documentElement.getAttribute('data-theme');
+  function setMode(m){
+    const v=m==='auto'?hostTheme:m;
+    if(v)document.documentElement.setAttribute('data-theme',v);else document.documentElement.removeAttribute('data-theme');
+    document.querySelectorAll('.modes button').forEach(b=>b.setAttribute('aria-pressed',String(b.dataset.mode===m)));
+  }
+  let mode='auto';try{mode=localStorage.getItem('suivi-mode')||'auto'}catch(e){}
+  setMode(mode);
+  document.querySelector('.modes').addEventListener('click',e=>{const b=e.target.closest('[data-mode]');if(!b)return;setMode(b.dataset.mode);try{localStorage.setItem('suivi-mode',b.dataset.mode)}catch(err){}});
+
+  function status(msg){const el=$('status');el.textContent=msg||'';el.hidden=!msg;}
+  function setFilter(f,v){
+    filters[f]=v;
+    document.querySelectorAll(`.chip[data-f="${f}"]`).forEach(c=>c.setAttribute('aria-pressed',String(c.dataset.v===v)));
+  }
+
+  // ─── Indicateur de synchronisation ───
+  function ago(iso){const s=Math.round((Date.now()-Date.parse(iso))/1000);return s<60?t('ago.now'):s<3600?t('ago.min',{n:Math.round(s/60)}):t('ago.h',{n:Math.round(s/3600)});}
+  function renderSync(){
+    const el=$('sync');el.className='sync'+(bridge.state==='on'?' on':bridge.state==='err'?' err':'');
+    $('syncText').textContent=bridge.state==='on'?t('sync.on',{ago:ago(bridge.at)})
+      :bridge.state==='err'?t('sync.err')
+      :bridge.state==='off'?t('sync.off')
+      :t('sync.connecting');
+  }
+  setInterval(renderSync,30000);
+
+  // ─── Pont MCP (canal A) : seulement dans l'app Claude desktop, sur le Mac où tourne Tarmac ───
+  const newer=(a,b)=>{const ta=Date.parse(a.updatedAt||'')||0,tb=Date.parse(b.updatedAt||'')||0;return ta!==tb?ta>tb:(a.rev||0)>(b.rev||0);};
+  const OFF_CODES=['server_not_connected','not_in_manifest','not_granted','unavailable','cancelled'];
+  const MISSING=['server_not_connected','not_in_manifest','not_granted'];
+  async function call(tool,input){
+    try{const r=await mcp.callTool(HOSTS[hostIdx],tool,input,{cache:false});return r.payload||{};}
+    catch(err){if(hostIdx<HOSTS.length-1&&MISSING.includes(err&&err.code)){hostIdx++;return call(tool,input);}throw err;}
+  }
+  function bridgeError(err){
+    bridge.state=OFF_CODES.includes(err&&err.code)?'off':'err';
+    if(bridge.state==='off'&&bridge.timer){clearInterval(bridge.timer);bridge.timer=null;}
+    renderSync();
+  }
+  // Tarmac → db de l'artefact : chaque tâche plus récente là-bas remplace la copie d'ici.
+  async function applyRemote(list){
+    for(const remote of list||[]){
+      const local=tasks.find(x=>x.id===remote.id);
+      if(local&&!newer(remote,local))continue;
+      const {id,...data}=remote;
+      // Mise à jour (fusion) d'une tâche existante : les champs inconnus de Tarmac restent intacts.
+      try{await (local?db.collection('tasks').doc(id).update(data):db.collection('tasks').doc(id).set(data));}catch(e){}
+    }
+  }
+  async function pull(){
+    try{const p=await call('suivi_pull',{projectId:CFG.projectId,since:bridge.cursor});await applyRemote(p.tasks);bridge.cursor=p.cursor||bridge.cursor;bridge.state='on';bridge.at=new Date().toISOString();renderSync();}
+    catch(err){bridgeError(err);}
+  }
+  async function push(list){
+    if(!mcp||bridge.state==='off'||!list.length)return;
+    try{await call('suivi_push',{projectId:CFG.projectId,tasks:list,channel:'A'});bridge.state='on';bridge.at=new Date().toISOString();renderSync();}
+    catch(err){bridgeError(err);}
+  }
+  async function startBridge(){
+    if(bridge.started)return;bridge.started=true;
+    try{mcp=await (window.claude&&window.claude.use?window.claude.use('mcp'):null);}catch(e){mcp=null;}
+    if(!mcp){bridge.state='off';renderSync();return;}
+    // À l'ouverture : envoyer ce qui a changé ici (téléphone…), puis reprendre tout ce qui a changé là-bas.
+    // Une tâche jamais datée (anciennes coches) prend la date de sa coche pour la comparaison.
+    await push(tasks.map(t=>t.updatedAt?t:{...t,updatedAt:t.doneAt||null}));
+    if(bridge.state==='off')return;
+    await pull();
+    if(bridge.state!=='off')bridge.timer=setInterval(pull,Math.max(10,CFG.bridgeIntervalSec||30)*1000);
+  }
+
+  // Sauvegarde manuelle : le même format que la copie du dépôt.
+  function backupJson(){
+    const sorted=[...tasks].sort((a,b)=>(a.order||0)-(b.order||0)||String(a.num).localeCompare(String(b.num)));
+    const v=sorted.filter(t=>!t.archived),done=v.filter(t=>t.done).length;
+    return JSON.stringify({
+      ...(CFG.schema?{$schema:CFG.schema}:{}),
+      source:location.href.split('?')[0],
+      collection:'tasks',
+      exportedAt:new Date().toISOString(),
+      counts:{total:v.length,done,remaining:v.length-done,toTest:v.filter(isToTest).length},
+      tasks:sorted,
+    },null,2)+'\n';
+  }
+  async function onBackup(){
+    const btn=$('backup');
+    if(!tasks.length){status(t('backup.empty'));return;}
+    btn.disabled=true;const was=btn.textContent;
+    try{
+      const data=backupJson();let saved=false;
+      try{const downloads=await (window.claude&&window.claude.use?window.claude.use('downloads'):null);if(downloads){await downloads.save({filename:CFG.copyFile,data});saved=true;}}catch(err){saved=false;}
+      if(!saved){
+        const url=URL.createObjectURL(new Blob([data],{type:'application/json'}));
+        const a=document.createElement('a');a.href=url;a.download=CFG.copyFile;document.body.appendChild(a);a.click();a.remove();
+        setTimeout(()=>URL.revokeObjectURL(url),2000);
+      }
+      btn.textContent=t('backup.saved');status('');setTimeout(()=>{btn.textContent=was;},2500);
+    }catch(err){status(t('backup.failed',{code:err&&err.code||t('error')}));btn.textContent=was;}
+    finally{btn.disabled=false;}
+  }
+
+  function render(){
+    const list=visible(),total=list.length,done=list.filter(t=>t.done).length;
+    const pct=total?Math.round(done*100/total):0;
+    $('pct').textContent=t('summary.pct',{n:pct});
+    $('bar').firstElementChild.style.width=pct+'%';$('bar').setAttribute('aria-valuenow',pct);
+    $('countline').textContent=total?tp('summary.count',done,{done,total}):t('summary.none');
+    $('tcount').textContent=t('toTest.count',{n:list.filter(isToTest).length});
+    $('tcount').hidden=!total;
+    const left=list.filter(t=>!t.done).reduce((a,t)=>a+(t.minutes||0),0);
+    $('timeline').textContent=total?t('summary.left',{time:fmtMin(left)||t('time.min',{n:0})}):'';
+    const nxt=list.find(t=>!t.done);
+    $('next').hidden=!nxt;
+    if(nxt){$('nextTitle').textContent=`${nxt.num} · ${nxt.title}`;$('nextOpen').onclick=()=>{open.add(nxt.id);openPhases.add(nxt.phase);render();setTimeout(()=>document.getElementById('task-'+nxt.id)?.scrollIntoView({behavior:'smooth',block:'start'}),50);};}
+    if(!total){$('phases').innerHTML='<div class="empty">'+esc(t('phases.none'))+'</div>';return;}
+    const phases=new Map();
+    list.forEach(t=>{if(!phases.has(t.phase))phases.set(t.phase,{title:t.phaseTitle,items:[]});phases.get(t.phase).items.push(t);});
+    // « À faire » : pas faite et pas en attente de test (les « À tester » ont leur propre filtre).
+    const statusOk=t=>filters.status==='all'||(filters.status==='totest'?isToTest(t):filters.status==='todo'?!t.done&&!isToTest(t):!!t.done);
+    const vis=t=>statusOk(t)&&(filters.who==='all'||t.who===filters.who);
+    let html='';
+    for(const [p,ph] of phases){
+      const pd=ph.items.filter(t=>t.done).length, shown=ph.items.filter(vis);
+      if(!shown.length)continue;
+      const isOpen=openPhases.has(p)||(nxt&&nxt.phase===p&&!openPhases.size)||filters.status==='totest';
+      html+=`<details class="phase${pd===ph.items.length?' complete':''}" data-phase="${esc(p)}"${isOpen?' open':''}><summary><span class="pnum">${esc(p)}</span><span class="ptitle">${esc(ph.title)}</span><span class="pcount">${pd}/${ph.items.length}${pd===ph.items.length?' '+esc(t('phase.complete')):''}</span></summary><div class="tasks">`;
+      for(const task of shown){
+        const o=open.has(task.id), id=esc(task.id);
+        const testedTitle=task.testedAt?t('task.testedOnTitle',{date:new Date(task.testedAt).toLocaleDateString(LOCALE)}):t('task.testedTitle');
+        html+=`<div class="task${task.done?' done':''}" id="task-${id}"><div class="row">
+<input type="checkbox" id="cb-${id}" data-id="${id}" ${task.done?'checked':''} aria-label="${esc(t('task.markDone',{num:task.num}))}">
+<span class="num">${esc(task.num)}</span>
+<button class="ttl" type="button" data-toggle="${id}" aria-expanded="${o}">${esc(task.title)}</button>
+<span class="tags">${isToTest(task)?`<button type="button" class="badge-totest" data-tested="${id}" title="${esc(t('task.toTestTitle'))}">${esc(t('task.toTest'))}</button>`:task.tested?`<button type="button" class="badge-tested" data-untest="${id}" title="${esc(testedTitle)}">${esc(t('task.tested'))}</button>`:''}<span class="pill who-${esc(task.who)}">${esc(WHO[task.who]||task.who)}</span><span class="time">${fmtMin(task.minutes)}</span></span></div>
+<div class="detail" ${o?'':'hidden'}>
+${task.why?`<p class="why">${t('task.why',{text:rich(task.why)})}</p>`:''}
+${(task.steps||[]).length?`<ol>${task.steps.map(s=>`<li>${rich(s)}</li>`).join('')}</ol>`:''}
+${task.check?`<div class="check"><b>${esc(t('task.check'))}</b><span>${rich(task.check)}</span></div>`:''}
+<label class="note" for="note-${id}">${esc(t('task.note'))}<textarea id="note-${id}" data-note="${id}" placeholder="${esc(t('task.notePlaceholder'))}">${esc(task.note||'')}</textarea></label>
+${task.done&&task.doneAt?`<span class="doneat">${esc(t('task.doneAt',{date:new Date(task.doneAt).toLocaleString(LOCALE,{dateStyle:'medium',timeStyle:'short'})}))}</span>`:''}
+</div></div>`;
+      }
+      html+='</div></details>';
+    }
+    const filtered=filters.status!=='all'||filters.who!=='all';
+    const shownCount=list.filter(vis).length;
+    const banner=filtered?`<div class="status" style="display:flex;gap:12px;align-items:center;justify-content:space-between;flex-wrap:wrap;margin-bottom:12px"><span>${esc(tp('filter.banner',shownCount,{total}))}</span><button class="btn" type="button" id="clearF">${esc(t('filter.clear'))}</button></div>`:'';
+    $('phases').innerHTML=banner+(html||'<div class="empty">'+esc(t('filter.none'))+'</div>');
+    const cf=document.getElementById('clearF');if(cf)cf.onclick=()=>{filters={status:'all',who:'all'};document.querySelectorAll('.chip').forEach(c=>c.setAttribute('aria-pressed',String(c.dataset.v==='all')));render();};
+  }
+
+  // Coche et note (D7 : on coche et on annote ici ; ajouter ou retirer une tâche passe par Claude).
+  async function edit(id,changes){
+    const task=tasks.find(x=>x.id===id);if(!task)return;
+    const data={...changes,rev:(task.rev||0)+1,updatedAt:new Date().toISOString(),updatedBy:'artifact'};
+    await db.collection('tasks').doc(id).update(data);
+    push([{...task,...data}]);
+  }
+
+  $('backup').addEventListener('click',onBackup);
+  $('tcount').addEventListener('click',()=>{setFilter('status','totest');render();document.querySelector('.filters')?.scrollIntoView({behavior:'smooth',block:'start'});});
+  document.addEventListener('click',async e=>{
+    const bt=e.target.closest('[data-tested],[data-untest]');
+    if(bt){
+      if(!db){status(t('save.unavailable'));return;}
+      const tested=!!bt.dataset.tested;bt.disabled=true;
+      try{await edit(bt.dataset.tested||bt.dataset.untest,tested?{toTest:false,tested:true,testedAt:new Date().toISOString()}:{toTest:true,tested:false,testedAt:null});status('');}
+      catch(err){bt.disabled=false;status(t('save.testFailed',{code:err&&err.code||t('error')}));}
+      return;
+    }
+    const tg=e.target.closest('[data-toggle]');
+    if(tg){const id=tg.dataset.toggle;open.has(id)?open.delete(id):open.add(id);render();return;}
+    const ch=e.target.closest('.chip');
+    if(ch){setFilter(ch.dataset.f,ch.dataset.v);render();}
+  });
+  document.addEventListener('toggle',e=>{const d=e.target;if(d.matches&&d.matches('details.phase')){const p=Number(d.dataset.phase);d.open?openPhases.add(p):openPhases.delete(p);saveUi();}},true);
+  document.addEventListener('change',async e=>{
+    const cb=e.target.closest('input[type=checkbox][data-id]');
+    if(!cb)return;
+    if(!db){cb.checked=!cb.checked;status(t('save.unavailableCheck'));return;}
+    const done=cb.checked;
+    try{await edit(cb.dataset.id,{done,doneAt:done?new Date().toISOString():null});status('');}
+    catch(err){cb.checked=!done;status(t('save.checkFailed',{code:err&&err.code||t('error')}));}
+  });
+  document.addEventListener('focusout',async e=>{
+    const ta=e.target.closest('textarea[data-note]');
+    if(!ta||!db)return;
+    const task=tasks.find(x=>x.id===ta.dataset.note);
+    if(!task||(task.note||'')===ta.value)return;
+    try{await edit(task.id,{note:ta.value});}catch(err){status(t('save.noteFailed'));}
+  });
+
+  renderSync();
+  (async()=>{
+    const slow=setTimeout(()=>status(t('load.slow')),10000);
+    try{db=await (window.claude&&window.claude.use?window.claude.use('db'):null);}catch(e){db=null;}
+    if(!db){clearTimeout(slow);status(t('load.unavailable'));bridge.state='off';renderSync();return;}
+    db.collection('tasks').orderBy('order').onSnapshot(snap=>{
+      clearTimeout(slow);status('');
+      tasks=snap.docs.map(d=>Object.assign({id:d.id},d.data()));
+      render();
+      startBridge();
+    },err=>{clearTimeout(slow);status(t('load.lost',{code:err&&err.code||t('error')}));});
+  })();
+})();
+</script>

@@ -1,0 +1,239 @@
+import fs from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
+import { execFile } from 'node:child_process';
+import { promisify } from 'node:util';
+import { tr } from './i18n.js';
+import { demo, demoClaudeCwds } from './demo/index.js';
+
+const exec = promisify(execFile);
+
+/**
+ * Sessions Claude Code locales.
+ *
+ * Claude Code écrit chaque session dans `~/.claude/projects/<cwd encodé>/<sessionId>.jsonl` (une ligne JSON
+ * par évènement, avec `cwd`, `sessionId`, `timestamp`, `gitBranch`…). Les titres viennent de
+ * `sessions-index.json` quand il existe (customTitle via /rename, résumé auto), sinon des lignes
+ * `summary` / `custom-title` du transcript.
+ *
+ * Le statut « archivé » est géré côté claude.ai : le transcript local reste présent tant que Claude Code ne
+ * l'a pas purgé (`cleanupPeriodDays`, 30 jours par défaut) — toutes les sessions sont donc listées.
+ */
+export interface ClaudeSession {
+  id: string;
+  cwd: string;
+  title: string;
+  titleSource: 'custom' | 'summary' | 'prompt' | 'none';
+  firstPrompt: string | null;
+  gitBranch: string | null;
+  createdAt: string | null;
+  updatedAt: string;
+  messages: number;
+  sizeBytes: number;
+  version: string | null;
+  /** Un process `claude` tourne dans ce dossier et ce transcript est le plus récent qui y a été écrit. */
+  active: boolean;
+  /** Session ouverte depuis Tarmac (onglet console). */
+  terminalId: string | null;
+}
+
+export const claudeDir = () => process.env.CLAUDE_CONFIG_DIR || path.join(os.homedir(), '.claude');
+
+interface FileCache { mtimeMs: number; size: number; s: Omit<ClaudeSession, 'active' | 'terminalId'> | null }
+const fileCache = new Map<string, FileCache>();
+
+const HEAD = 256 * 1024;
+const TAIL = 128 * 1024;
+
+function readSlice(file: string, start: number, length: number) {
+  const fd = fs.openSync(file, 'r');
+  try {
+    const buf = Buffer.alloc(length);
+    const n = fs.readSync(fd, buf, 0, length, start);
+    return buf.subarray(0, n).toString('utf8');
+  } finally {
+    fs.closeSync(fd);
+  }
+}
+
+const parseLines = (txt: string) =>
+  txt.split('\n').flatMap((l) => {
+    if (!l.startsWith('{')) return [];
+    try { return [JSON.parse(l)]; } catch { return []; } // ligne tronquée en bord de tranche
+  });
+
+function textOf(content: unknown): string | null {
+  if (typeof content === 'string') return content;
+  if (Array.isArray(content)) {
+    const t = content.find((c: any) => c?.type === 'text' && typeof c.text === 'string');
+    return t ? (t as any).text : null;
+  }
+  return null;
+}
+
+/** Premier vrai message utilisateur (on ignore les messages techniques : commandes, caveats, rappels). */
+function isRealPrompt(line: any): string | null {
+  if (line.type !== 'user' || line.isMeta || line.isSidechain) return null;
+  const t = textOf(line.message?.content)?.trim();
+  if (!t || /^<(command|local-command|system-reminder|bash-|user-memory)/.test(t) || t.startsWith('Caveat:')) return null;
+  return t.replace(/\s+/g, ' ').slice(0, 200);
+}
+
+function parseTranscript(file: string, st: fs.Stats): Omit<ClaudeSession, 'active' | 'terminalId'> | null {
+  const head = parseLines(readSlice(file, 0, Math.min(HEAD, st.size)));
+  const tail = st.size > HEAD ? parseLines(readSlice(file, Math.max(0, st.size - TAIL), TAIL)) : [];
+  const all = [...head, ...tail];
+  const withCwd = all.find((l) => typeof l.cwd === 'string');
+  if (!withCwd) return null;
+  if (head.every((l) => l.isSidechain)) return null; // transcript de sous-agent
+
+  let custom: string | null = null;
+  let summary: string | null = null;
+  for (const l of all) {
+    if (l.type === 'custom-title' && l.customTitle) custom = l.customTitle;
+    else if (typeof l.customTitle === 'string' && l.customTitle) custom = l.customTitle;
+    if (l.type === 'summary' && l.summary) summary = l.summary;
+    if (l.type === 'ai-title' && (l.title || l.aiTitle)) summary ??= l.title ?? l.aiTitle;
+  }
+  const firstPrompt = head.map(isRealPrompt).find(Boolean) ?? null;
+  const stamps = all.map((l) => l.timestamp).filter((t) => typeof t === 'string').sort();
+  const title = custom ?? summary ?? firstPrompt ?? ''; // sans titre : libellé traduit à la sortie (emptyTitle)
+  // Estimation du nombre d'échanges : exact pour les petits fichiers, extrapolé sinon.
+  const msgHead = head.filter((l) => (l.type === 'user' || l.type === 'assistant') && !l.isSidechain && !l.isMeta).length;
+  const messages = st.size <= HEAD ? msgHead : Math.round((msgHead * st.size) / HEAD);
+
+  return {
+    id: path.basename(file, '.jsonl'),
+    cwd: withCwd.cwd,
+    title: title.length > 120 ? title.slice(0, 117) + '…' : title,
+    titleSource: custom ? 'custom' : summary ? 'summary' : firstPrompt ? 'prompt' : 'none',
+    firstPrompt,
+    gitBranch: [...all].reverse().find((l) => l.gitBranch)?.gitBranch ?? null,
+    createdAt: stamps[0] ?? null,
+    updatedAt: stamps.at(-1) ?? st.mtime.toISOString(),
+    messages,
+    sizeBytes: st.size,
+    version: withCwd.version ?? null,
+  };
+}
+
+/** Index officiel (titres /rename, résumés) quand Claude Code l'a écrit. */
+function readIndex(dir: string): Map<string, any> {
+  const m = new Map<string, any>();
+  try {
+    const idx = JSON.parse(fs.readFileSync(path.join(dir, 'sessions-index.json'), 'utf8'));
+    for (const e of idx.entries ?? idx.sessions ?? []) if (e.sessionId) m.set(e.sessionId, e);
+  } catch { /* pas d'index */ }
+  return m;
+}
+
+/** Process `claude` en cours → leurs dossiers de travail. */
+async function runningClaudeCwds(): Promise<Map<string, number>> {
+  const d = demo();
+  if (d) return demoClaudeCwds(d);
+  const cwds = new Map<string, number>();
+  let pids: number[] = [];
+  try {
+    const { stdout } = await exec('ps', ['-axo', 'pid=,comm=,args='], { timeout: 5000, maxBuffer: 16 * 1024 * 1024 });
+    pids = stdout.split('\n').flatMap((l) => {
+      const m = l.trim().match(/^(\d+)\s+(\S+)\s+(.*)$/);
+      if (!m) return [];
+      const [, pid, comm, args] = m;
+      const isClaude = path.basename(comm) === 'claude' || /(^|\/)claude(\s|$)/.test(args.split(' ').slice(0, 2).join(' '));
+      return isClaude && !/remote-control\s+--?help/.test(args) ? [Number(pid)] : [];
+    });
+  } catch { return cwds; }
+  if (!pids.length) return cwds;
+  try {
+    const { stdout } = await exec('lsof', ['-a', '-d', 'cwd', '-Fn', '-p', pids.join(',')], { timeout: 5000 });
+    for (const l of stdout.split('\n')) if (l.startsWith('n/')) cwds.set(l.slice(1), (cwds.get(l.slice(1)) ?? 0) + 1);
+  } catch (e: any) {
+    for (const l of String(e.stdout ?? '').split('\n')) if (l.startsWith('n/')) cwds.set(l.slice(1), (cwds.get(l.slice(1)) ?? 0) + 1);
+  }
+  return cwds;
+}
+
+let cache: { at: number; sessions: Omit<ClaudeSession, 'terminalId'>[] } = { at: 0, sessions: [] };
+
+/** Session sans titre : libellé dans la langue de la requête (le cache reste neutre). */
+const emptyTitle = <S extends { title: string; titleSource: ClaudeSession['titleSource'] }>(list: S[]): S[] =>
+  list.map((s) => (s.titleSource === 'none' && !s.title ? { ...s, title: tr({ en: '(empty session)', fr: '(session vide)' }) } : s));
+
+export async function listClaudeSessions(force = false): Promise<Omit<ClaudeSession, 'terminalId'>[]> {
+  if (!force && Date.now() - cache.at < 8000) return emptyTitle(cache.sessions);
+  const base = path.join(claudeDir(), 'projects');
+  let dirs: string[] = [];
+  try { dirs = fs.readdirSync(base); } catch { return (cache = { at: Date.now(), sessions: [] }).sessions; }
+
+  const found: Omit<ClaudeSession, 'active' | 'terminalId'>[] = [];
+  const seen = new Set<string>();
+  for (const d of dirs) {
+    const dir = path.join(base, d);
+    let files: string[];
+    try { files = fs.readdirSync(dir).filter((f) => f.endsWith('.jsonl') && !f.startsWith('agent-')); } catch { continue; }
+    const index = readIndex(dir);
+    for (const f of files) {
+      const file = path.join(dir, f);
+      seen.add(file);
+      let st: fs.Stats;
+      try { st = fs.statSync(file); } catch { continue; }
+      if (!st.size) continue;
+      let c = fileCache.get(file);
+      if (!c || c.mtimeMs !== st.mtimeMs || c.size !== st.size) {
+        c = { mtimeMs: st.mtimeMs, size: st.size, s: (() => { try { return parseTranscript(file, st); } catch { return null; } })() };
+        fileCache.set(file, c);
+      }
+      if (!c.s) continue;
+      const e = index.get(c.s.id);
+      const s = { ...c.s };
+      if (e?.customTitle) Object.assign(s, { title: e.customTitle, titleSource: 'custom' as const });
+      else if (e?.summary && s.titleSource !== 'custom') Object.assign(s, { title: e.summary, titleSource: 'summary' as const });
+      if (typeof e?.messageCount === 'number') s.messages = e.messageCount;
+      found.push(s);
+    }
+  }
+  for (const k of fileCache.keys()) if (!seen.has(k)) fileCache.delete(k);
+
+  // Session active : un process `claude` tourne dans ce cwd → les N transcripts les plus récents du cwd
+  // (N = nombre de process), s'ils ont été écrits dans les dernières 24 h.
+  const running = await runningClaudeCwds();
+  const byCwd = new Map<string, typeof found>();
+  for (const s of found) byCwd.set(s.cwd, [...(byCwd.get(s.cwd) ?? []), s]);
+  const active = new Set<string>();
+  for (const [cwd, n] of running) {
+    const recent = (byCwd.get(cwd) ?? [])
+      .filter((s) => Date.now() - new Date(s.updatedAt).getTime() < 24 * 3600_000)
+      .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt))
+      .slice(0, n);
+    for (const s of recent) active.add(s.id);
+  }
+
+  const sessions = found
+    .map((s) => ({ ...s, active: active.has(s.id) }))
+    .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
+  cache = { at: Date.now(), sessions };
+  return emptyTitle(sessions);
+}
+
+/**
+ * Rattache chaque session au projet le plus profond dont le dossier contient son `cwd`.
+ * `dirs` : dossiers des projets (apps et racines de groupe).
+ */
+export function assignSessions<T extends { cwd: string }>(sessions: T[], dirs: string[]): Map<string, T[]> {
+  const sorted = [...new Set(dirs)].sort((a, b) => b.length - a.length);
+  const out = new Map<string, T[]>();
+  for (const s of sessions) {
+    const d = sorted.find((p) => s.cwd === p || s.cwd.startsWith(p + path.sep));
+    if (d) out.set(d, [...(out.get(d) ?? []), s]);
+  }
+  return out;
+}
+
+/** Commande shell : nouvelle session Remote Control, ou reprise d'une session existante. */
+export function claudeCommand(opts: { name?: string; resume?: string; sessionId?: string; prompt?: string }) {
+  const q = (s: string) => `'${s.replace(/'/g, `'\\''`)}'`;
+  // --session-id : on connaît l'ID du transcript dès le lancement (lien onglet ↔ session).
+  // `prompt` : premier message (ex. `/suivi init`), après le nom consommé par --remote-control.
+  if (opts.resume) return `claude --resume ${q(opts.resume)} --remote-control`;
+  return `claude${opts.sessionId ? ` --session-id ${opts.sessionId}` : ''} --remote-control ${q(opts.name ?? 'Claude')}${opts.prompt ? ' ' + q(opts.prompt) : ''}`;
+}
