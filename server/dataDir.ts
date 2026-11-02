@@ -1,7 +1,9 @@
 /**
  * Dossier de données de Tarmac : `DATA_DIR`, sinon `~/.tarmac`.
  * Tarmac s'appelait App Manager (`~/.app-manager`) : au premier démarrage du serveur, l'ancien dossier est
- * copié (jamais déplacé) vers `~/.tarmac` si celui-ci n'existe pas encore.
+ * copié (jamais déplacé) vers `~/.tarmac` si celui-ci n'existe pas encore. Si `~/.tarmac` existe déjà mais que
+ * `~/.app-manager` a des données plus récentes (copie faite trop tôt), le serveur avertit seulement ; `tarmac setup`
+ * propose de mettre `~/.tarmac` de côté puis de copier.
  */
 import fs from 'node:fs';
 import os from 'node:os';
@@ -34,6 +36,69 @@ export function migrateEnvText(text: string): string {
     .replace(/\bmanager\.(localhost|test)\b/g, 'tarmac.$1')
     .replace(/Configuration App Manager/g, 'Configuration Tarmac')
     .replace(/serveur MCP app-manager/g, 'serveur MCP tarmac');
+}
+
+/** Fichiers dont la date dit si un dossier de données sert encore (base du suivi, état des apps). */
+export const ACTIVITY_FILES = ['suivi.db', 'suivi.db-wal', 'suivi.db-shm', 'state.json'];
+
+/** Date (ms) de la dernière écriture d'un fichier d'activité du dossier, 0 s'il n'y en a aucun. */
+export function lastActivity(dir: string): number {
+  let last = 0;
+  for (const f of ACTIVITY_FILES) {
+    try { last = Math.max(last, fs.statSync(path.join(dir, f)).mtimeMs); } catch { /* absent */ }
+  }
+  return last;
+}
+
+/**
+ * `target` et `legacy` existent tous deux et `legacy` a des données plus récentes : `target` est probablement
+ * une copie périmée (migration faite trop tôt, App Manager utilisé ensuite). Renvoie les deux dates, sinon null.
+ */
+export function staleDataDir(target = defaultDataDir(), legacy = legacyDataDir()): { target: number; legacy: number } | null {
+  if (!fs.existsSync(target) || !fs.existsSync(legacy)) return null;
+  const t = lastActivity(target);
+  const l = lastActivity(legacy);
+  // Marge d'une seconde : une copie qui conserve les dates peut perdre les fractions de milliseconde.
+  return l > t + 1000 ? { target: t, legacy: l } : null;
+}
+
+const pad = (n: number) => String(n).padStart(2, '0');
+/** Horodatage local `AAAAMMJJ-HHMMSS`. */
+export const stamp = (d: Date) => `${d.getFullYear()}${pad(d.getMonth() + 1)}${pad(d.getDate())}-${pad(d.getHours())}${pad(d.getMinutes())}${pad(d.getSeconds())}`;
+
+/** Date locale lisible `AAAA-MM-JJ HH:MM`, « never » pour 0. */
+export function localTime(ms: number): string {
+  if (!ms) return 'never';
+  const d = new Date(ms);
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}`;
+}
+
+/** Nom libre pour mettre de côté un dossier de données périmé : `<target>.old-AAAAMMJJ-HHMMSS[-n]`. */
+export function asideName(target: string, now = new Date()): string {
+  const base = `${target}.old-${stamp(now)}`;
+  let name = base;
+  for (let i = 2; fs.existsSync(name); i++) name = `${base}-${i}`;
+  return name;
+}
+
+/**
+ * Met `target` de côté (renommé en `aside`, jamais supprimé) puis copie `legacy` à sa place.
+ * Renvoie le dossier mis de côté.
+ */
+export function replaceStaleDataDir(target: string, legacy: string, aside = asideName(target)): string {
+  if (fs.existsSync(aside)) throw new Error(`${aside} already exists`);
+  fs.renameSync(target, aside);
+  migrateDataDir(target, legacy);
+  return aside;
+}
+
+/** Avertissement du serveur au démarrage (il ne déplace rien lui-même : c'est le rôle de `tarmac setup`). */
+export function staleDataWarning(target = defaultDataDir(), legacy = legacyDataDir()): string | null {
+  const s = staleDataDir(target, legacy);
+  if (!s) return null;
+  return `Warning: ${legacy} has newer data (last write ${localTime(s.legacy)}) than ${target} (${localTime(s.target)}). `
+    + `Tarmac uses ${target}. To start from the App Manager data instead, run: tarmac setup `
+    + `(it moves ${target} aside, nothing is deleted).`;
 }
 
 /**

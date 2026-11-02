@@ -35,6 +35,7 @@ import { suiviToken } from './suivi/token.js';
 import { SyncRunner } from './suivi/sync.js';
 import { setSuiviDir, TodolistWatcher, type ProjectRoot } from './suivi/watch.js';
 import { demo, demoBinDir, isDemo } from './demo/index.js';
+import { crossOriginFetch, originAllowed } from './originGuard.js';
 import { androidStatus, applyAndroidEnv, ensureEmulator, installCommand, isAvd, startAvd, stopAvd, waitForBootCommand } from './android.js';
 
 const exec = promisify(execFile);
@@ -48,6 +49,7 @@ const app = Fastify({ logger: { level: process.env.LOG_LEVEL ?? 'warn' } });
 // l'origine n'est pas locale (CSRF depuis un site tiers, DNS rebinding, WebSocket cross-origin).
 const allowedHosts = new Set(['localhost', '127.0.0.1', '[::1]', ...(process.env.ALLOWED_HOSTS ?? '').split(',').filter(Boolean)]);
 if (config.publicUrl) allowedHosts.add(new URL(config.publicUrl).hostname);
+const allowedOrigins = config.publicUrl ? [new URL(config.publicUrl).origin] : [];
 const isAllowedHost = (h: string) => allowedHosts.has(h) || h.endsWith('.localhost') || h.endsWith('.test');
 
 // Langue des textes renvoyés (en premier : les hooks et routes suivants s'exécutent dans ce contexte).
@@ -56,12 +58,9 @@ app.addHook('onRequest', (req, _reply, done) => runWithRequestLang(req.headers, 
 app.addHook('onRequest', async (req, reply) => {
   const host = (req.headers.host ?? '').replace(/:\d+$/, '');
   if (!isAllowedHost(host)) return reply.code(403).send({ error: msg('api.hostNotAllowed', { host }) });
-  const origin = req.headers.origin;
-  if (origin) {
-    let h = '';
-    try { h = new URL(origin).hostname; } catch { /* origine invalide */ }
-    if (!isAllowedHost(h)) return reply.code(403).send({ error: msg('api.originNotAllowed') });
-  }
+  const fromOtherOrigin = !originAllowed(req.headers.origin, req.headers.host ?? '', allowedOrigins, `${req.protocol}:`)
+    || ((req.url.startsWith('/api') || req.url.startsWith('/ws')) && crossOriginFetch(req.headers['sec-fetch-site'] as string | undefined));
+  if (fromOtherOrigin) return reply.code(403).send({ error: msg('api.originNotAllowed') });
 });
 
 // Pages chargées via un domaine .test (non sécurisé pour Chrome) → tarmac.localhost, où l'installation
@@ -567,7 +566,7 @@ app.post<{ Params: { id: string }; Body: { command: string; arg?: string; cols?:
   if (!cfg) return reply.code(400).send({ error: msg('api.noSupabase') });
   let built;
   try {
-    built = buildSupabaseCommand(req.body?.command, req.body?.arg);
+    built = buildSupabaseCommand(req.body?.command, req.body?.arg, cfg.dir);
   } catch (e: any) {
     return reply.code(400).send({ error: e.message });
   }

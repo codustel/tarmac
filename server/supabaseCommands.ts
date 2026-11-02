@@ -144,8 +144,22 @@ export const SUPABASE_COMMANDS: SupabaseCommand[] = [
       fr: 'Affiche les types TypeScript générés depuis le schéma du projet distant lié.' } },
 ];
 
-/** Construit la commande ; erreur si le paramètre est invalide. */
-export function buildSupabaseCommand(id: string, arg?: string): { cmd: SupabaseCommand; shell: string } {
+/**
+ * Vrai si `rel` reste dans `base` une fois les liens symboliques résolus, que la cible existe ou non ; une cible
+ * qui est elle-même un lien est refusée (la redirection `>` du shell le suivrait).
+ */
+export function pathStaysInside(base: string, rel: string): boolean {
+  const root = fs.realpathSync(base);
+  const target = path.resolve(root, rel);
+  try { if (fs.lstatSync(target).isSymbolicLink()) return false; } catch { /* pas encore créée */ }
+  let parent = path.dirname(target);
+  while (!fs.existsSync(parent)) parent = path.dirname(parent);
+  const real = fs.realpathSync(parent);
+  return real === root || real.startsWith(root + path.sep);
+}
+
+/** Construit la commande ; erreur si le paramètre est invalide. `dir` : dossier où elle s'exécutera. */
+export function buildSupabaseCommand(id: string, arg?: string, dir?: string): { cmd: SupabaseCommand; shell: string } {
   const cmd = SUPABASE_COMMANDS.find((c) => c.id === id);
   if (!cmd) throw appError('supabase.unknownCommand', undefined, 400);
   const a = (arg ?? '').trim();
@@ -159,6 +173,7 @@ export function buildSupabaseCommand(id: string, arg?: string): { cmd: SupabaseC
   } else if (cmd.arg === 'path') {
     // Chemin relatif au dossier Supabase, sans remonter ni option déguisée.
     if (!/^[\w][\w./-]{0,199}$/.test(a) || a.split('/').includes('..')) throw appError('supabase.badPath', undefined, 400);
+    if (dir && !pathStaysInside(dir, a)) throw appError('supabase.badPath', undefined, 400);
     value = quote(a);
   }
   return { cmd, shell: cmd.cmd.replace('{arg}', value) };

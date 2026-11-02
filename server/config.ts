@@ -1,7 +1,7 @@
 import os from 'node:os';
 import path from 'node:path';
 import fs from 'node:fs';
-import { dataDirOf, envVar, expandHome, migrateDataDir } from './dataDir.js';
+import { dataDirOf, envVar, expandHome, migrateDataDir, staleDataWarning } from './dataDir.js';
 
 const home = os.homedir();
 const expand = (p: string) => (p.startsWith('~') ? path.join(home, p.slice(1)) : p);
@@ -16,7 +16,15 @@ function defaultRoots(): string {
 }
 
 // Ancien nom (App Manager, ~/.app-manager) : copie vers ~/.tarmac au premier démarrage.
-if (!process.env.DATA_DIR && migrateDataDir()) console.log('Data from the previous installation copied: ~/.app-manager → ~/.tarmac (the original is kept).');
+// Si ~/.tarmac existe déjà mais que ~/.app-manager est plus récent, seulement un avertissement : `tarmac setup`
+// propose de mettre l'ancien ~/.tarmac de côté (le serveur ne décide pas seul).
+if (!process.env.DATA_DIR) {
+  if (migrateDataDir()) console.log('Data from the previous installation copied: ~/.app-manager → ~/.tarmac (the original is kept).');
+  else {
+    const stale = staleDataWarning();
+    if (stale) console.warn(stale);
+  }
+}
 
 const [rangeStart, rangeEnd] = (process.env.PORT_RANGE ?? '4100-4999').split('-').map(Number);
 

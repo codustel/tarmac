@@ -444,10 +444,13 @@ function ProjectRow({ p, header, child, loose, expandable, open, onToggle, onOpe
   const open_ = (w: 'finder' | 'editor') => api.open(p.dir, w).catch((e) => toast('err', e.message));
   const port = p.external?.port ?? rt.port ?? p.plannedPort;
   const defaultCmd = p.commands.find((c) => c.id === p.defaultCommand);
-  // Lien GitHub : sur l'en-tête, ou sur une sous-app qui a son propre dépôt (projets liés).
+  // Lien GitHub : sur l'en-tête, ou sur une sous-app qui a son propre dépôt (projets liés). Ouvre la branche
+  // seulement si elle est poussée (upstream « origin/<branche> ») ; sinon la page du dépôt, pour éviter une 404.
   const key = p.repo?.git?.remoteKey;
+  const upstream = p.repo?.git?.upstream;
+  const remoteBranch = upstream?.includes('/') ? upstream.slice(upstream.indexOf('/') + 1) : null;
   const githubUrl = key?.startsWith('github.com/') && (!child || p.repo!.relPath !== p.group.relPath)
-    ? `https://${key}${p.repo!.git!.branch && !['main', 'master'].includes(p.repo!.git!.branch) ? `/tree/${p.repo!.git!.branch}` : ''}`
+    ? `https://${key}${remoteBranch && !['main', 'master'].includes(remoteBranch) ? `/tree/${remoteBranch}` : ''}`
     : null;
 
   // Titre : en-tête = nom de l'app ; sous-app = son propre nom s'il diffère du projet, sinon son nom technique.

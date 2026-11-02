@@ -70,13 +70,24 @@ tarmac setup
 ```
 
 `tarmac setup` crée `~/.tarmac/env`, installe un service de session (LaunchAgent), puis, avec votre accord et votre
-mot de passe (`sudo`), ajoute `tarmac.localhost` à `/etc/hosts` et redirige le port 80 vers le port 7777 de Tarmac
-pour une URL sans port. Ces deux étapes sont facultatives : avec `tarmac setup --no-sudo`, Tarmac est sur
-`http://tarmac.localhost:7777` (Chrome, Firefox et Safari résolvent `*.localhost` d'eux-mêmes). Enfin, il propose
-l'intégration Claude Code. Lancez d'abord `tarmac setup --dry-run` pour voir chaque action sans rien modifier.
+mot de passe (`sudo`), ajoute `tarmac.localhost` à `/etc/hosts` et redirige le port 80 vers le port 7777 de Tarmac.
+Enfin, il propose l'intégration Claude Code. Lancez d'abord `tarmac setup --dry-run` pour voir chaque action sans
+rien modifier.
+
+**L'adresse de référence est `http://tarmac.localhost:7777`** : elle marche toujours, avec ou sans `sudo` (Chrome,
+Firefox et Safari résolvent `*.localhost` d'eux-mêmes). L'adresse sans port, `http://tarmac.localhost`, est un
+bonus : `tarmac setup` vérifie que le port 80 atteint vraiment Tarmac et garde sinon l'adresse avec le port
+(certains Mac chargent la redirection sans l'appliquer ; voir [Dépannage](docs/troubleshooting.md#port-80)).
+`tarmac setup --no-sudo` saute ces étapes facultatives.
+
+Pour installer Tarmac comme une app dans Chrome, laissez quelques secondes à la page : Chrome n'affiche son bouton
+d'installation qu'après un court usage. En attendant, passez par le menu **⋮ → Caster, enregistrer et partager →
+Installer la page en tant qu'application**.
 
 Une installation **App Manager** (ancien nom de Tarmac) est migrée : son service est remplacé et ses données sont
-copiées de `~/.app-manager` vers `~/.tarmac` (l'original est conservé).
+copiées de `~/.app-manager` vers `~/.tarmac` (l'original est conservé). Si un `~/.tarmac` plus ancien existe déjà,
+`tarmac setup` le signale et propose de le mettre de côté (`~/.tarmac.old-<date>`, rien n'est supprimé) avant la
+copie.
 
 ## Premiers pas
 

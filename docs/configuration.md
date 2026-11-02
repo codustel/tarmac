@@ -19,10 +19,14 @@ Set `DATA_DIR` to use another folder than `~/.tarmac`.
 
 ## Ports and domain
 
-- Tarmac listens on **`127.0.0.1:7777`** (`TARMAC_PORT`). A user process cannot listen on port 80, so
-  `tarmac setup` adds a `pf` rule that redirects `127.0.0.1:80` to 7777 (anchor `com.apple/com.codustel.tarmac`,
-  reloaded at boot by the LaunchDaemon `com.codustel.tarmac.pf`). If port 80 is already taken, or with
-  `--no-sudo`, the URL keeps its port: `http://tarmac.localhost:7777`.
+- Tarmac listens on **`127.0.0.1:7777`** (`TARMAC_PORT`). **The reference address is
+  `http://tarmac.localhost:7777`**: it always works.
+- The address without port is a bonus. A user process cannot listen on port 80, so `tarmac setup` adds a `pf`
+  rule that redirects `127.0.0.1:80` to 7777 (anchor `com.apple/com.codustel.tarmac`, reloaded at boot by the
+  LaunchDaemon `com.codustel.tarmac.pf`), then checks that a connection to `127.0.0.1:80` really reaches Tarmac.
+  `TARMAC_URL` is saved without port only if it does. If port 80 is already taken, if macOS does not apply the
+  redirect (see [Troubleshooting](troubleshooting.md#port-80)), or with `--no-sudo`, the URL keeps its port.
+  `tarmac doctor` says whether the redirect is active.
 - Apps started by Tarmac get a port from **4100–4999** (`PORT_RANGE`, or **Settings → Port range**), which avoids
   the usual 3000, 5173 and 54321–54329. Each app keeps its port from one run to the next.
 - The domain is **`tarmac.localhost`** (`tarmac setup --domain other.localhost` to change it). Chrome, Firefox,

@@ -71,14 +71,22 @@ tarmac setup
 ```
 
 `tarmac setup` creates `~/.tarmac/env`, installs a login service (LaunchAgent), then, with your confirmation and
-your password (`sudo`), adds `tarmac.localhost` to `/etc/hosts` and redirects port 80 to Tarmac's port 7777 so the
-URL has no port. Those two steps are optional: with `tarmac setup --no-sudo`, Tarmac is on
-`http://tarmac.localhost:7777` (Chrome, Firefox and Safari resolve `*.localhost` on their own). Last, it offers to
-set up the Claude Code integration. Run `tarmac setup --dry-run` first to see every action without changing
-anything.
+your password (`sudo`), adds `tarmac.localhost` to `/etc/hosts` and redirects port 80 to Tarmac's port 7777. Last,
+it offers to set up the Claude Code integration. Run `tarmac setup --dry-run` first to see every action without
+changing anything.
+
+**The reference address is `http://tarmac.localhost:7777`**: it always works, with or without `sudo` (Chrome,
+Firefox and Safari resolve `*.localhost` on their own). The address without port, `http://tarmac.localhost`, is a
+bonus: `tarmac setup` checks that port 80 really reaches Tarmac and keeps the address with port otherwise (some
+Macs load the redirect but do not apply it; see [Troubleshooting](docs/troubleshooting.md#port-80)).
+`tarmac setup --no-sudo` skips those optional steps.
+
+To install Tarmac as an app in Chrome, give the page a few seconds: Chrome shows its install button only after a
+short use of the page. Meanwhile, use the menu **⋮ → Cast, save, and share → Install page as app**.
 
 An existing **App Manager** install (Tarmac's former name) is migrated: its service is replaced and its data is
-copied from `~/.app-manager` to `~/.tarmac` (the original is kept).
+copied from `~/.app-manager` to `~/.tarmac` (the original is kept). If an older `~/.tarmac` is already there,
+`tarmac setup` says so and offers to move it aside (`~/.tarmac.old-<date>`, nothing is deleted) before copying.
 
 ## First steps
 

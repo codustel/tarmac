@@ -5,9 +5,9 @@
  */
 import fs from 'node:fs';
 import path from 'node:path';
-import { migrateDataDir } from '../server/dataDir.js';
+import { asideName, migrateDataDir, replaceStaleDataDir, staleDataDir } from '../server/dataDir.js';
 import {
-  ALIAS_DOMAIN, DEFAULT_PORT, DEV_MANAGER_LABEL, LABEL, OLD_DOMAINS, OLD_LABEL,
+  ALIAS_DOMAIN, DEFAULT_PORT, DEV_MANAGER_LABEL, c, LABEL, OLD_DOMAINS, OLD_LABEL,
   readEnv, tilde, which, type Ctx, type Runner,
 } from './context.js';
 import type { Action, Runtime, Step } from './plan.js';
@@ -21,6 +21,11 @@ export interface SetupOptions {
   /** Déclaration du serveur MCP dans Claude desktop aussi (attend que l'app soit fermée). */
   claudeDesktop: boolean;
   open: boolean;
+  /**
+   * `~/.tarmac` existe mais `~/.app-manager` est plus récent : le mettre de côté (`~/.tarmac.old-…`) puis copier
+   * `~/.app-manager` (sur confirmation, ou --yes). Sans cette option, `~/.tarmac` est gardé tel quel.
+   */
+  replaceStale?: boolean;
 }
 
 /** Dossiers de code usuels, comme le serveur (premier démarrage) ; sinon ~/Documents. */
@@ -145,8 +150,27 @@ export function planSetup(ctx: Ctx, o: SetupOptions, runner: Runner): Step[] {
       ],
     });
   }
-  const migrating = !ctx.env.DATA_DIR && !fs.existsSync(ctx.dataDir) && fs.existsSync(ctx.oldDataDir);
-  if (migrating) {
+  // ~/.tarmac déjà là mais périmé (copie faite avant le dernier usage d'App Manager) : mis de côté, jamais supprimé.
+  const replacing = !!o.replaceStale && !ctx.env.DATA_DIR && staleDataDir(ctx.dataDir, ctx.oldDataDir) !== null;
+  if (replacing) {
+    const aside = asideName(ctx.dataDir);
+    steps.push({
+      id: 'replace-stale-data',
+      title: `Move the outdated ${tilde(ctx, ctx.dataDir)} aside to ${tilde(ctx, aside)}, then copy App Manager data `
+        + `${tilde(ctx, ctx.oldDataDir)} → ${tilde(ctx, ctx.dataDir)} (nothing is deleted)`,
+      actions: [
+        { kind: 'exec', argv: ['launchctl', 'bootout', `gui/${uid}/${LABEL}`], allowFail: true },
+        { kind: 'task', label: `wait until ${LABEL} is unloaded (it may use ${tilde(ctx, ctx.dataDir)})`, run: (rt) => waitUnloaded(rt, LABEL) },
+        {
+          kind: 'task',
+          label: `rename ${tilde(ctx, ctx.dataDir)} → ${tilde(ctx, aside)}, then copy ${tilde(ctx, ctx.oldDataDir)} (without manager.log; in env: MANAGER_* → TARMAC_*)`,
+          run: () => { replaceStaleDataDir(ctx.dataDir, ctx.oldDataDir, aside); },
+        },
+      ],
+    });
+  }
+  const migrating = replacing || (!ctx.env.DATA_DIR && !fs.existsSync(ctx.dataDir) && fs.existsSync(ctx.oldDataDir));
+  if (migrating && !replacing) {
     steps.push({
       id: 'migrate-data',
       title: `Copy App Manager data: ${tilde(ctx, ctx.oldDataDir)} → ${tilde(ctx, ctx.dataDir)} (the original is kept)`,
@@ -290,13 +314,13 @@ export function planSetup(ctx: Ctx, o: SetupOptions, runner: Runner): Step[] {
       },
       {
         kind: 'task',
-        label: `TARMAC_URL in ${tilde(ctx, ctx.envFile)} = http://${o.domain}, else http://${o.domain}:${port}`,
-        run: async () => {
-          const candidates = [`http://${o.domain}`, `http://${o.domain}:${port}`, `http://127.0.0.1:${port}`];
-          let url = candidates[2];
-          for (const u of candidates) if (await answers(u)) { url = u; break; }
-          setEnvVar(ctx.envFile, 'TARMAC_URL', url, /^(?:TARMAC|MANAGER)_URL=/);
-          finalUrl = url;
+        label: `if the pf redirect is installed: check that http://127.0.0.1/api/meta (port 80) reaches Tarmac; `
+          + `TARMAC_URL in ${tilde(ctx, ctx.envFile)} = http://${o.domain} if so, else http://${o.domain}:${port}`,
+        run: async (rt) => {
+          const r = await resolveUrl({ domain: o.domain, port, pfInstalled: fs.existsSync(ctx.pfAnchor) }, answers);
+          if (r.port80 === 'not-applied') rt.out.log(`${c.yellow('!')} ${port80NotApplied(o.domain, port)}`);
+          setEnvVar(ctx.envFile, 'TARMAC_URL', r.url, /^(?:TARMAC|MANAGER)_URL=/);
+          finalUrl = r.url;
         },
       },
       ...(o.open ? [{ kind: 'task', label: `$ open http://${o.domain}…`, run: (rt: Runtime) => { rt.runner.run(['open', finalUrl]); } } as Action] : []),
@@ -320,13 +344,37 @@ export function planSetup(ctx: Ctx, o: SetupOptions, runner: Runner): Step[] {
 /** URL retenue par l'étape `start` (affichée à la fin de `setup`). */
 export let finalUrl = '';
 
+/** Vrai si `base` atteint bien Tarmac : `/api/meta` répond en JSON avec un `buildId` (pas une autre app). */
 export async function answers(base: string): Promise<boolean> {
   try {
     const r = await fetch(`${base}/api/meta`, { signal: AbortSignal.timeout(2000) });
-    return r.ok;
+    if (!r.ok) return false;
+    const meta = await r.json() as Record<string, unknown> | null;
+    return !!meta && typeof meta === 'object' && 'buildId' in meta;
   } catch {
     return false;
   }
+}
+
+/** État de la redirection du port 80 : active, installée mais sans effet, ou absente. */
+export type Port80 = 'active' | 'not-applied' | 'none';
+
+export const port80NotApplied = (domain: string, port: number) =>
+  `The port 80 redirect is in place but macOS does not apply it: Tarmac stays on http://${domain}:${port} `
+  + '(see "Port 80" in docs/troubleshooting.md).';
+
+/**
+ * URL à enregistrer : sans port seulement si la redirection pf est installée ET qu'une connexion à
+ * 127.0.0.1:80 atteint réellement Tarmac ; sinon avec le port, puis 127.0.0.1 en dernier recours.
+ */
+export async function resolveUrl(
+  o: { domain: string; port: number; pfInstalled: boolean },
+  probe: (base: string) => Promise<boolean>,
+): Promise<{ url: string; port80: Port80 }> {
+  const port80: Port80 = !o.pfInstalled ? 'none' : (await probe('http://127.0.0.1')) ? 'active' : 'not-applied';
+  const candidates = [...(port80 === 'active' ? [`http://${o.domain}`] : []), `http://${o.domain}:${o.port}`];
+  for (const u of candidates) if (await probe(u)) return { url: u, port80 };
+  return { url: `http://127.0.0.1:${o.port}`, port80 };
 }
 
 /** Remplace (ou ajoute) une variable du fichier `env`. */

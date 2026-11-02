@@ -23,11 +23,31 @@ Keeping your code outside `~/Documents` (`~/Developer`, `~/code`…) avoids the 
 - `tarmac doctor` says the service "runs another Tarmac installation": you reinstalled Tarmac under another Node
   version (nvm, fnm, Homebrew…), so the global package moved. Run `tarmac setup` again from the new one.
 
-## Port 80 is already used
+## Port 80
 
-If something else (Apache, nginx, another dev proxy) listens on port 80, `tarmac setup` does not touch it and
-Tarmac stays on `http://tarmac.localhost:7777`. To get the URL without port later, free port 80 and run
-`tarmac setup` again.
+The address without port is a bonus; `http://tarmac.localhost:7777` is the reference address and always works.
+
+**Port 80 is already used.** If something else (Apache, nginx, another dev proxy) listens on port 80,
+`tarmac setup` does not touch it and Tarmac stays on `http://tarmac.localhost:7777`. To get the URL without port
+later, free port 80 and run `tarmac setup` again.
+
+**The redirect is in place but macOS does not apply it.** `tarmac setup` and `tarmac doctor` check that a
+connection to `127.0.0.1:80` reaches Tarmac. On some Macs the `pf` rule is loaded but has no effect
+(`curl http://127.0.0.1/` is refused): Tarmac then keeps the address with port, nothing else is affected. To dig
+further (administrator rights needed; these commands only read):
+
+```bash
+sudo pfctl -s info | head -3                                   # Status: Enabled?
+sudo pfctl -s nat                                              # rdr-anchor "com.apple/*" present?
+sudo pfctl -a com.apple -s Anchors                             # com.apple/com.codustel.tarmac listed?
+sudo pfctl -vv -a com.apple/com.codustel.tarmac -s nat         # the rule, with its Evaluations / Packets counters
+curl -s -o /dev/null -w '%{http_code}\n' http://127.0.0.1/api/meta; sudo pfctl -vv -a com.apple/com.codustel.tarmac -s nat
+sudo pfctl -s Interfaces -v | grep -A1 lo0                     # lo0 marked "skip" by another ruleset?
+```
+
+If the counters stay at 0 after the `curl`, the anchor is not evaluated for local traffic; if `lo0` is skipped,
+another tool (VPN, firewall) has loaded its own `pf` ruleset. Either way, `http://tarmac.localhost:7777` keeps
+working.
 
 ## The domain does not resolve
 
@@ -38,8 +58,9 @@ without `--no-sudo`. `http://localhost:7777` always works.
 ## The installed app (PWA)
 
 - **No "Install the app" button**: installing needs a secure context, which `http://tarmac.localhost` is and
-  `http://tarmac.test` is not (it redirects). In Chrome or Edge, use the button in the sidebar or the install icon
-  in the address bar; in Safari, **File → Add to Dock**.
+  `http://tarmac.test` is not (it redirects). Chrome also waits for a short use of the page before offering it:
+  give it a few seconds, or use the menu **⋮ → Cast, save, and share → Install page as app**. In Chrome or Edge,
+  the button then shows up in the sidebar and in the address bar; in Safari, **File → Add to Dock**.
 - **The app shows an old version**: open windows notice a new build and reload when in the background; otherwise
   a "Reload" banner shows up.
 - **After a domain or port change** the installed app keeps its old address: uninstall it and install it again
@@ -58,6 +79,10 @@ Tarmac used to be called App Manager. `tarmac setup` migrates it:
 - the `com.codustel.app-manager` service is stopped and removed, `com.codustel.tarmac` replaces it;
 - `~/.app-manager` is **copied** to `~/.tarmac` (`MANAGER_*` variables become `TARMAC_*`, `manager.localhost`
   becomes `tarmac.localhost`); the original is kept: delete it once Tarmac works;
+- **a `~/.tarmac` is already there** (an earlier try, then App Manager kept being used): when `~/.app-manager` has
+  newer data (`suivi.db`, `state.json`), `tarmac setup` shows both dates and offers to move `~/.tarmac` aside to
+  `~/.tarmac.old-YYYYMMDD-HHMMSS` before copying (`--yes` accepts, `--dry-run` shows it; nothing is deleted). If
+  you decline, `~/.tarmac` is kept and the server only writes a warning in `tarmac logs`;
 - with your confirmation, the old port 80 redirect and the `manager.localhost` / `manager.test` lines of
   `/etc/hosts` are removed;
 - the installed app on `manager.localhost` must be installed again from `http://tarmac.localhost`;

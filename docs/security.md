@@ -7,9 +7,16 @@ Mac only. This page explains how, and what each part is allowed to do. To report
 ## Local only
 
 - The server listens on **`127.0.0.1`** (`TARMAC_HOST`), never on your network interfaces by default.
-- Every HTTP and WebSocket request whose `Host` or `Origin` header is not local is refused (`403`). Accepted:
+- Every HTTP and WebSocket request whose `Host` header is not local is refused (`403`). Accepted hosts:
   `localhost`, `127.0.0.1`, `[::1]`, `*.localhost`, `*.test`, the host of `TARMAC_URL` and `ALLOWED_HOSTS`. This
-  blocks cross-site requests (CSRF) and cross-origin WebSockets from any website you visit, and DNS rebinding.
+  blocks DNS rebinding.
+- A request sent by a browser page must come from Tarmac itself: its `Origin` must be exactly the address
+  requested (scheme, host and port) or the origin of `TARMAC_URL`, and API or WebSocket requests marked
+  `Sec-Fetch-Site: cross-site` or `same-site` are refused. A website you visit, or another app you run in dev on
+  `localhost:5173` or `app.localhost`, cannot call Tarmac's API or open its consoles. Clients without `Origin`
+  (the `tarmac` CLI, the MCP server, hooks) are not affected.
+- The "write TypeScript types to a file" Supabase command only writes inside the project: a path through a
+  symbolic link that leads outside is refused.
 - No telemetry. Outgoing calls are limited to `git fetch` on your repositories and the GitHub API with your token.
 
 Do not set `TARMAC_HOST=0.0.0.0` or put Tarmac behind a tunnel: anyone who reaches the UI can run commands as

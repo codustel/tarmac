@@ -6,7 +6,7 @@ import dns from 'node:dns/promises';
 import fs from 'node:fs';
 import path from 'node:path';
 import { LABEL, MIN_NODE, OLD_LABEL, c, configured, nodeOk, tilde, which, type Ctx, type Out, type Runner } from './context.js';
-import { answers } from './setup.js';
+import { answers, type Port80 } from './setup.js';
 
 export interface Facts {
   platform: string;
@@ -26,7 +26,8 @@ export interface Facts {
   /** Adresses du domaine (vide si non résolu). */
   domainAddrs: string[];
   urlAnswers: boolean;
-  pfRedirect: boolean;
+  /** Redirection du port 80 : active (127.0.0.1:80 atteint Tarmac), installée sans effet, ou absente. */
+  pfRedirect: Port80;
   git: boolean;
   gh: 'missing' | 'logged-out' | 'ok';
   docker: string | null;
@@ -70,8 +71,11 @@ export function diagnose(f: Facts): Check[] {
   }
   add('URL', f.urlAnswers ? 'ok' : 'warn', `${f.url}${f.urlAnswers ? '' : ' does not answer'}`,
     f.urlAnswers ? undefined : `Open http://${f.domain}:${f.port} instead, or run tarmac setup to fix the URL`);
-  add('Port 80', f.pfRedirect ? 'ok' : 'warn', f.pfRedirect ? `redirected to ${f.port} (pf)` : 'not redirected (URL with :port)',
-    f.pfRedirect ? undefined : 'Optional: tarmac setup (without --no-sudo) for an URL without port');
+  if (f.pfRedirect === 'active') add('Port 80', 'ok', `redirect active: 127.0.0.1:80 reaches Tarmac (pf → ${f.port})`);
+  else if (f.pfRedirect === 'not-applied') {
+    add('Port 80', 'warn', `redirect installed but not applied by macOS (use http://${f.domain}:${f.port})`,
+      'Optional: see "Port 80" in docs/troubleshooting.md for the diagnosis commands');
+  } else add('Port 80', 'warn', 'not redirected (URL with :port)', 'Optional: tarmac setup (without --no-sudo) for an URL without port');
 
   add('git', f.git ? 'ok' : 'fail', f.git ? 'installed' : 'not found', f.git ? undefined : 'Install the Xcode command line tools: xcode-select --install');
   if (f.gh === 'ok') add('GitHub CLI', 'ok', 'gh logged in');
@@ -104,7 +108,10 @@ export async function gatherFacts(ctx: Ctx, runner: Runner): Promise<Facts> {
   const gh = which('gh', ctx.env) ? (runner.capture(['gh', 'auth', 'status'], { timeoutMs: 8000 }) !== null ? 'ok' : 'logged-out') : 'missing';
   const claudeJson = (() => { try { return JSON.parse(fs.readFileSync(path.join(ctx.home, '.claude.json'), 'utf8')); } catch { return {}; } })();
   const claudeDir = ctx.env.CLAUDE_CONFIG_DIR ?? path.join(ctx.home, '.claude');
-  const [portAnswers, urlAnswers] = await Promise.all([answers(`http://127.0.0.1:${port}`), answers(url)]);
+  const pfInstalled = fs.existsSync(ctx.pfAnchor);
+  const [portAnswers, urlAnswers, port80] = await Promise.all([
+    answers(`http://127.0.0.1:${port}`), answers(url), pfInstalled ? answers('http://127.0.0.1') : Promise.resolve(false),
+  ]);
   return {
     platform: ctx.platform,
     node: ctx.nodeVersion,
@@ -120,7 +127,7 @@ export async function gatherFacts(ctx: Ctx, runner: Runner): Promise<Facts> {
     domain,
     domainAddrs,
     urlAnswers,
-    pfRedirect: fs.existsSync(ctx.pfAnchor),
+    pfRedirect: !pfInstalled ? 'none' : port80 ? 'active' : 'not-applied',
     git: which('git', ctx.env) !== null,
     gh,
     docker: dockerSocket(ctx),

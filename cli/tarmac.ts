@@ -14,9 +14,19 @@ import {
 import { doctor } from './doctor.js';
 import { executePlan, printPlan } from './plan.js';
 import { logs, open, planUninstall, restart, start, status, stop, uninstallNotes } from './service.js';
+import { asideName, localTime, staleDataDir } from '../server/dataDir.js';
 import { claudePresence, finalUrl, planSetup, type SetupOptions } from './setup.js';
 
 const interactive = () => !!process.stdin.isTTY && !!process.stdout.isTTY;
+
+/** `~/.tarmac` existe mais `~/.app-manager` a des données plus récentes : explication (dates comparées). */
+function staleNotice(ctx: Ctx, out: Out, s: { target: number; legacy: number }) {
+  warn(out, `${tilde(ctx, ctx.dataDir)} already exists, but ${tilde(ctx, ctx.oldDataDir)} (App Manager) has newer data:`);
+  out.log(`   ${tilde(ctx, ctx.oldDataDir).padEnd(16)} last write ${localTime(s.legacy)}`);
+  out.log(`   ${tilde(ctx, ctx.dataDir).padEnd(16)} last write ${localTime(s.target)}`);
+  out.log(`   Tarmac would start on the older data (suivi.db, state.json). Nothing is deleted: ${tilde(ctx, ctx.dataDir)}`);
+  out.log(`   can be moved aside to ${tilde(ctx, asideName(ctx.dataDir))} before copying ${tilde(ctx, ctx.oldDataDir)}.`);
+}
 
 async function ask(question: string, def: boolean): Promise<boolean> {
   const rl = readline.createInterface({ input: process.stdin, output: process.stdout });
@@ -55,9 +65,16 @@ export async function setup(ctx: Ctx, flags: Flags, runner: Runner, out: Out): P
     warn(out, `${o.domain} only resolves through /etc/hosts, which --no-sudo skips: use a *.localhost domain.`);
   }
 
+  const stale = ctx.env.DATA_DIR ? null : staleDataDir(ctx.dataDir, ctx.oldDataDir);
+
   if (flags.dryRun) {
+    o.replaceStale = !!stale;
     printPlan(ctx, planSetup(ctx, o, runner), out, `tarmac setup ${ctx.version} — ${tilde(ctx, ctx.appDir)}`);
     out.log();
+    if (stale) {
+      staleNotice(ctx, out, stale);
+      out.log(c.dim('   Moving it aside is asked for confirmation (--yes accepts it); if refused, it is kept as is.'));
+    }
     if (o.sudo) out.log(c.dim('[sudo] steps are explained and confirmed first; --no-sudo skips them (URL with :port).'));
     if (o.claude) out.log(c.dim('The Claude Code step is asked for confirmation (--with-claude / --no-claude to decide up front).'));
     if (!presence.code && !flags.noClaude) out.log(c.dim('Claude Code not found: its integration would be skipped.'));
@@ -65,6 +82,13 @@ export async function setup(ctx: Ctx, flags: Flags, runner: Runner, out: Out): P
   }
 
   // Questions posées avant toute modification.
+  if (stale) {
+    staleNotice(ctx, out, stale);
+    if (flags.yes) o.replaceStale = true;
+    else if (interactive()) o.replaceStale = await ask(`Move ${tilde(ctx, ctx.dataDir)} aside and copy ${tilde(ctx, ctx.oldDataDir)}?`, true);
+    else warn(out, `Not interactive: ${tilde(ctx, ctx.dataDir)} is kept as is (use --yes to move it aside and copy ${tilde(ctx, ctx.oldDataDir)}).`);
+    if (!o.replaceStale) out.log(c.dim(`   ${tilde(ctx, ctx.dataDir)} kept; Tarmac uses it.`));
+  }
   let steps = planSetup(ctx, o, runner);
   const sudoSteps = steps.filter((s) => s.sudo);
   if (sudoSteps.length && !flags.yes) {
@@ -98,10 +122,14 @@ export async function setup(ctx: Ctx, flags: Flags, runner: Runner, out: Out): P
   await executePlan({ ctx, runner, out }, steps);
   out.log();
   ok(out, `Tarmac is up → ${finalUrl}`);
-  if (steps.some((s) => s.id === 'legacy-service' || s.id === 'migrate-data')) {
+  if (steps.some((s) => ['legacy-service', 'migrate-data', 'replace-stale-data'].includes(s.id))) {
     say(out, 'Migration from App Manager:');
     out.log(`   - the installed app (PWA) on manager.localhost must be reinstalled from ${finalUrl};`);
     out.log(`   - ${tilde(ctx, ctx.oldDataDir)} is kept and can be deleted once Tarmac is checked;`);
+    if (steps.some((s) => s.id === 'replace-stale-data')) {
+      out.log(`   - the outdated ${tilde(ctx, ctx.dataDir)} was moved to ${tilde(ctx, ctx.dataDir)}.old-… (same: delete it once checked);`);
+      out.log('   - restart open Claude Code sessions so that their MCP server reads the new data;');
+    }
     out.log('   - Claude: tarmac setup --with-claude replaces the "app-manager" MCP server with "tarmac".');
   }
   out.log(c.dim('Next: tarmac status · tarmac logs · tarmac doctor · tarmac --help'));
