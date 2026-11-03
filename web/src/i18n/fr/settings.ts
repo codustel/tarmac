@@ -14,6 +14,7 @@ export default {
   'settings.rootsHint': 'Scannés récursivement à la recherche de projets (Node, Python, Go, Rust, PHP, Ruby, Deno, sites statiques, dépôts git). {tilde} est accepté.',
   'settings.remove': 'Retirer',
   'settings.addFolder': 'Ajouter un dossier',
+  'settings.browse': 'Parcourir…',
   'settings.shown': 'Projets affichés',
   'settings.shownHint': 'Par défaut : les projets lançables dans un navigateur (web, API, mobile/Expo) et les projets Python. Les librairies, CLI et outils sont masqués.',
   'settings.showAll': 'Afficher aussi les autres projets (librairies, CLI Node/Go/Rust…)',

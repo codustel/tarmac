@@ -3,6 +3,7 @@
  * (pas de commande libre via l'API) ; les paramètres sont validés puis échappés.
  */
 import { appError, type Loc } from './i18n.js';
+import { chain, quote } from './platform.js';
 
 export type GitArg = 'message' | 'branch' | 'optional-message';
 
@@ -143,13 +144,13 @@ export const GIT_COMMANDS: GitCommand[] = [
     description: {
       en: 'Deletes untracked files and folders (except .gitignore). Irreversible.',
       fr: 'Supprime les fichiers et dossiers non suivis (hors .gitignore). Irréversible.' } },
-  { id: 'reset-remote', group: { en: 'Undo', fr: 'Annuler' }, label: 'git reset --hard @{u}', cmd: 'git fetch && git reset --hard @{u}', danger: true,
+  { id: 'reset-remote', group: { en: 'Undo', fr: 'Annuler' }, label: 'git reset --hard @{u}', cmd: "git fetch && git reset --hard '@{u}'", danger: true,
     description: {
       en: 'Aligns the branch exactly on the remote: ALL local changes and unpushed commits are lost.',
       fr: 'Aligne exactement la branche sur le distant : TOUTES les modifs et commits locaux non poussés sont perdus.' } },
 ];
 
-export const quote = (s: string) => `'${s.replace(/'/g, `'\\''`)}'`;
+export { quote } from './platform.js';
 
 /** Construit la commande ; erreur si le paramètre est invalide. */
 export function buildGitCommand(id: string, arg?: string): { cmd: GitCommand; shell: string } {
@@ -169,5 +170,6 @@ export function buildGitCommand(id: string, arg?: string): { cmd: GitCommand; sh
     if (!/^[A-Za-z0-9][\w./-]{0,199}$/.test(b) || b.includes('..') || b.endsWith('.lock') || b.endsWith('/')) throw appError('git.badBranch', undefined, 400);
     value = quote(b);
   }
-  return { cmd, shell: cmd.cmd.replace('{arg}', value).replace(/\s+$/, '') };
+  // Étapes enchaînées par le shell courant (`&&` n'existe pas en Windows PowerShell 5.1).
+  return { cmd, shell: chain(cmd.cmd.split(' && ').map((step) => step.replace('{arg}', value).replace(/\s+$/, ''))) };
 }

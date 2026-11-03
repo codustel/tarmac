@@ -14,6 +14,7 @@ const en: typeof fr = {
   'settings.rootsHint': 'Scanned recursively for projects (Node, Python, Go, Rust, PHP, Ruby, Deno, static sites, git repositories). {tilde} is accepted.',
   'settings.remove': 'Remove',
   'settings.addFolder': 'Add a folder',
+  'settings.browse': 'Browse…',
   'settings.shown': 'Projects shown',
   'settings.shownHint': 'By default: projects that run in a browser (web, API, mobile/Expo) and Python projects. Libraries, CLIs and tools are hidden.',
   'settings.showAll': 'Also show other projects (libraries, Node/Go/Rust CLIs…)',

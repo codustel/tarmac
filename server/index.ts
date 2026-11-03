@@ -28,6 +28,7 @@ import { GIT_COMMANDS, buildGitCommand } from './gitCommands.js';
 import { msg, runWithRequestLang, tr, uiLang } from './i18n.js';
 import { SUPABASE_COMMANDS, buildSupabaseCommand, findSupabaseDir } from './supabaseCommands.js';
 import { freeHistoryPorts, isPortBusy, killPort } from './ports.js';
+import { chain, hasCommand, isWindows, openTerminal, openWithEditor, portOwnerHint, quote, reveal, shellLabel } from './platform.js';
 import { state, flushSync } from './store.js';
 import { publicSettings, settings, updateSettings, type SettingsPatch } from './settings.js';
 import { listDir, MAX_EDIT_BYTES, readFile as readProjectFile, resolveInside, statFile, writeFile as writeProjectFile } from './ide.js';
@@ -50,7 +51,7 @@ import { androidStatus, applyAndroidEnv, ensureEmulator, installCommand, isAvd, 
 const exec = promisify(execFile);
 const webDir = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../web');
 /** Racine du dépôt Tarmac (même chemin depuis server/ et depuis dist/server/). */
-const APP_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..').replace(/\/dist$/, '');
+const APP_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..').replace(/[\\/]dist$/, '');
 const app = Fastify({ logger: { level: process.env.LOG_LEVEL ?? 'warn' } });
 
 // ─── Sécurité ───────────────────────────────────────────────────────────────
@@ -529,7 +530,7 @@ app.post<{ Params: { id: string }; Body: { commandId?: string; shell?: boolean; 
     if (!p) return reply.code(404).send({ error: msg('api.unknownProject') });
     const { commandId, shell, cols, rows } = req.body ?? {};
     let command: string | null = null;
-    let label = path.basename(process.env.SHELL || 'zsh');
+    let label = shellLabel();
     if (!shell) {
       const c = p.commands.find((x) => x.id === (commandId ?? p.defaultCommand));
       if (!c) return reply.code(400).send({ error: msg('api.unknownCommand') });
@@ -831,9 +832,7 @@ async function openClaudeConsole(p: Project, opts: { resume?: string; prompt?: s
     const open = terminals.findByClaude(resume);
     if (open) return terminals.list().find((t) => t.id === open)!;
   }
-  try {
-    if (!isDemo()) await exec('/bin/sh', ['-c', 'command -v claude'], { env: process.env, timeout: 3000 });
-  } catch {
+  if (!isDemo() && !(await hasCommand('claude'))) {
     throw Object.assign(new Error(msg('api.noClaudeCli')), { statusCode: 400 });
   }
   const displayName = p.group.isRoot || p.group.type === 'single' ? p.name : `${p.group.name} · ${p.name === p.group.name ? p.techName : p.name}`;
@@ -885,9 +884,7 @@ async function openCodexConsole(p: Project, opts: { resume?: string; prompt?: st
     const open = terminals.findByCodex(resume);
     if (open) return terminals.list().find((t) => t.id === open)!;
   }
-  try {
-    if (!isDemo()) await exec('/bin/sh', ['-c', 'command -v codex'], { env: process.env, timeout: 3000 });
-  } catch {
+  if (!isDemo() && !(await hasCommand('codex'))) {
     throw Object.assign(new Error(msg('api.noCodexCli')), { statusCode: 400 });
   }
   const displayName = p.group.isRoot || p.group.type === 'single' ? p.name : `${p.group.name} · ${p.name === p.group.name ? p.techName : p.name}`;
@@ -1007,10 +1004,11 @@ app.post<{ Body: { fullName: string; cols?: number; rows?: number } }>('/api/git
   // `gh repo clone` réutilise l'authentification de la CLI (repos privés) ; sinon git clone en SSH.
   // Mode démo : faux `gh` (sans réseau) en tête du PATH.
   const st = await ghCliStatus();
-  const q = (s: string) => `'${s.replace(/'/g, `'\\''`)}'`;
-  // Destination sous le dossier personnel écrite `~/…` (développé par le shell) : chemin court dans la console.
+  const q = (s: string) => quote(s);
+  // Destination sous le dossier personnel écrite `~/…` (développé par sh) : chemin court dans la console.
+  // PowerShell ne développe pas `~` pour un programme : chemin complet sous Windows.
   const home = os.homedir();
-  const qDest = dest.startsWith(home + path.sep) ? `~/${q(dest.slice(home.length + 1))}` : q(dest);
+  const qDest = !isWindows() && dest.startsWith(home + path.sep) ? `~/${q(dest.slice(home.length + 1))}` : q(dest);
   const d = demo();
   const command = st.loggedIn || d
     ? `gh repo clone ${q(fullName)} ${qDest}`
@@ -1123,7 +1121,7 @@ app.post<{ Params: { id: string }; Body: { cols?: number; rows?: number } }>('/a
   try {
     const avd = await ensureEmulator();
     return await terminals.create(p, {
-      command: `${waitForBootCommand()} && ${run}`,
+      command: chain([waitForBootCommand(), run]),
       label: `Android (${avd})`,
       projectName: p.name,
       cols: req.body?.cols,
@@ -1167,13 +1165,40 @@ const EDITORS: Record<string, { app: string; cli: string }> = {
   webstorm: { app: 'WebStorm', cli: 'webstorm' },
 };
 
+/**
+ * Sélecteur de dossier natif (Réglages) : la fenêtre « Choisir un dossier » de macOS, ouverte par le service
+ * (le navigateur ne donne jamais le chemin absolu d'un dossier). Le dossier de départ est passé en argument,
+ * jamais interpolé dans le script.
+ */
+app.post<{ Body: { start?: string } }>('/api/pick-folder', async (req, reply) => {
+  if (process.platform !== 'darwin') return reply.code(501).send({ error: msg('api.pickFolderUnsupported') });
+  const raw = typeof req.body?.start === 'string' ? req.body.start.trim() : '';
+  const expanded = raw ? path.resolve(raw.replace(/^~(?=$|\/)/, os.homedir())) : '';
+  const start = expanded && fs.existsSync(expanded) && fs.statSync(expanded).isDirectory() ? expanded : os.homedir();
+  const script = [
+    'on run argv',
+    '  activate',
+    '  set f to choose folder with prompt (item 1 of argv) default location (POSIX file (item 2 of argv))',
+    '  return POSIX path of f',
+    'end run',
+  ];
+  try {
+    const { stdout } = await exec('osascript', [...script.flatMap((l) => ['-e', l]), msg('api.pickFolderPrompt'), start], { timeout: 10 * 60_000 });
+    return { path: stdout.trim().replace(/\/$/, '') || null };
+  } catch (e: any) {
+    // Annulation par l'utilisateur (erreur AppleScript -128) : pas une erreur.
+    if (/-128/.test(String(e.stderr ?? e.message))) return { path: null };
+    return reply.code(500).send({ error: e.message });
+  }
+});
+
 app.post<{ Body: { dir: string; with: 'finder' | 'editor' | 'terminal' } }>('/api/open', async (req, reply) => {
   const dir = path.resolve(req.body.dir);
   if (!inRoots(dir)) return reply.code(400).send({ error: msg('api.outsideRoots') });
   if (isDemo()) return { ok: true }; // mode démo : n'ouvre aucune app de la machine
   try {
-    if (req.body.with === 'finder') await exec('open', fs.statSync(dir).isFile() ? ['-R', dir] : [dir]);
-    else if (req.body.with === 'terminal') await exec('open', ['-a', 'Terminal', dir]);
+    if (req.body.with === 'finder') await reveal(dir, fs.statSync(dir).isFile());
+    else if (req.body.with === 'terminal') await openTerminal(dir);
     else {
       // Projet déjà ouvert (directement, via un dossier parent ou un .code-workspace) : on rouvre la même
       // cible dans le même éditeur → VS Code met au premier plan la fenêtre existante au lieu d'en créer une.
@@ -1181,8 +1206,8 @@ app.post<{ Body: { dir: string; with: 'finder' | 'editor' | 'terminal' } }>('/ap
       const existing = open && EDITOR_APPS.find((e) => e.id === open.editor);
       const ed = existing ?? EDITORS[settings.editor] ?? EDITORS.vscode;
       const target = open ? open.workspaceFile ?? open.path : dir;
-      // `open -a` fonctionne sans la CLI ; repli sur la CLI (`code`) si l'app n'est pas dans /Applications.
-      await exec('open', ['-a', ed.app, target]).catch(() => exec(ed.cli, [target]));
+      // macOS : `open -a` fonctionne sans la CLI ; repli sur la CLI (`code`) si l'app n'est pas dans /Applications.
+      await openWithEditor(ed, target);
       return { ok: true, reused: !!open, target };
     }
     return { ok: true };
@@ -1222,7 +1247,7 @@ try {
   await app.listen({ host: config.host, port: config.port });
 } catch (e: any) {
   if (e.code === 'EACCES') console.error(`✗ Port ${config.port} denied: on macOS, ports < 1024 are not allowed on ${config.host} without root. Use TARMAC_PORT=7777 (the install script redirects port 80).`);
-  else if (e.code === 'EADDRINUSE') console.error(`✗ Port ${config.port} already in use (lsof -nP -iTCP:${config.port} -sTCP:LISTEN).`);
+  else if (e.code === 'EADDRINUSE') console.error(`✗ Port ${config.port} already in use (${portOwnerHint(config.port)}).`);
   else console.error(e);
   process.exit(1);
 }

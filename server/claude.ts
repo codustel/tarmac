@@ -4,6 +4,7 @@ import path from 'node:path';
 import { tr } from './i18n.js';
 import { isDemo } from './demo/index.js';
 import { attachSessions, scanAgentProcs } from './agentProcs.js';
+import { quote } from './platform.js';
 
 
 /**
@@ -198,7 +199,7 @@ export function assignSessions<T extends { cwd: string }>(sessions: T[], dirs: s
 
 /** Commande shell : nouvelle session Remote Control, ou reprise d'une session existante. */
 export function claudeCommand(opts: { name?: string; resume?: string; sessionId?: string; prompt?: string }) {
-  const q = (s: string) => `'${s.replace(/'/g, `'\\''`)}'`;
+  const q = (s: string) => quote(s);
   // --session-id : on connaît l'ID du transcript dès le lancement (lien onglet ↔ session).
   // `prompt` : premier message (ex. `/suivi init`), après le nom consommé par --remote-control.
   if (opts.resume) return `claude --resume ${q(opts.resume)} --remote-control`;

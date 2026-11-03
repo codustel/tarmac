@@ -90,7 +90,7 @@ test('tour de parole Codex : task_started sans fin = au travail, task_complete /
   assert.equal(codexTurnFromLines([ev(3, { type: 'task_complete' }), ev(1, { type: 'task_started' })]), 'working');
 });
 
-test('commande Codex : nouvelle session (premier message), reprise, guillemets', () => {
+test('commande Codex : nouvelle session (premier message), reprise, guillemets', { skip: process.platform === 'win32' && 'échappement sh (PowerShell : platform.test.ts)' }, () => {
   assert.equal(codexCommand({}), 'codex');
   assert.equal(codexCommand({ prompt: "Traite la tâche 4.12 « l'accueil »" }), "codex 'Traite la tâche 4.12 « l'\\''accueil »'");
   assert.equal(codexCommand({ prompt: '--yolo do it' }), "codex 'yolo do it'", 'un message ne devient jamais une option');

@@ -11,7 +11,9 @@ import { SuiviService } from './service.js';
 import { buildPrompt, cleanText, codexConsoleState, consoleState, isCodexFooterLine, pasteSequence, screenText, SuiviDispatcher, type ConsoleInfo } from './dispatch.js';
 import { countTasks, sanitizeTask } from './types.js';
 
-const ROOT = '/dev/acme-shop';
+// Chemins absolus de la plateforme (C:\dev\… sous Windows), comme ceux que Tarmac scanne.
+const ROOT = path.resolve('/dev/acme-shop');
+const OTHER = path.resolve('/dev/other');
 const T = (id: string, order: number, over: object = {}) => ({ id, order, phase: 4, phaseTitle: 'Phase 4', num: `4.${order}`, title: `Tâche ${id}`, who: 'claude', minutes: 30, ...over });
 
 // Écrans de Claude Code (sortie brute, avec couleurs et effacements comme la TUI).
@@ -29,7 +31,7 @@ const idleScreens = (consoles: ConsoleInfo[]): Screens => Object.fromEntries(con
 function setup(consoles: ConsoleInfo[] = [], screens: Screens = idleScreens(consoles)) {
   const s = new SuiviService(openDb(':memory:'));
   s.registerProject({ projectId: 'acme/shop', name: 'shop', paths: [ROOT] });
-  s.registerProject({ projectId: 'acme/other', name: 'other', paths: ['/dev/other'] });
+  s.registerProject({ projectId: 'acme/other', name: 'other', paths: [OTHER] });
   s.importFile('acme/shop', { collection: 'tasks', exportedAt: '2026-10-10T00:00:00Z', tasks: [
     T('t-4-12', 12, { title: 'Ajouter\x1b[31m le\nbouton\u202e « Claude »\x07' }), T('t-4-13', 13, { toTest: true }), T('t-4-14', 14, { done: true }), T('t-4-15', 15, { archived: true }),
   ] });
@@ -38,7 +40,7 @@ function setup(consoles: ConsoleInfo[] = [], screens: Screens = idleScreens(cons
   const opened: [string, string][] = [];
   const d = new SuiviDispatcher({
     service: s,
-    appProjects: () => [{ id: 'shop-web', dir: `${ROOT}/apps/web` }, { id: 'shop', dir: ROOT }, { id: 'other', dir: '/dev/other' }, { id: 'near', dir: `${ROOT}-2` }],
+    appProjects: () => [{ id: 'shop-web', dir: path.join(ROOT, 'apps', 'web') }, { id: 'shop', dir: ROOT }, { id: 'other', dir: OTHER }, { id: 'near', dir: `${ROOT}-2` }],
     consoles: () => consoles,
     sessionTitle: (id) => (id === 'cs-1' ? 'Refonte du panier' : null),
     write: (id, data) => { writes.push([id, data]); onWrite?.(id, data); },
