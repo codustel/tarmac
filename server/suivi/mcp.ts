@@ -160,6 +160,18 @@ register('suivi_sync_merge', {
   inputSchema: { projectId: PROJECT },
 }, ({ projectId }) => run(() => api('POST', `/api/suivi/projects/${enc(projectId)}/sync/merge`)));
 
+register('suivi_restructure', {
+  description: 'Restructures a tracker (/suivi restructure): renumbers whole phases (`phases`: 8 → 10), moves top-level tasks to another phase (`moves`; subtasks follow their parent), sets phase titles (`titles`). Task ids never change; `num`, `phase`, `phaseTitle` and `order` are recomputed (numbers kept when possible, `compact` renumbers touched phases 1..N). Call it with `dryRun: true` first and show the user the result (`phases`, `mapping` old → new numbers); apply only after their OK, then run /suivi sync (writes the changed tasks to the artifact) and suivi_write_copy.',
+  inputSchema: {
+    projectId: PROJECT,
+    phases: z.array(z.object({ from: z.number().int(), to: z.number().int() })).optional().describe('Whole phases renumbered, e.g. [{from: 9, to: 10}]'),
+    moves: z.array(z.object({ taskId: z.string(), phase: z.number().int() })).optional().describe('Top-level tasks moved to another phase (by task id)'),
+    titles: z.array(z.object({ phase: z.number().int(), title: z.string() })).optional().describe('Titles of the resulting phases (required for a phase that only receives moved tasks)'),
+    compact: z.boolean().optional().describe('Renumber every touched phase 1..N (default: keep numbers when possible)'),
+    dryRun: z.boolean().optional().describe('Preview only: nothing is written'),
+  },
+}, ({ projectId, ...plan }) => run(() => api('POST', `/api/suivi/projects/${enc(projectId)}/restructure`, plan)));
+
 register('suivi_write_copy', {
   description: 'Regenerates the project’s versioned copy Todolist/<file>.json from Tarmac (call after every change).',
   inputSchema: { projectId: PROJECT },

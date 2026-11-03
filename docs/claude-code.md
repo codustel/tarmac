@@ -119,6 +119,7 @@ permission or submit half-typed text. Sessions started outside Tarmac (Terminal,
 | `/suivi sync [--all]` | Catch-up between the artifact and Tarmac (the most recent change wins) |
 | `/suivi upgrade [--all]` | Republishes the artifact page with the latest template and its capabilities, same URL, data kept |
 | `/suivi theme` | Shows or fixes the artifact's colors and fonts |
+| `/suivi restructure` | Splits, merges or renumbers phases (e.g. phase 7 → 7 backend, 8 mobile, 9 frontend; old 8 → 10), after you review a preview; task ids and history are kept |
 
 ### Sync channels
 

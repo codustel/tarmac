@@ -8,6 +8,7 @@ import type { Db } from './db.js';
 import { msg, tr, uiLang } from '../i18n.js';
 import { compareVersions, mergeTask, same, type FieldChange } from './merge.js';
 import { buildTheme, sanitizeTheme } from './theme.js';
+import { planRestructure, type RestructurePlan } from './restructure.js';
 import {
   clearRequestIfHandled, countTasks, sanitizeField, sanitizeTask, SuiviError, TASK_FIELDS, TASK_ID_RE, UI_FIELDS,
   type Channel, type Origin, type SuiviProject, type Task, type TaskField,
@@ -218,6 +219,24 @@ export class SuiviService {
     });
     this.onChange(projectId);
     return next;
+  }
+
+  /**
+   * Restructuration (/suivi restructure) : phases renumérotées, tâches déplacées, titres. `dryRun` renvoie le
+   * résultat sans rien écrire (aperçu à montrer avant d'appliquer). Les tâches modifiées passent `rev + 1` :
+   * le rattrapage suivant (/suivi sync) les réécrit dans l'artefact.
+   */
+  restructure(projectId: string, plan: RestructurePlan, opts: { dryRun?: boolean } = {}) {
+    this.requireProject(projectId);
+    const r = planRestructure(this.tasks(projectId, { archived: true }), plan ?? {});
+    if (!opts.dryRun && r.changed.length) {
+      const now = new Date().toISOString();
+      this.tx(() => {
+        for (const t of r.changed) this.mergeOne(projectId, { ...t, rev: t.rev + 1, updatedAt: now, updatedBy: 'claude' }, 'claude', 'restructure');
+      });
+      this.onChange(projectId);
+    }
+    return { dryRun: !!opts.dryRun, changed: r.changed.length, phases: r.phases, mapping: r.mapping };
   }
 
   // ─── Import / export ───────────────────────────────────────────────────────

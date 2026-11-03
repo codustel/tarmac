@@ -141,6 +141,18 @@ export function registerSuiviRoutes(app: FastifyInstance, service: SuiviService,
     } catch (e) { return fail(reply, e); }
   });
 
+  /** Restructuration du suivi (/suivi restructure) : aperçu avec `dryRun`, sinon application. */
+  app.post<{ Params: P; Body: Record<string, any> }>('/api/suivi/projects/:projectId/restructure', async (req, reply) => {
+    if (!isClaude(req.headers)) return claudeOnly(reply);
+    try {
+      const projectId = pid(req.params.projectId);
+      const { dryRun, ...plan } = req.body ?? {};
+      const r = service.restructure(projectId, plan, { dryRun: !!dryRun });
+      if (!r.dryRun && r.changed) service.recordSync(projectId, 'B', tr({ en: 'restructure: {n} task(s)', fr: 'restructuration : {n} tâche(s)' }, { n: r.changed }));
+      return r;
+    } catch (e) { return fail(reply, e); }
+  });
+
   /** Régénère la copie `Todolist/<fichier>` du dépôt depuis la base. */
   app.post<{ Params: P }>('/api/suivi/projects/:projectId/write-copy', async (req, reply) => {
     if (!isClaude(req.headers)) return claudeOnly(reply);

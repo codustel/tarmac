@@ -1,6 +1,6 @@
 ---
 name: suivi
-description: Claude Todolist — project tracking shared between Tarmac (source of truth, MCP server tarmac) and one claude.ai artifact per project. Subcommands /suivi init, open, import, sync [--all], upgrade [--all], theme. Use whenever the user asks to create, show, sync, update or fill a project's tracker (its "todolist"), or when the session-start hook suggests it.
+description: Claude Todolist — project tracking shared between Tarmac (source of truth, MCP server tarmac) and one claude.ai artifact per project. Subcommands /suivi init, open, import, sync [--all], upgrade [--all], theme, restructure. Use whenever the user asks to create, show, sync, update or fill a project's tracker (its "todolist"), or when the session-start hook suggests it.
 ---
 
 # /suivi — Claude Todolist
@@ -100,6 +100,24 @@ Show the saved brand (`suivi_get` → `project.theme`); suggest a fix (primary c
 Google Fonts); save it in `Todolist/suivi.config.json` and `suivi_register_project`, then
 `/suivi upgrade`.
 
+## /suivi restructure — split, merge or renumber phases
+
+For a phase that grew too big (split it), phases to shift (9 → 10) or to merge. Task ids never change (the
+artifact db keeps its documents, history stays attached): only `phase`, `phaseTitle`, `num` and `order` move.
+1. Read the tracker (`suivi_get`, archived included) and propose the new structure to the user: the resulting
+   phases (number, title) and, for each task of a phase to split, where it goes. Classify by title, `why` and
+   steps; when in doubt, ask. Example: phase 7 → 7 Backend, 8 Mobile, 9 Frontend; old 8 → 10, old 9 → 11.
+2. Build the plan: `phases` (whole phases renumbered, `{from, to}`), `moves` (top-level tasks moved one by one,
+   `{taskId, phase}`; subtasks always follow their parent), `titles` (`{phase, title}`, required for a phase that
+   only receives moved tasks). Numbers are kept when possible (7.12 stays 7.12; 9.3 → 10.3); moved tasks are
+   numbered after the last number of their new phase; `compact: true` renumbers each touched phase 1..N.
+3. **Preview**: `suivi_restructure` with `dryRun: true`; show the user the resulting phases and the old → new
+   numbers (`mapping`, in a file or a page if it is long) and wait for their OK. Nothing is written before.
+4. Apply: same call without `dryRun`. Old numbers stay in each task's history (journal origin `restructure`).
+5. `/suivi sync` (steps 1-4): writes the changed tasks to the artifact db; then the final check.
+6. Sum up in one line (phases, tasks renumbered). Numbers quoted elsewhere (commits, notes) keep their old value:
+   the `mapping` is the correspondence table, put it in the commit message of the `Todolist/` copy if useful.
+
 ## /suivi import — fill the tracker from sessions
 
 1. Collect: the project's local sessions (clone and worktrees) — Tarmac's `GET /api/projects/<id>/claude-sessions`
@@ -116,7 +134,7 @@ Google Fonts); save it in `Todolist/suivi.config.json` and `suivi_register_proje
    db** (`ArtifactData` `batch` of `set`, batches of 50, data = `suivi_get` without the `id` field), then
    `suivi_write_copy`.
 
-## Final check — mandatory after init, import, sync and any series of writes
+## Final check — mandatory after init, import, sync, restructure and any series of writes
 
 `ArtifactData` `list` of `tasks` (`query.limit` 1000, `out_dir` in the scratchpad) and compare with the total from
 `suivi_get` (archived included). If tasks are missing from the artifact, write them there (`set`) before replying,

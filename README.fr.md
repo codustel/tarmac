@@ -146,6 +146,7 @@ Codex passe par la vue Todolist de Tarmac et la copie `Todolist/` (voir [Codex](
 | `/suivi sync [--all]` | Rattrape l'écart entre l'artefact et Tarmac quand l'un a changé sans l'autre (téléphone, autre ordinateur) ; la modification la plus récente l'emporte. `--all` traite tous les projets. |
 | `/suivi upgrade [--all]` | Republie la page de l'artefact avec le dernier gabarit (nouveaux boutons comme **▶ Claude**, corrections), même URL, données conservées. À lancer après une mise à jour de Tarmac. `--all` traite tous les projets. |
 | `/suivi theme` | Affiche les couleurs et polices de l'artefact et permet de les corriger si la détection s'est trompée. |
+| `/suivi restructure` | Réorganise le suivi quand une phase devient trop grosse : la redécoupe en plusieurs phases, décale ou fusionne les suivantes (ex. phase 7 → 7 backend, 8 mobile, 9 frontend ; l'ancienne 8 devient 10). Claude montre d'abord un aperçu des nouveaux numéros ; identifiants des tâches et historique conservés. |
 
 ## Documentation (en anglais)
 

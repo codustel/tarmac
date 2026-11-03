@@ -1,6 +1,6 @@
 ---
 name: suivi
-description: Todolist — project tracking kept by Tarmac (source of truth, MCP server tarmac) with a Todolist/ copy in the repo. Subcommands $suivi init, sync, import, theme. Use when the user asks to create, show, sync, update or fill a project's tracker (its "todolist"), or when the session-start hook suggests it. Do not use for unrelated to-do lists.
+description: Todolist — project tracking kept by Tarmac (source of truth, MCP server tarmac) with a Todolist/ copy in the repo. Subcommands $suivi init, sync, import, theme, restructure. Use when the user asks to create, show, sync, update or fill a project's tracker (its "todolist"), or when the session-start hook suggests it. Do not use for unrelated to-do lists.
 ---
 
 # $suivi — Todolist (Codex)
@@ -58,6 +58,17 @@ synced by Tarmac and Claude sessions, not from Codex.
 
 Show the saved brand (`suivi_get` → `project.theme`); suggest a fix (primary color `#RRGGBB`, Google Fonts);
 save it in `Todolist/suivi.config.json` and `suivi_register_project`.
+
+## $suivi restructure — split, merge or renumber phases
+
+Task ids never change; only `phase`, `phaseTitle`, `num` and `order` move.
+1. `suivi_get` (archived included); propose the new phases (number, title) and where each task of a phase to
+   split goes (by title, `why`, steps; ask when in doubt).
+2. Plan: `phases` (`{from, to}`, whole phases renumbered), `moves` (`{taskId, phase}`, top-level tasks; subtasks
+   follow their parent), `titles` (`{phase, title}`), optional `compact: true` (renumber touched phases 1..N).
+3. `suivi_restructure` with `dryRun: true`; show the phases and the old → new numbers (`mapping`), wait for the
+   user's OK. Then the same call without `dryRun`, then `suivi_write_copy`. The artifact side is caught up by the
+   next Claude `/suivi sync`.
 
 ## $suivi import — fill the tracker from past work
 
