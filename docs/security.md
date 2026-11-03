@@ -35,6 +35,7 @@ you. To use your projects from another device, use Claude Code's Remote Control 
 | Editor, README, files | Reads and writes are confined to the project folder; the README image route only serves image files of the project. |
 | Ports | "Free ports" stops what still listens on ports Tarmac assigned to apps (never Docker or Tarmac itself). |
 | Clone | `gh repo clone` or `git clone` into the clone folder. |
+| Modules | Only the folders listed in `TARMAC_MODULES` (never discovered). A module runs in the server with Tarmac's rights; its routes keep the local host and origin checks. See [Extensions](extensions.md). |
 
 Projects are only searched in the folders you list in **Settings**.
 

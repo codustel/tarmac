@@ -36,6 +36,12 @@
   "bin": {
     "tarmac": "dist/cli/tarmac.js"
   },
+  "exports": {
+    "./modules": {
+      "types": "./dist/types/api.d.ts"
+    },
+    "./package.json": "./package.json"
+  },
   "files": [
     "dist/",
     "scripts/mcp-install.sh",
@@ -56,7 +62,7 @@
   },
   "scripts": {
     "dev": "concurrently -k -n api,web -c blue,magenta \"tsx watch server/index.ts\" \"vite\"",
-    "build": "vite build && tsup",
+    "build": "vite build && tsup && tsc -p tsconfig.modules.json",
     "start": "node dist/server/index.js",
     "typecheck": "tsc --noEmit",
     "test": "node --import tsx --test \"server/**/*.test.ts\" \"web/src/**/*.test.ts\" \"cli/**/*.test.ts\"",

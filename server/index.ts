@@ -39,6 +39,8 @@ import { SuiviDispatcher } from './suivi/dispatch.js';
 import { setSuiviDir, TodolistWatcher, type ProjectRoot } from './suivi/watch.js';
 import { demo, demoBinDir, demoClaudeUsage, isDemo } from './demo/index.js';
 import { crossOriginFetch, originAllowed } from './originGuard.js';
+import { loadModules, parseModuleDirs } from './modules/loader.js';
+import { envVar } from './dataDir.js';
 import { androidStatus, applyAndroidEnv, ensureEmulator, installCommand, isAvd, startAvd, stopAvd, waitForBootCommand } from './android.js';
 
 const exec = promisify(execFile);
@@ -985,6 +987,14 @@ app.post<{ Body: { dir: string; with: 'finder' | 'editor' | 'terminal' } }>('/ap
   } catch (e: any) {
     return reply.code(500).send({ error: msg('api.openFailed', { error: e.message }) });
   }
+});
+
+// ─── Modules (TARMAC_MODULES, docs/extensions.md) ───────────────────────────
+await loadModules(app, {
+  dirs: parseModuleDirs(envVar('MODULES')),
+  dataDir: config.dataDir,
+  coreVersion: JSON.parse(fs.readFileSync(path.join(APP_ROOT, 'package.json'), 'utf8')).version,
+  projects: () => lastScan.projects.map(({ id, name, dir, repoDir }) => ({ id, name, dir, repoDir })),
 });
 
 // ─── UI ─────────────────────────────────────────────────────────────────────

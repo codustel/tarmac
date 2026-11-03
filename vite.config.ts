@@ -21,6 +21,6 @@ export default defineConfig({
   build: { outDir: '../dist/web', emptyOutDir: true, chunkSizeWarningLimit: 1200 },
   server: {
     port: 7778,
-    proxy: { '/api': api, '/ws': { target: api.replace('http', 'ws'), ws: true } },
+    proxy: { '/api': api, '/modules': api, '/ws': { target: api.replace('http', 'ws'), ws: true } },
   },
 });

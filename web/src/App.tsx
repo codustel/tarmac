@@ -12,6 +12,7 @@ import { GithubView } from './views/GithubView';
 import { PortsView } from './views/PortsView';
 import { AndroidView } from './views/AndroidView';
 import { SettingsView } from './views/SettingsView';
+import { ModuleIcon, ModuleView } from './views/ModuleView';
 import { TodolistView } from './views/TodolistView';
 import { ClaudeIcon, ClaudeSessionsView, StandaloneTerminal } from './views/ClaudeSessions';
 import { ClaudeUsagePanel } from './views/ClaudeUsagePanel';
@@ -23,16 +24,19 @@ import { useLanguageSetting, useT, type TKey } from './i18n';
 // Monaco est lourd : chargé seulement à la première ouverture de l'IDE.
 const IdeView = lazy(() => import('./ide/IdeView'));
 
-type Tab = 'projects' | 'ide' | 'todolist' | 'claude' | 'supabase' | 'docker' | 'github' | 'ports' | 'android' | 'settings';
+type CoreTab = 'projects' | 'ide' | 'todolist' | 'claude' | 'supabase' | 'docker' | 'github' | 'ports' | 'android' | 'settings';
+/** Onglet du cœur, ou vue d'un module (`#m/<id>`, docs/extensions.md). */
+type Tab = CoreTab | `m/${string}`;
 type Theme = 'light' | 'dark' | 'system';
-const TABS: Tab[] = ['projects', 'ide', 'todolist', 'claude', 'supabase', 'docker', 'github', 'ports', 'android', 'settings'];
+const TABS: CoreTab[] = ['projects', 'ide', 'todolist', 'claude', 'supabase', 'docker', 'github', 'ports', 'android', 'settings'];
 
 /** Titre et sous-titre de chaque onglet : clés common.title.<tab> / common.sub.<tab>. */
-const TITLES = Object.fromEntries(TABS.map((t) => [t, [`common.title.${t}`, `common.sub.${t}`]])) as Record<Tab, [TKey, TKey]>;
+const TITLES = Object.fromEntries(TABS.map((t) => [t, [`common.title.${t}`, `common.sub.${t}`]])) as Record<CoreTab, [TKey, TKey]>;
 
 const tabFromHash = (): Tab => {
-  const h = location.hash.slice(1) as Tab;
-  return TABS.includes(h) ? h : 'projects';
+  const h = location.hash.slice(1);
+  if (/^m\/[a-z][a-z0-9-]{1,39}$/.test(h)) return h as Tab;
+  return TABS.includes(h as CoreTab) ? (h as CoreTab) : 'projects';
 };
 
 /**
@@ -131,6 +135,8 @@ function Main({ terminals }: { terminals: import('./api').TerminalSession[] }) {
   }, []);
 
   const meta = useQuery({ queryKey: ['meta'], queryFn: api.meta, refetchInterval: 15_000 });
+  // Chargés au démarrage du serveur seulement : pas de rafraîchissement.
+  const modules = useQuery({ queryKey: ['modules'], queryFn: api.modules, staleTime: Infinity });
   const projects = useQuery({ queryKey: ['projects'], queryFn: api.projects, refetchInterval: 30_000 });
   const supabase = useQuery({ queryKey: ['supabase'], queryFn: api.supabase, refetchInterval: 10_000 });
   const github = useQuery({ queryKey: ['github'], queryFn: () => api.github(), staleTime: 5 * 60_000, retry: false });
@@ -188,7 +194,14 @@ function Main({ terminals }: { terminals: import('./api').TerminalSession[] }) {
     { id: 'github', label: t('common.nav.github'), icon: <GithubIcon className="size-4" />, count: github.data?.remoteOnly.length },
     { id: 'ports', label: t('common.nav.ports'), icon: <Network className="size-4" />, count: ports.data?.assigned.length },
     { id: 'android', label: t('common.nav.android'), icon: <Smartphone className="size-4" />, count: android.data?.avds.length, live: android.data?.avds.filter((a) => a.state !== 'stopped').length },
+    ...(modules.data ?? []).filter((m) => m.status === 'loaded' && m.webUrl)
+      .map((m) => ({ id: `m/${m.id}` as Tab, label: t.loc(m.name), icon: <ModuleIcon svg={m.icon} /> })),
   ];
+  const isModuleTab = tab.startsWith('m/');
+  const moduleTab = modules.data?.find((m) => `m/${m.id}` === tab);
+  const [title, subtitle] = isModuleTab
+    ? [t.loc(moduleTab?.name ?? tab.slice(2)), moduleTab ? t('common.moduleSub', { version: moduleTab.version }) : '']
+    : [t(TITLES[tab as CoreTab][0]), t(TITLES[tab as CoreTab][1])];
 
   const NavButton = ({ n }: { n: (typeof nav)[number] }) => (
     <button
@@ -291,10 +304,10 @@ function Main({ terminals }: { terminals: import('./api').TerminalSession[] }) {
         <main className={cx('min-w-0 flex-1 overflow-auto', tab === 'ide' && 'hidden')}>
           <header className="sticky top-0 z-10 flex items-center gap-3 border-b border-line bg-bg/80 backdrop-blur px-6 h-14">
             <div className="min-w-0 flex-1">
-              <h1 className="font-semibold text-[15px] leading-tight">{t(TITLES[tab][0])}</h1>
-              <p className="text-[11px] text-faint truncate">{t(TITLES[tab][1])}</p>
+              <h1 className="font-semibold text-[15px] leading-tight">{title}</h1>
+              <p className="text-[11px] text-faint truncate">{subtitle}</p>
             </div>
-            {tab !== 'settings' && (
+            {tab !== 'settings' && !isModuleTab && (
               <>
                 <div className="relative">
                   <Search className="pointer-events-none absolute left-2.5 top-1/2 size-3.5 -translate-y-1/2 text-faint" />
@@ -327,6 +340,7 @@ function Main({ terminals }: { terminals: import('./api').TerminalSession[] }) {
                 onOpenTerminal={(sid) => { setClaudeTab(sid); setTab('claude'); }} />
             )}
             {tab === 'settings' && <SettingsView />}
+            {isModuleTab && modules.data && <ModuleView module={moduleTab} />}
           </div>
         </main>
 

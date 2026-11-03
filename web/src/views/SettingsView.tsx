@@ -4,6 +4,7 @@ import { Check, FolderPlus, KeyRound, Plus, Save, Trash2, X } from 'lucide-react
 import { api, type Settings, type SettingsPatch } from '../api';
 import { Badge, Button, Card, GithubIcon, copy, cx, tildify, useToast } from '../ui';
 import { GhCliLogin } from './GhCliLogin';
+import { ModuleIcon } from './ModuleView';
 import { fmtDateTime, useLanguageSetting, useT, type LanguageSetting } from '../i18n';
 
 const input = 'h-8 w-full rounded-md border border-line bg-panel px-2.5 text-[13px] outline-none placeholder:text-faint focus:border-accent';
@@ -212,7 +213,39 @@ export function SettingsView() {
       </div>
 
       {q.data && <SuiviSettingsCard settings={q.data} />}
+      <ModulesCard />
     </div>
+  );
+}
+
+/** Modules chargés (`TARMAC_MODULES`) : affichée seulement s'il y en a. */
+function ModulesCard() {
+  const t = useT();
+  const modules = useQuery({ queryKey: ['modules'], queryFn: api.modules, staleTime: Infinity });
+  if (!modules.data?.length) return null;
+  const tone = { loaded: 'green', ignored: 'amber', error: 'red' } as const;
+  return (
+    <Card className="divide-y divide-line">
+      <div className="px-5 py-3 text-[11px] font-semibold uppercase tracking-wider text-faint">{t('settings.modules.title')}</div>
+      <Field title={t('settings.modules.title')} hint={t('settings.modules.hint')}>
+        <ul className="space-y-2">
+          {modules.data.map((m) => (
+            <li key={m.dir} className="flex items-start gap-2 text-[13px]">
+              <ModuleIcon svg={m.icon} className="mt-0.5 text-muted" />
+              <div className="min-w-0 flex-1">
+                <div className="flex items-center gap-2">
+                  <span className="font-medium">{t.loc(m.name)}</span>
+                  {m.version && <span className="font-mono text-[11px] text-faint">{m.version}</span>}
+                  <Badge tone={tone[m.status]}>{t(`settings.modules.${m.status}`)}</Badge>
+                </div>
+                <div className="truncate font-mono text-[11px] text-faint" title={m.dir}>{m.dir}</div>
+                {m.error && <div className="text-[12px] text-red-600 dark:text-red-400">{m.error}</div>}
+              </div>
+            </li>
+          ))}
+        </ul>
+      </Field>
+    </Card>
   );
 }
 

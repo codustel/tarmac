@@ -142,6 +142,7 @@ l'installation).
 - [Security](docs/security.md) : où Tarmac écoute, ce qu'il peut lancer, ce qui demande `sudo` et pourquoi.
 - [Troubleshooting](docs/troubleshooting.md) : accès à `~/Documents`, port 80, app installée, migration.
 - [Windows (WSL 2)](docs/windows.md) : utiliser Tarmac sous Windows, et ce qui n'y marche pas.
+- [Extensions](docs/extensions.md) (en anglais) : modules qui ajoutent des routes, une vue et des réglages sans modifier Tarmac.
 - [Uninstall](docs/uninstall.md).
 
 ## FAQ

@@ -2,7 +2,8 @@
 # Instance de démo de Tarmac, isolée : HOME factice, données, sessions Claude et fixtures factices.
 #   scripts/demo/run-demo.sh            génère l'espace (si besoin), construit une copie, lance http://localhost:7790
 #   scripts/demo/run-demo.sh --stop     arrête les apps de démo puis l'instance
-# Variables : DEMO_HOME (~/tarmac-demo-home), DEMO_PORT (7790), DEMO_BUILD (dossier de build hors du dépôt).
+# Variables : DEMO_HOME (~/tarmac-demo-home), DEMO_PORT (7790), DEMO_BUILD (dossier de build hors du dépôt),
+#   TARMAC_MODULES (modules à charger, docs/extensions.md ; ex. TARMAC_MODULES="$PWD/examples/hello-module").
 # Le service Tarmac habituel, ~/.claude, ~/.tarmac et la config gh ne sont jamais lus ni modifiés.
 set -euo pipefail
 
@@ -56,6 +57,7 @@ env -i \
   PATH="$NODE_DIR:/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin" \
   DATA_DIR="$DEMO_HOME/.tarmac" CLAUDE_CONFIG_DIR="$DEMO_HOME/.claude" \
   TARMAC_DEMO_FIXTURES="$DEMO_HOME/demo-fixtures" TARMAC_PORT="$DEMO_PORT" DEV_ROOTS="$DEMO_HOME/Developer" \
+  ${TARMAC_MODULES:+TARMAC_MODULES="$TARMAC_MODULES"} \
   GIT_CONFIG_NOSYSTEM=1 NO_UPDATE_NOTIFIER=1 npm_config_update_notifier=false DO_NOT_TRACK=1 ASTRO_TELEMETRY_DISABLED=1 \
   NEXT_TELEMETRY_DISABLED=1 TURBO_TELEMETRY_DISABLED=1 PIP_DISABLE_PIP_VERSION_CHECK=1 \
   nohup node "$DEMO_BUILD/dist/server/index.js" > "$DEMO_HOME/tarmac-demo.log" 2>&1 &

@@ -138,6 +138,7 @@ Typed in a Claude Code session, inside the project's folder (needs the Claude Co
 - [Security](docs/security.md): what Tarmac listens on, what it can run, what needs `sudo` and why.
 - [Troubleshooting](docs/troubleshooting.md): `~/Documents` access, port 80, installed app, migration.
 - [Windows (WSL 2)](docs/windows.md): running Tarmac on Windows, and what does not work there.
+- [Extensions](docs/extensions.md): modules that add routes, a view and settings without patching Tarmac.
 - [Uninstall](docs/uninstall.md).
 
 ## FAQ

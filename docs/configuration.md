@@ -12,6 +12,7 @@ it uses, and the environment variables read when the service starts.
 | `~/.tarmac/settings.json` | Settings edited in the app, plus names, production URLs and favorites set per project. Mode `600`: it can hold your GitHub token. |
 | `~/.tarmac/state.json` | Ports assigned to apps, port history, apps started by Tarmac (adopted again after a restart). |
 | `~/.tarmac/suivi.db` | Claude Todolist database (SQLite). |
+| `~/.tarmac/modules/<id>/` | Data of each module (database, settings), see [Extensions](extensions.md). |
 | `~/.tarmac/tarmac.log` | Service log (`tarmac logs`). |
 | `~/Library/LaunchAgents/com.codustel.tarmac.plist` | Login service (starts at login, restarted after a crash). |
 
@@ -58,6 +59,7 @@ The file is loaded every time the service starts: edit it, then `tarmac restart`
 | `DOCKER_HOST` | Docker Desktop, OrbStack or Colima socket | Docker socket for local Supabase |
 | `LOG_BUFFER_LINES` | `2000` | Log lines kept per app |
 | `LOG_LEVEL` | `warn` | Server log level |
+| `TARMAC_MODULES` | — | Module folders to load, separated by `:` (see [Extensions](extensions.md)) |
 | `SUIVI_TOKEN`, `SUIVI_ARTIFACT_TOKEN` | generated | Tokens of the `tarmac` MCP server (see [Security](security.md)) |
 
 Variables from the former name (`MANAGER_PORT`, `MANAGER_URL`, `MANAGER_HOST`) are still read.

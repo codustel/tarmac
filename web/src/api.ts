@@ -434,6 +434,18 @@ export interface ScmGraphRow { col: number; top: Array<[number, number]>; bottom
 export interface ScmLog { upstream: string | null; commits: ScmCommit[]; graph: ScmGraphRow[] }
 export type ScmAction = 'stage' | 'unstage' | 'discard' | 'stageAll' | 'unstageAll' | 'discardAll' | 'commit' | 'push' | 'pull' | 'sync' | 'fetch';
 
+/** Module chargé par le serveur (`TARMAC_MODULES`) ; voir docs/extensions.md. */
+export interface ModuleInfo {
+  id: string;
+  name: string | Loc;
+  version: string;
+  dir: string;
+  icon: string | null;
+  webUrl: string | null;
+  status: 'loaded' | 'ignored' | 'error';
+  error: string | null;
+}
+
 async function request<T>(url: string, init?: RequestInit): Promise<T> {
   const res = await fetch(url, {
     ...init,
@@ -449,6 +461,7 @@ const json = (body: unknown, method = 'POST'): RequestInit => ({ method, body: J
 
 export const api = {
   meta: () => request<Meta>('/api/meta'),
+  modules: () => request<ModuleInfo[]>('/api/modules'),
   projects: () => request<Project[]>('/api/projects'),
   logs: (id: string) => request<LogLine[]>(`/api/projects/${id}/logs`),
   action: (id: string, action: 'start' | 'stop' | 'restart') => request<Runtime>(`/api/projects/${id}/${action}`, { method: 'POST' }),
