@@ -49,6 +49,9 @@ sont `git fetch` sur vos dépôts et l'API GitHub avec votre propre token, pour 
   commitées d'un coup d'œil.
 - **Claude Code** : toutes les sessions de chaque projet (actives ou terminées), sessions nouvelles ou reprises
   avec Remote Control dans une console intégrée, ouvertes aussi depuis claude.ai/code et l'app mobile.
+- **Utilisation Claude** : votre plan et votre utilisation en direct dans la barre latérale (session de 5 h, semaine,
+  limites par modèle comme Fable), lus avec la connexion de Claude Code ; le jeton reste sur votre Mac et n'est
+  envoyé qu'à Anthropic.
 - **Todolist Claude** : un suivi des tâches par projet que Claude tient à jour via le serveur MCP `tarmac` et le
   skill `/suivi`, reflété dans un artefact claude.ai et dans une copie `Todolist/` du dépôt.
 - **GitHub** : vos dépôts et organisations, ceux qui sont clonés, « Cloner » en un clic (`gh` ou SSH).

@@ -42,4 +42,15 @@ export default {
 
   // Console plein écran (StandaloneTerminal)
   'claude.standalone.notFound': 'Session introuvable ou fermée.',
+
+  // Utilisation de l'abonnement (ClaudeUsagePanel, sidebar)
+  'claude.usage.title': 'Utilisation Claude',
+  'claude.usage.session': 'Session 5 h',
+  'claude.usage.week': 'Semaine',
+  'claude.usage.resets': 'Remise à zéro : {when}',
+  'claude.usage.reconnect': 'Lance Claude Code pour te reconnecter',
+  'claude.usage.notConnected': 'Claude Code n’est pas connecté sur cette machine.',
+  'claude.usage.expired': 'Connexion Claude Code expirée.',
+  'claude.usage.error': 'Utilisation indisponible pour le moment',
+  'claude.usage.source': 'Lu depuis la connexion Claude Code de cette machine, mis à jour {when}. Le jeton n’est envoyé qu’à Anthropic.',
 } satisfies Record<string, Entry>;

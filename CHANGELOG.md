@@ -21,6 +21,8 @@ First public release. Tarmac was previously a private tool named App Manager.
   Android emulators.
 - Docker view: containers grouped by compose project (state, health, ports, CPU, memory, network, disk), linked
   project, start / stop / restart, "Open Docker Desktop / OrbStack" button.
+- Claude usage in the sidebar: plan, 5-hour session, week and per-model weekly limits (such as Fable), read with
+  Claude Code's own sign-in (token sent only to Anthropic); can be turned off in Settings.
 - English and French interface.
 - Documentation: README in English and French, `docs/` (configuration, Claude Code, security, troubleshooting,
   uninstall).

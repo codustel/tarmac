@@ -27,6 +27,8 @@ export const COVERAGE = [
   { feature: 'Todolist Claude : artefact claude.ai (gabarit rendu en local)', files: ['artefact/'] },
   { feature: 'GitHub : dépôts, clonés, « Clone » avec progression dans une console', files: ['github/', 'videos/clonage.mp4'] },
   { feature: 'Supabase local : instances, Studio, Mailpit, URL', files: ['supabase/'] },
+  { feature: 'Docker : conteneurs par projet compose, état, santé, ports, CPU / mémoire, actions', files: ['docker/'] },
+  { feature: 'Utilisation Claude dans la sidebar : plan, session 5 h, semaine, limites par modèle (Fable)', files: ['utilisation/'] },
   { feature: 'README rendu', files: ['panneau/en-dark-05.png', 'panneau/en-light-05.png'] },
   { feature: 'IDE intégré et vue de contrôle de source', files: ['ide/'] },
   { feature: 'Ports : attribution, historique, « Free the ports »', files: ['ports/'] },
@@ -221,6 +223,25 @@ export async function scenario(x) {
       await page.getByText('NEBULA STORE', { exact: false }).first().click();
       await sleep(1200);
       await shot(page, 'todolist', v(lang, theme, 2), 'Todolist d’un projet : phases, faites, à tester, sous-tâches lettrées');
+    }
+
+    // ─── Docker (5.2) : conteneurs groupés par projet compose ─────────────────────────────────────────
+    if (want('docker')) {
+      await go(page, 'docker');
+      await sleep(2200); // statistiques (CPU, mémoire) après le premier relevé
+      await shot(page, 'docker', v(lang, theme, 1), 'Docker : conteneurs groupés par projet compose, état, santé, ports, CPU et mémoire, projet rattaché');
+    }
+
+    // ─── Utilisation Claude (5.4) : gros plan du panneau de la sidebar ────────────────────────────────
+    if (want('utilisation')) {
+      await go(page, 'projects');
+      const box = await page.locator('.usage-panel').boundingBox();
+      if (!box) throw new Error('Panneau d’utilisation Claude absent');
+      const logo = await page.locator('.sidebar-logo').boundingBox();
+      const top = Math.max(0, Math.floor(box.y - 16));
+      const bottom = Math.ceil(logo && logo.height ? logo.y + logo.height : box.y + box.height + 16);
+      await shot(page, 'utilisation', v(lang, theme, 1), 'Utilisation Claude dans la sidebar (gros plan) : plan, session 5 h, semaine, Fable, remises à zéro', { clip: { x: 0, y: top, width: 224, height: bottom - top } });
+      await shot(page, 'utilisation', v(lang, theme, 2), 'Sidebar entière : navigation, utilisation Claude au-dessus du logo, pied de page', { clip: { x: 0, y: 0, width: 224, height: VH_ } });
     }
 
     // ─── Vues en anglais (sombre et clair) ────────────────────────────────────────────────────────────
@@ -432,6 +453,10 @@ export async function scenario(x) {
     });
     await page.keyboard.press('Escape');
     await sleep(500);
+    // Apps du monorepo arrêtées (la scène video-fr les a démarrées) : le bouton redevient « Start all ».
+    for (const p of await projects()) if (p.group?.name === 'mission-control' && !['stopped', 'crashed'].includes(p.runtime.status)) await api(`/api/projects/${p.id}/stop`, 'POST').catch(() => null);
+    for (const n of ['admin', 'internal-api']) await waitStatus(n, 'stopped', 15_000).catch(() => null);
+    await sleep(800);
     await row(page, 'mission-control').getByRole('button', { name: 'Start all' }).click();
     await waitStatus('admin', 'running', 45_000).catch(() => null);
     await sleep(4000);

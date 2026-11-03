@@ -23,6 +23,27 @@ Claude Code deletes transcripts older than 30 days. To keep the history longer, 
 `~/.claude/settings.json`. Cloud sessions started on claude.ai/code (not on this Mac) are not stored locally and do
 not appear.
 
+## Usage in the sidebar
+
+The sidebar shows your plan (Pro, Max 5x, Max 20x, Team, Enterprise…) and the same limits as Claude Code's
+`/usage` screen: **5-hour session** (hidden when your plan has no session limit), **week** (all models) and each
+per-model weekly limit (for example **Fable**), with the percentage used and when it resets (hover a gauge for the
+full date). Gauges turn orange from 70 % and red from 90 %. If the window is too short, the Tarmac logo makes room
+first, then the panel hides; nothing scrolls.
+
+How it works, and what Tarmac does with the token:
+
+- Tarmac reads Claude Code's OAuth sign-in where Claude Code keeps it: the macOS keychain (item
+  `Claude Code-credentials`; macOS may ask you to allow access the first time), else
+  `~/.claude/.credentials.json`. It reads it again at each refresh and keeps no copy.
+- It sends the token **only** to `https://api.anthropic.com/api/oauth/usage` (the endpoint Claude Code uses for
+  `/usage`), with redirects refused. The token is never sent to the browser, logged or written anywhere.
+- At most one request per minute, and only while a Tarmac window is open and visible (5 minutes after a
+  `429`). The UI receives only the plan, the percentages and the reset dates (`GET /api/claude/usage`).
+- Tarmac never refreshes the token. If Claude Code is not signed in or its sign-in has expired, the panel says
+  "Launch Claude Code to sign in again"; opening Claude Code renews it.
+- To turn it off: **Settings → Interface → Claude usage** (nothing is read while it is off).
+
 ## Claude Code integration
 
 `tarmac setup` offers it (or `tarmac setup --with-claude`). It adds:

@@ -17,7 +17,8 @@ Mac only. This page explains how, and what each part is allowed to do. To report
   (the `tarmac` CLI, the MCP server, hooks) are not affected.
 - The "write TypeScript types to a file" Supabase command only writes inside the project: a path through a
   symbolic link that leads outside is refused.
-- No telemetry. Outgoing calls are limited to `git fetch` on your repositories and the GitHub API with your token.
+- No telemetry. Outgoing calls are limited to `git fetch` on your repositories, the GitHub API with your token,
+  and, for the Claude usage panel, `api.anthropic.com` with Claude Code's own token (see below).
 
 Do not set `TARMAC_HOST=0.0.0.0` or put Tarmac behind a tunnel: anyone who reaches the UI can run commands as
 you. To use your projects from another device, use Claude Code's Remote Control (sessions) or your own VPN.
@@ -47,6 +48,11 @@ Projects are only searched in the folders you list in **Settings**.
   read the tracker, check tasks and add notes only). Both are generated on first use and stored in
   `~/.tarmac/env`. Creating or importing tasks without the Claude Code token is refused.
 - The Claude Todolist rule tells Claude never to put a secret or a `.env` value in a task.
+- **Claude usage panel**: Tarmac reads Claude Code's OAuth token (macOS keychain item `Claude Code-credentials`,
+  else `~/.claude/.credentials.json`) at each refresh, at most once a minute, and sends it only to
+  `https://api.anthropic.com/api/oauth/usage` (redirects refused). It never stores, logs or refreshes it, and never
+  sends it to the browser: `/api/claude/usage` returns only the plan, percentages and reset dates. Turn it off in
+  **Settings → Interface → Claude usage**; nothing is read while it is off.
 
 ## What needs `sudo`, and why
 

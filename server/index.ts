@@ -19,6 +19,7 @@ import { SYSTEM_ID, terminals } from './terminals.js';
 import { EDITOR_APPS, matchOpen, openEditorFolders } from './editors.js';
 import crypto from 'node:crypto';
 import { assignSessions, claudeCommand, claudeDir, listClaudeSessions } from './claude.js';
+import { ClaudeUsageService, readCredentials } from './claudeUsage.js';
 import { GIT_COMMANDS, buildGitCommand } from './gitCommands.js';
 import { msg, runWithRequestLang, tr } from './i18n.js';
 import { SUPABASE_COMMANDS, buildSupabaseCommand, findSupabaseDir } from './supabaseCommands.js';
@@ -35,7 +36,7 @@ import { registerSuiviRoutes } from './suivi/routes.js';
 import { suiviToken } from './suivi/token.js';
 import { SyncRunner } from './suivi/sync.js';
 import { setSuiviDir, TodolistWatcher, type ProjectRoot } from './suivi/watch.js';
-import { demo, demoBinDir, isDemo } from './demo/index.js';
+import { demo, demoBinDir, demoClaudeUsage, isDemo } from './demo/index.js';
 import { crossOriginFetch, originAllowed } from './originGuard.js';
 import { androidStatus, applyAndroidEnv, ensureEmulator, installCommand, isAvd, startAvd, stopAvd, waitForBootCommand } from './android.js';
 
@@ -614,6 +615,16 @@ app.get<{ Params: { id: string }; Querystring: { force?: string } }>('/api/proje
   const all = await listClaudeSessions(req.query.force === '1');
   return all.filter((s) => s.cwd === p.dir || s.cwd.startsWith(p.dir + path.sep)).map(withTerminal);
 });
+
+// Utilisation de l'abonnement Claude : plan, limites et remises à zéro (jamais le jeton, voir claudeUsage.ts).
+const claudeUsage = new ClaudeUsageService({
+  readCredentials,
+  fetch: (url, init) => fetch(url, init),
+  now: Date.now,
+  demo: () => { const d = demo(); return d ? demoClaudeUsage(d) : null; },
+  enabled: () => settings.showClaudeUsage,
+});
+app.get('/api/claude/usage', async () => claudeUsage.get());
 
 app.get('/api/claude/sessions', async () => {
   const all = await listClaudeSessions();

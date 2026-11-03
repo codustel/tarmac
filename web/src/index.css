@@ -162,7 +162,18 @@ body {
 .ide-progress > div { width: 30%; height: 100%; animation: ide-progress 1.2s linear infinite; }
 @keyframes ide-progress { from { transform: translateX(-100%); } to { transform: translateX(340%); } }
 
-/* Logo de la barre latérale : dans l'espace libre sous la navigation, masqué quand il ne tient pas
-   (fenêtre basse) plutôt que de pousser la navigation ou de faire défiler la barre. */
-.sidebar-logo { container-type: size; }
-@container (max-height: 76px) { .sidebar-logo > img { display: none !important; } }
+/* Espace libre de la barre latérale, sous la navigation : panneau d'utilisation Claude puis logo discret.
+   Quand la fenêtre est trop basse, le logo s'efface d'abord, puis le panneau (hauteur selon son nombre de
+   lignes, `data-rows`), plutôt que de pousser la navigation ou de faire défiler la barre. */
+.sidebar-free { container: sidebar-free / size; }
+@container sidebar-free (max-height: 60px) { .sidebar-logo { display: none; } }
+@container sidebar-free (max-height: 134px) { .sidebar-free-inner:has(.usage-panel[data-rows="1"]) .sidebar-logo { display: none; } }
+@container sidebar-free (max-height: 76px) { .usage-panel[data-rows="1"] { display: none; } }
+@container sidebar-free (max-height: 162px) { .sidebar-free-inner:has(.usage-panel[data-rows="2"]) .sidebar-logo { display: none; } }
+@container sidebar-free (max-height: 104px) { .usage-panel[data-rows="2"] { display: none; } }
+@container sidebar-free (max-height: 190px) { .sidebar-free-inner:has(.usage-panel[data-rows="3"]) .sidebar-logo { display: none; } }
+@container sidebar-free (max-height: 132px) { .usage-panel[data-rows="3"] { display: none; } }
+@container sidebar-free (max-height: 218px) { .sidebar-free-inner:has(.usage-panel[data-rows="4"]) .sidebar-logo { display: none; } }
+@container sidebar-free (max-height: 160px) { .usage-panel[data-rows="4"] { display: none; } }
+@container sidebar-free (max-height: 246px) { .sidebar-free-inner:has(.usage-panel[data-rows="5"]) .sidebar-logo { display: none; } }
+@container sidebar-free (max-height: 188px) { .usage-panel[data-rows="5"] { display: none; } }

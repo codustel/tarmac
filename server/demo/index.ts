@@ -92,6 +92,16 @@ export interface DemoFixtures {
   claudeActiveCwds: string[];
   /** Faux `claude` (relatif au dossier des fixtures, ou absolu ; nommé `claude`) ; le faux `gh` est à côté. */
   claudeCommand: string;
+  /** Utilisation Claude affichée dans la sidebar (facultatif : valeurs par défaut sinon). */
+  claudeUsage?: DemoClaudeUsage;
+}
+
+/** Utilisation Claude factice : plan, session (null = plan sans limite de session), semaine, limites par modèle. */
+export interface DemoClaudeUsage {
+  plan: string;
+  session: number | null;
+  week: number;
+  models: Array<{ name: string; utilization: number }>;
 }
 
 let loaded: { dir: string; mtimeMs: number; data: DemoFixtures } | null = null;
@@ -312,3 +322,22 @@ export function demoDockerAction(d: DemoFixtures, action: DockerAction, target: 
 
 /** Réinitialise les actions de démo (tests). */
 export const resetDemoDocker = () => dockerOverrides.clear();
+
+const DEMO_USAGE: DemoClaudeUsage = { plan: 'Max 20x', session: 42, week: 63, models: [{ name: 'Fable', utilization: 28 }] };
+
+/** Utilisation Claude factice, au format de `/api/claude/usage` (aucun appel réseau, aucun jeton lu). */
+export function demoClaudeUsage(d: DemoFixtures, now = Date.now()) {
+  const u = d.claudeUsage ?? DEMO_USAGE;
+  const at = (ms: number) => new Date(Math.ceil((now + ms) / 600_000) * 600_000).toISOString();
+  const week = at(3 * 86_400_000 + 5 * 3_600_000);
+  return {
+    status: 'ok' as const,
+    plan: u.plan,
+    limits: [
+      ...(u.session === null ? [] : [{ id: 'session', kind: 'session' as const, label: null, utilization: u.session, resetsAt: at(2 * 3_600_000 + 13 * 60_000) }]),
+      { id: 'week', kind: 'week' as const, label: null, utilization: u.week, resetsAt: week },
+      ...u.models.map((m) => ({ id: `model:${m.name.toLowerCase()}`, kind: 'model' as const, label: m.name, utilization: m.utilization, resetsAt: week })),
+    ],
+    fetchedAt: new Date(now).toISOString(),
+  };
+}

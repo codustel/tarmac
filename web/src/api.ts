@@ -213,6 +213,7 @@ export interface Settings {
   scanMaxDepth: number;
   editor: 'vscode' | 'cursor' | 'zed' | 'webstorm';
   showAllProjects: boolean;
+  showClaudeUsage: boolean;
   cloneDir: string;
   theme: 'light' | 'dark' | 'system';
   language: 'auto' | 'fr' | 'en';
@@ -232,10 +233,21 @@ export interface SettingsPatch {
   scanMaxDepth?: number;
   editor?: Settings['editor'];
   showAllProjects?: boolean;
+  showClaudeUsage?: boolean;
   cloneDir?: string;
   theme?: Settings['theme'];
   language?: Settings['language'];
   suivi?: { channels?: Partial<SuiviSettings['channels']>; bridgeIntervalSec?: number; folder?: string };
+}
+
+/** Utilisation de l'abonnement Claude (`/api/claude/usage`). */
+export interface ClaudeUsageLimit { id: string; kind: 'session' | 'week' | 'model'; label: string | null; utilization: number; resetsAt: string | null }
+export interface ClaudeUsage {
+  status: 'ok' | 'disabled' | 'not-connected' | 'expired' | 'error';
+  plan: string | null;
+  limits: ClaudeUsageLimit[];
+  fetchedAt: string | null;
+  error?: string;
 }
 
 // ─── Todolist Claude (suivi de projets) ─────────────────────────────────────
@@ -468,6 +480,7 @@ export const api = {
   scan: () => request('/api/scan', { method: 'POST' }),
   fetchGit: () => request('/api/git/fetch', { method: 'POST' }),
   settings: () => request<Settings>('/api/settings'),
+  claudeUsage: () => request<ClaudeUsage>('/api/claude/usage'),
   clone: (fullName: string) => request<TerminalSession>('/api/github/clone', json({ fullName, cols: 110, rows: 22 })),
   ghCli: () => request<GhCliStatus>('/api/github/cli'),
   ghLogin: (cols?: number, rows?: number) => request<TerminalSession>('/api/github/cli/login', json({ cols, rows })),

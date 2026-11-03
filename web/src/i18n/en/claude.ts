@@ -42,5 +42,16 @@ const en: typeof fr = {
 
   // Full-screen console (StandaloneTerminal)
   'claude.standalone.notFound': 'Session not found or closed.',
+
+  // Subscription usage (ClaudeUsagePanel, sidebar)
+  'claude.usage.title': 'Claude usage',
+  'claude.usage.session': '5-hour session',
+  'claude.usage.week': 'Week',
+  'claude.usage.resets': 'Resets {when}',
+  'claude.usage.reconnect': 'Launch Claude Code to sign in again',
+  'claude.usage.notConnected': 'Claude Code is not signed in on this machine.',
+  'claude.usage.expired': 'Claude Code sign-in has expired.',
+  'claude.usage.error': 'Usage unavailable right now',
+  'claude.usage.source': 'Read from this machine’s Claude Code sign-in, updated {when}. The token is only ever sent to Anthropic.',
 };
 export default en;

@@ -50,6 +50,8 @@ are `git fetch` on your repositories and the GitHub API with your own token, to 
   confirmation for destructive ones; ahead / behind and uncommitted changes at a glance.
 - **Claude Code**: every session of each project (active or finished), new or resumed sessions with Remote
   Control in a built-in console, open from claude.ai/code and the mobile app too.
+- **Claude usage**: your plan and live usage in the sidebar (5-hour session, week, per-model limits such as Fable),
+  read with Claude Code's own sign-in; the token stays on your Mac and is only sent to Anthropic.
 - **Claude Todolist**: a task tracker per project that Claude keeps up to date through the `tarmac` MCP server
   and the `/suivi` skill, mirrored in a claude.ai artifact and in a `Todolist/` copy in the repo.
 - **GitHub**: your repositories and organizations, which ones are cloned, "Clone" in one click (`gh` or SSH).

@@ -23,6 +23,8 @@ export interface Settings {
   names: Record<string, string>;
   /** false (défaut) : seulement les projets web / API / mobile et Python. */
   showAllProjects: boolean;
+  /** Utilisation Claude (session, semaine, limites par modèle) affichée dans la sidebar. */
+  showClaudeUsage: boolean;
   /** Dossier où sont clonés les repos GitHub (par défaut le premier dossier scanné). */
   cloneDir: string;
   /** URL de production saisie à la main, par dossier absolu. */
@@ -60,6 +62,7 @@ const defaults = (): Settings => ({
   editor: 'vscode',
   names: {},
   showAllProjects: false,
+  showClaudeUsage: true,
   urls: {},
   theme: 'system',
   language: 'auto',
@@ -96,6 +99,7 @@ export interface SettingsPatch {
   /** Renommage : { dossier: nom } ; nom vide = retour au nom détecté. */
   names?: Record<string, string>;
   showAllProjects?: boolean;
+  showClaudeUsage?: boolean;
   cloneDir?: string;
   urls?: Record<string, string>;
   suivi?: { channels?: Partial<SuiviSettings['channels']>; bridgeIntervalSec?: number; folder?: string };
@@ -150,6 +154,7 @@ export function updateSettings(patch: SettingsPatch): { errors: string[] } {
     next.cloneDir = d;
   }
   if (patch.showAllProjects !== undefined) next.showAllProjects = !!patch.showAllProjects;
+  if (patch.showClaudeUsage !== undefined) next.showClaudeUsage = !!patch.showClaudeUsage;
   if (patch.suivi) {
     const { channels, bridgeIntervalSec, folder } = patch.suivi;
     if (channels) for (const k of ['A', 'B', 'C'] as const) if (typeof channels[k] === 'boolean') next.suivi.channels[k] = channels[k]!;

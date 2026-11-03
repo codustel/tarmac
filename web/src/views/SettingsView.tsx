@@ -237,7 +237,33 @@ function LanguageCard() {
           <option value="fr">Français</option>
         </select>
       </Field>
+      <ClaudeUsageField />
     </Card>
+  );
+}
+
+/** Affichage de l'utilisation Claude dans la sidebar : enregistré tout de suite. */
+function ClaudeUsageField() {
+  const t = useT();
+  const qc = useQueryClient();
+  const toast = useToast();
+  const q = useQuery({ queryKey: ['settings'], queryFn: api.settings });
+  const save = useMutation({
+    mutationFn: (on: boolean) => api.saveSettings({ showClaudeUsage: on }),
+    onSuccess: (s) => {
+      qc.setQueryData(['settings'], s);
+      qc.invalidateQueries({ queryKey: ['claude-usage'] });
+    },
+    onError: (e: Error) => toast('err', e.message),
+  });
+  if (!q.data) return null;
+  return (
+    <Field title={t('settings.claudeUsage')} hint={t('settings.claudeUsageHint')}>
+      <label className="inline-flex cursor-pointer items-center gap-2 text-[13px]">
+        <input type="checkbox" checked={q.data.showClaudeUsage !== false} disabled={save.isPending} onChange={(e) => save.mutate(e.target.checked)} className="size-4 accent-[var(--accent)]" />
+        {t('settings.claudeUsageShow')}
+      </label>
+    </Field>
   );
 }
 

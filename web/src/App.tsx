@@ -14,6 +14,7 @@ import { AndroidView } from './views/AndroidView';
 import { SettingsView } from './views/SettingsView';
 import { TodolistView } from './views/TodolistView';
 import { ClaudeIcon, ClaudeSessionsView, StandaloneTerminal } from './views/ClaudeSessions';
+import { ClaudeUsagePanel } from './views/ClaudeUsagePanel';
 import { InstallButton, UpdateBanner } from './pwa';
 import { onIdeOpen } from './ide/store';
 import { useLanguageSetting, useT, type TKey } from './i18n';
@@ -229,10 +230,16 @@ function Main({ terminals }: { terminals: import('./api').TerminalSession[] }) {
           <div className="my-2 border-t border-line" />
           <NavButton n={{ id: 'settings', label: t('common.nav.settings'), icon: <Settings2 className="size-4" /> }} />
         </nav>
-        {/* Logo discret dans l'espace libre ; masqué (index.css) quand la fenêtre est trop basse. */}
-        <div className="sidebar-logo flex min-h-0 flex-1 items-end justify-center overflow-hidden px-6" aria-hidden="true">
-          <img src="/tarmac-logo-light.svg" alt="" draggable={false} className="mb-4 w-[116px] select-none opacity-35 dark:hidden" />
-          <img src="/tarmac-logo-dark.svg" alt="" draggable={false} className="mb-4 hidden w-[116px] select-none opacity-30 dark:block" />
+        {/* Espace libre : utilisation Claude au-dessus du logo discret. Quand la fenêtre est trop basse, le logo
+            puis le panneau s'effacent (règles de hauteur dans index.css) : rien ne déborde ni ne défile. */}
+        <div className="sidebar-free min-h-0 flex-1 overflow-hidden">
+          <div className="sidebar-free-inner flex h-full flex-col justify-end">
+            <ClaudeUsagePanel />
+            <div className="sidebar-logo flex shrink-0 justify-center px-6" aria-hidden="true">
+              <img src="/tarmac-logo-light.svg" alt="" draggable={false} className="mb-4 w-[116px] select-none opacity-35 dark:hidden" />
+              <img src="/tarmac-logo-dark.svg" alt="" draggable={false} className="mb-4 hidden w-[116px] select-none opacity-30 dark:block" />
+            </div>
+          </div>
         </div>
         <div className="border-t border-line p-3 space-y-3">
           <div className="space-y-1 text-[11px] text-faint">
