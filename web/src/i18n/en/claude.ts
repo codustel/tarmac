@@ -10,7 +10,7 @@ const en: typeof fr = {
   // Session row (SessionRow)
   'claude.row.openHere': 'open here',
   'claude.row.active': 'active',
-  'claude.row.activeTitle': 'A claude process is running in this folder (terminal, VS Code…)',
+  'claude.row.activeTitle': 'Session running outside Tarmac (terminal, Claude app, IDE…)',
   'claude.row.show': 'Show',
   'claude.row.resume': 'Resume',
   'claude.row.resumeActiveTitle': 'Session already open elsewhere: resuming it here adds a second client to the same conversation',
@@ -29,7 +29,6 @@ const en: typeof fr = {
   'claude.view.closeConfirm': 'Close “{label}”? The Claude session will stop (you can resume it later).',
   'claude.view.noTabs': 'No open sessions — start one from a project (Claude tab) or from the history.',
   'claude.view.history': 'History',
-  'claude.view.activeElsewhere': 'Active outside Tarmac:',
   'claude.view.allTitle': 'All Claude Code sessions',
   'claude.view.allSub': 'linked to a scanned project',
   'claude.view.noSession': 'No sessions',

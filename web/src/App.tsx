@@ -1,6 +1,6 @@
 import { Suspense, lazy, useCallback, useEffect, useRef, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { Boxes, Code2, Container, Database, FolderTree, Languages, ListChecks, Monitor, Moon, Network, RefreshCw, Search, Settings2, Smartphone, Sun } from 'lucide-react';
+import { Activity, Boxes, Code2, Container, Database, FolderTree, Languages, ListChecks, Monitor, Moon, Network, RefreshCw, Search, Settings2, Smartphone, Sun } from 'lucide-react';
 import { api } from './api';
 import { useConnected } from './socket';
 import { Button, GithubIcon, Kbd, copy, cx, tildify, timeAgo, useToast } from './ui';
@@ -16,6 +16,8 @@ import { ModuleIcon, ModuleView } from './views/ModuleView';
 import { TodolistView } from './views/TodolistView';
 import { ClaudeIcon, ClaudeSessionsView, StandaloneTerminal } from './views/ClaudeSessions';
 import { ClaudeUsagePanel } from './views/ClaudeUsagePanel';
+import { TimelineView } from './views/TimelineView';
+import { AgentLed, useRunningAgents } from './views/Agents';
 import { LicenseModal } from './views/LicenseModal';
 import { InstallButton, UpdateBanner } from './pwa';
 import { onIdeOpen } from './ide/store';
@@ -32,6 +34,22 @@ const TABS: CoreTab[] = ['projects', 'ide', 'todolist', 'claude', 'supabase', 'd
 
 /** Titre et sous-titre de chaque onglet : clés common.title.<tab> / common.sub.<tab>. */
 const TITLES = Object.fromEntries(TABS.map((t) => [t, [`common.title.${t}`, `common.sub.${t}`]])) as Record<CoreTab, [TKey, TKey]>;
+
+/** Timeline : affichée d'office à partir de cette largeur de fenêtre (sidebar + liste compacte + ~300 px). */
+const TIMELINE_AUTO_MIN = 1280;
+type TimelinePref = 'auto' | 'shown' | 'hidden';
+
+function useWide(min: number) {
+  const [wide, setWide] = useState(() => window.innerWidth >= min);
+  useEffect(() => {
+    const mq = matchMedia(`(min-width: ${min}px)`);
+    const on = () => setWide(mq.matches);
+    on();
+    mq.addEventListener('change', on);
+    return () => mq.removeEventListener('change', on);
+  }, [min]);
+  return wide;
+}
 
 const tabFromHash = (): Tab => {
   const h = location.hash.slice(1);
@@ -108,6 +126,16 @@ function Main({ terminals }: { terminals: import('./api').TerminalSession[] }) {
   const [selected, setSelected] = useState<{ id: string; tab: PanelTab } | null>(null);
   const [todoFocus, setTodoFocus] = useState<string | null>(null);
   const [licenseOpen, setLicenseOpen] = useState(false);
+  const agents = useRunningAgents();
+  const agentsWorking = (agents.data ?? []).some((a) => a.working);
+  const wide = useWide(TIMELINE_AUTO_MIN);
+  const [timelinePref, setTimelinePrefState] = useState<TimelinePref>(() => {
+    try { return (localStorage.getItem('timeline:pref') as TimelinePref) || 'auto'; } catch { return 'auto'; }
+  });
+  const setTimelinePref = (v: TimelinePref) => {
+    setTimelinePrefState(v);
+    try { localStorage.setItem('timeline:pref', v); } catch { /* stockage indisponible */ }
+  };
   const suivi = useQuery({ queryKey: ['suivi', 'projects'], queryFn: api.suiviProjects });
   const [theme, setTheme] = useTheme();
   const t = useT();
@@ -183,11 +211,11 @@ function Main({ terminals }: { terminals: import('./api').TerminalSession[] }) {
     return true;
   }, [suivi.data, projects.data]);
 
-  const nav: Array<{ id: Tab; label: string; icon: React.ReactNode; count?: number; live?: number }> = [
+  const nav: Array<{ id: Tab; label: string; icon: React.ReactNode; count?: number; live?: number; led?: boolean | null }> = [
     { id: 'projects', label: t('common.nav.projects'), icon: <Boxes className="size-4" />, count: projects.data ? new Set(list.filter((p) => !p.loose).map((p) => p.group.id)).size : undefined, live: list.filter(isActive).length },
     { id: 'ide', label: t('common.nav.ide'), icon: <Code2 className="size-4" />, count: ideTabs.length || undefined },
     { id: 'todolist', label: t('common.nav.todolist'), icon: <ListChecks className="size-4" />, count: suivi.data ? suivi.data.reduce((a, p) => a + p.counts.toTest, 0) || undefined : undefined },
-    { id: 'claude', label: t('common.nav.claude'), icon: <ClaudeIcon size={15} />, count: terminals.filter((x) => x.kind === 'claude').length || undefined, live: terminals.filter((x) => x.kind === 'claude' && x.status === 'running').length },
+    { id: 'claude', label: t('common.nav.claude'), icon: <ClaudeIcon size={15} />, count: terminals.filter((x) => x.kind === 'claude').length || undefined, live: terminals.filter((x) => x.kind === 'claude' && x.status === 'running').length, led: agents.data?.length ? agentsWorking : null },
     { id: 'supabase', label: t('common.nav.supabase'), icon: <Database className="size-4" />, count: supabase.data?.instances.length, live: supabase.data?.instances.filter((i) => i.status !== 'stopped').length },
     // Pas de compteur : la vue Docker n'interroge le moteur que lorsqu'elle est affichée.
     { id: 'docker', label: t('common.nav.docker'), icon: <Container className="size-4" /> },
@@ -198,6 +226,8 @@ function Main({ terminals }: { terminals: import('./api').TerminalSession[] }) {
       .map((m) => ({ id: `m/${m.id}` as Tab, label: t.loc(m.name), icon: <ModuleIcon svg={m.icon} /> })),
   ];
   const isModuleTab = tab.startsWith('m/');
+  const timelineSlot = tab === 'projects' && !selectedProject;
+  const timelineOpen = timelinePref === 'shown' || (timelinePref === 'auto' && wide);
   const moduleTab = modules.data?.find((m) => `m/${m.id}` === tab);
   const [title, subtitle] = isModuleTab
     ? [t.loc(moduleTab?.name ?? tab.slice(2)), moduleTab ? t('common.moduleSub', { version: moduleTab.version }) : '']
@@ -211,7 +241,10 @@ function Main({ terminals }: { terminals: import('./api').TerminalSession[] }) {
         tab === n.id ? 'bg-panel-2 text-fg font-medium' : 'text-muted hover:text-fg hover:bg-panel-2/60',
       )}
     >
-      {n.icon}
+      <span className="relative grid shrink-0 place-items-center">
+        {n.icon}
+        {n.led != null && <AgentLed working={n.led} size={6} className="absolute -right-1 -top-0.5 ring-2 ring-panel" title={n.led ? t('agents.ledWorking') : t('agents.ledIdle')} />}
+      </span>
       <span className="flex-1 text-left">{n.label}</span>
       {!!n.live && <span className="rounded bg-emerald-500/15 px-1.5 text-[10px] font-semibold text-emerald-600 dark:text-emerald-400 tabular-nums">{n.live}</span>}
       {n.count != null && <span className="text-[11px] text-faint tabular-nums">{n.count}</span>}
@@ -327,7 +360,8 @@ function Main({ terminals }: { terminals: import('./api').TerminalSession[] }) {
             )}
           </header>
 
-          <div className="p-6 max-w-[1400px]">
+          <div className={cx('p-6', timelineSlot ? 'flex items-start gap-5' : 'max-w-[1400px]')}>
+            <div className={cx(timelineSlot && 'min-w-0 max-w-[1400px] flex-1')}>
             {tab === 'projects' && <ProjectsView projects={list} query={query} onOpen={openProject} selectedId={selected?.id ?? null} />}
             {tab === 'claude' && <ClaudeSessionsView terminals={terminals} activeId={claudeTab} onActive={setClaudeTab} projects={list} />}
             {tab === 'supabase' && <SupabaseView data={supabase.data} query={query} />}
@@ -341,6 +375,19 @@ function Main({ terminals }: { terminals: import('./api').TerminalSession[] }) {
             )}
             {tab === 'settings' && <SettingsView />}
             {isModuleTab && modules.data && <ModuleView module={moduleTab} />}
+            </div>
+            {/* Timeline d'activité : espace libre à droite de la liste des projets, volet du projet fermé. */}
+            {timelineSlot && (timelineOpen ? (
+              <aside className="sticky top-20 w-[clamp(300px,22vw,440px)] shrink-0">
+                <TimelineView onOpenProject={openProject} onHide={() => setTimelinePref('hidden')} />
+              </aside>
+            ) : (
+              <button onClick={() => setTimelinePref('shown')} title={t('timeline.showTitle')}
+                className="sticky top-20 flex w-8 shrink-0 flex-col items-center gap-2 rounded-lg border border-line bg-panel py-3 text-muted hover:text-fg">
+                <Activity className="size-4" />
+                <span className="text-[11px] font-medium [writing-mode:vertical-rl]">{t('timeline.show')}</span>
+              </button>
+            ))}
           </div>
         </main>
 

@@ -31,6 +31,8 @@ export function registerServiceWorker() {
 
 const standalone = () => matchMedia('(display-mode: standalone)').matches || matchMedia('(display-mode: window-controls-overlay)').matches;
 const isSafari = /^((?!chrome|android|crios|fxios).)*safari/i.test(navigator.userAgent);
+/** Dans l'app Tarmac Desktop (agent utilisateur « TarmacDesktop/<version> ») : déjà installée. */
+const inDesktopApp = navigator.userAgent.includes('TarmacDesktop');
 
 /** URL équivalente en *.localhost (contexte sécurisé). */
 function secureUrl() {
@@ -48,7 +50,7 @@ export function InstallButton() {
     return () => void listeners.delete(l);
   }, []);
 
-  if (standalone()) return null;
+  if (standalone() || inDesktopApp) return null;
 
   const base = 'flex w-full items-center gap-2 rounded-md border px-2.5 h-8 text-xs font-medium transition-colors';
 

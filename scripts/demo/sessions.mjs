@@ -17,7 +17,7 @@ const D = 24 * H;
  */
 export const SESSIONS = [
   {
-    project: 'nebula-store', title: 'Cart drawer with quantity controls', branch: 'feat/cart-drawer', age: 0.15 * H, span: 2 * H, messages: 64, active: true,
+    project: 'nebula-store', title: 'Cart drawer with quantity controls', branch: 'feat/cart-drawer', age: 0.15 * H, span: 2 * H, messages: 64,
     chat: [
       ['user', 'Add a slide-over cart drawer with quantity controls and a subtotal. Keep the current card styles.'],
       ['assistant', "I'll add a `CartDrawer` component, wire it to the cart button in the header and reuse the card tokens from `styles.css`. Let me start with the component."],
@@ -63,9 +63,26 @@ export const SESSIONS = [
   },
 ];
 
+/**
+ * Sessions « en cours hors Tarmac » : run-demo.sh lance un faux `claude` (agents-demo.mjs) dans le dossier du projet,
+ * qui écrit son fichier `sessions/<pid>.json` comme Claude Code (point d'entrée, statut busy / idle) et fait vivre
+ * ses faux agents en arrière-plan (`<session>/subagents/agent-<id>.jsonl` + `.meta.json`).
+ */
+export const RUNNING_AGENTS = [
+  {
+    project: 'nebula-store', session: 'Cart drawer with quantity controls', entrypoint: 'claude-desktop', status: 'busy',
+    subagents: [
+      { id: 'a7c3e19d2b4f60a18', type: 'Explore', description: 'Audit cart drawer accessibility' },
+      { id: 'a2f9b07c5d1e83b42', type: 'general-purpose', description: 'Write checkout e2e tests', finished: true },
+    ],
+  },
+  { project: 'rocket-api', session: 'Pagination on /v1/missions', entrypoint: 'claude-vscode', status: 'idle', subagents: [] },
+];
+export const sessionIdOf = (project, title) => uuidOf(`${project}:${title}`);
+
 /** Lignes JSONL d'un transcript au format lu par Tarmac (et par Claude Code). */
 export function transcript(s, cwd, now) {
-  const id = uuidOf(`${s.project}:${s.title}`);
+  const id = sessionIdOf(s.project, s.title);
   const end = now - s.age;
   const start = end - s.span;
   const lines = [];
@@ -305,7 +322,6 @@ export function fixtures(home) {
       ],
     },
     editors: [{ editor: 'vscode', editorLabel: 'VS Code', path: '~/Developer/nebula-store' }],
-    claudeActiveCwds: SESSIONS.filter((s) => s.active).map((s) => `~/Developer/${s.project}`),
     claudeCommand: 'bin/claude',
     home,
   };

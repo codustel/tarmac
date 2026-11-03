@@ -80,3 +80,46 @@ test('validation : champs bornés et valeurs inconnues neutralisées', () => {
   assert.equal(t.sources.length, 1);
   assert.throws(() => sanitizeTask({ id: '../etc' }));
 });
+
+test('notes : une écriture de Claude remplace sa note précédente sans conflit', () => {
+  const local = base({ note: 'Première version', rev: 3, updatedBy: 'claude' });
+  const incoming = base({ note: 'Note réécrite', rev: 4, updatedAt: '2026-10-02T09:00:00Z', updatedBy: 'claude' });
+  const r = mergeTask(local, incoming, 'claude');
+  assert.equal(r.task.note, 'Note réécrite');
+  assert.deepEqual(r.changes.map((c) => [c.field, c.before]), [['note', 'Première version']], 'l’ancienne note reste au journal');
+});
+
+test('notes : une réécriture de la même note nettoie les blocs ⟂', () => {
+  const local = base({ note: 'Note\n⟂ (autre appareil, 01/11/2026 10:00) Vieille note', rev: 4 });
+  const r = mergeTask(local, base({ note: 'Note', rev: 5, updatedAt: '2026-10-02T09:00:00Z', updatedBy: 'claude' }), 'claude');
+  assert.equal(r.task.note, 'Note');
+});
+
+test('notes : une copie antérieure à la dernière écriture n’est pas réajoutée', () => {
+  // L’artefact renvoie la version qu’il avait avant l’écriture de Claude (rev et date plus anciennes).
+  const local = base({ note: 'Note réécrite', rev: 4, updatedAt: '2026-10-02T09:00:00Z', updatedBy: 'claude' });
+  const stale = base({ note: 'Première version', rev: 3, updatedBy: 'artifact' });
+  const r = mergeTask(local, stale, 'artifact');
+  assert.equal(r.task.note, 'Note réécrite');
+  assert.equal(r.changes.length, 0);
+  assert.deepEqual(r.lost.map((c) => c.field), ['note'], 'la note écartée est journalisée');
+});
+
+test('notes : modifications concurrentes (même rev de départ) toujours gardées', () => {
+  const local = base({ note: 'Note du Mac', rev: 2, updatedAt: '2026-10-02T09:00:00Z' });
+  const incoming = base({ note: 'Note du téléphone', rev: 2, updatedAt: '2026-10-02T10:00:00Z', updatedBy: 'artifact' });
+  assert.match(mergeTask(local, incoming, 'artifact').task.note, /^Note du téléphone\n⟂ .+\) Note du Mac$/);
+});
+
+test('notes : un bloc ⟂ ne s’empile jamais avec un texte identique ou quasi identique', () => {
+  const a = 'Note\n⟂ (autre appareil, 01/11/2026 10:00) Vieille note';
+  const b = 'Note\n⟂ (other device, 11/2/26, 9:00 AM) Vieille note';
+  assert.equal(mergeNotes(a, b, null), a, 'mêmes textes, en-têtes différents');
+  assert.equal(mergeNotes('Bug de fusion corrigé.', 'bug de  fusion corrigé', null), 'Bug de fusion corrigé.');
+  assert.match(mergeNotes('Nouvelle', 'Ancienne\n⟂ (autre appareil, 01/11/2026 10:00) Nouvelle', null), /^Nouvelle\n⟂ \([^)]+\) Ancienne$/, 'pas de bloc imbriqué');
+  const merged = mergeNotes('C', 'B\n⟂ (autre appareil, 01/11/2026 10:00) A', '2026-11-02T10:00:00Z');
+  assert.equal(merged.split('\n⟂ ').length, 3);
+  assert.match(merged, /^C\n⟂ \(.+\) B\n⟂ \(autre appareil, 01\/11\/2026 10:00\) A$/);
+  assert.equal(mergeNotes(merged, 'B', null), merged);
+  assert.equal(mergeNotes(merged, 'A\n⟂ (autre appareil, 03/11/2026 08:00) C', null), merged);
+});

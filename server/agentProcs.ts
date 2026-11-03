@@ -1,0 +1,288 @@
+import fs from 'node:fs';
+import path from 'node:path';
+import { execFile } from 'node:child_process';
+import { promisify } from 'node:util';
+
+const exec = promisify(execFile);
+
+/**
+ * Process d'agents de code en cours sur la machine (aujourd'hui Claude Code ; `agent` prévoit Codex, tâche 7.7).
+ *
+ * Sources, de la plus précise à la moins précise :
+ * - `~/.claude/sessions/<pid>.json` : écrit par Claude Code pour chaque process interactif (sessionId, cwd,
+ *   début, `entrypoint` = cli / claude-desktop / claude-vscode…, `status` = busy / idle) ;
+ * - `ps` (pid, parent, durée, exécutable, arguments) : `--resume <id>` / `--session-id <id>`, et les apps parentes
+ *   (premier ancêtre dont l'exécutable est dans un `.app`) ;
+ * - `lsof -d cwd` : dossier de travail du process.
+ * Tout est en lecture seule ; rien n'est envoyé aux process.
+ */
+export type AgentKind = 'claude';
+
+export interface PsRow { pid: number; ppid: number; etimeSec: number; comm: string; args: string }
+
+/** Fichier `sessions/<pid>.json` de Claude Code (champs utiles seulement). */
+export interface PidFile {
+  pid: number;
+  sessionId: string | null;
+  cwd: string | null;
+  startedAt: string | null;
+  entrypoint: string | null;
+  status: 'busy' | 'idle' | null;
+  updatedAt: string | null;
+  name: string | null;
+}
+
+export interface AgentProc {
+  agent: AgentKind;
+  pid: number;
+  ppid: number;
+  cwd: string | null;
+  args: string;
+  startedAt: string;
+  /** Pids des ancêtres, du parent vers la racine. */
+  ancestors: number[];
+  /** App parente (« Terminal », « VS Code », « Claude »…), si on la trouve sans effort. */
+  app: string | null;
+  pidFile: PidFile | null;
+}
+
+/** Durée `ps -o etime` (`[[jj-]hh:]mm:ss`) en secondes. */
+export function parseEtime(s: string): number {
+  const m = s.trim().match(/^(?:(\d+)-)?(?:(\d+):)?(\d+):(\d+)$/);
+  if (!m) return 0;
+  return (Number(m[1] ?? 0) * 24 + Number(m[2] ?? 0)) * 3600 + Number(m[3]) * 60 + Number(m[4]);
+}
+
+/**
+ * Lignes de `ps -axo pid=,ppid=,etime=,comm=` et de `ps -axo pid=,args=` (deux appels : l'exécutable peut
+ * contenir des espaces, « Application Support »).
+ */
+export function parsePs(commOut: string, argsOut: string): PsRow[] {
+  const args = new Map<number, string>();
+  for (const l of argsOut.split('\n')) {
+    const m = l.trim().match(/^(\d+)\s+(.*)$/);
+    if (m) args.set(Number(m[1]), m[2]);
+  }
+  return commOut.split('\n').flatMap((l) => {
+    const m = l.trim().match(/^(\d+)\s+(\d+)\s+(\S+)\s+(.*)$/);
+    if (!m) return [];
+    const pid = Number(m[1]);
+    return [{ pid, ppid: Number(m[2]), etimeSec: parseEtime(m[3]), comm: m[4], args: args.get(pid) ?? m[4] }];
+  });
+}
+
+/** Options et sous-commandes `claude` qui ne sont pas des sessions (aide, version, hôte natif Chrome, MCP…). */
+const NOT_A_SESSION_FLAG = /\s(--help|-h|--version|-v|--chrome-native-host)(\s|$)/;
+const NOT_A_SESSION_CMD = new Set(['mcp', 'doctor', 'update', 'install', 'setup-token', 'config', 'migrate-installer', 'plugin']);
+
+/** Process Claude Code : exécutable `claude`, ou script `claude` lancé par un interpréteur (`node …/claude`). */
+export function isClaudeProcess(comm: string, args: string): boolean {
+  const tokens = args.split(/\s+/);
+  const byInterpreter = /(^|\/)(node|bun|deno)$/.test(tokens[0] ?? '') && /(^|\/)claude$/.test(tokens[1] ?? '');
+  const isClaude = path.basename(comm) === 'claude' || /(^|\/)claude$/.test(tokens[0] ?? '') || byInterpreter;
+  if (!isClaude) return false;
+  const first = tokens[byInterpreter ? 2 : 1] ?? '';
+  return !NOT_A_SESSION_CMD.has(first) && !NOT_A_SESSION_FLAG.test(` ${args}`);
+}
+
+const SESSION_ID = /^[0-9a-f][0-9a-f-]{7,63}$/i;
+
+/** Session demandée par les arguments : `--resume <id>` / `-r <id>` / `--session-id <id>`. */
+export function sessionFromArgs(args: string): string | null {
+  const m = args.match(/(?:^|\s)(?:--resume|-r|--session-id)(?:=|\s+)['"]?([0-9a-fA-F-]{8,64})/);
+  return m && SESSION_ID.test(m[1]) ? m[1] : null;
+}
+
+const APP_ALIASES: Record<string, string> = {
+  'Visual Studio Code': 'VS Code', Code: 'VS Code', 'Code - Insiders': 'VS Code Insiders', iTerm: 'iTerm2', iTerm2: 'iTerm2',
+};
+
+/** App d'un exécutable (`/Applications/Foo.app/Contents/MacOS/foo` → « Foo »), ou null. */
+export function appOfComm(comm: string): string | null {
+  const m = comm.match(/\/([^/]+)\.app\//);
+  return m ? APP_ALIASES[m[1]] ?? m[1] : null;
+}
+
+/** App déduite du point d'entrée déclaré par Claude Code. */
+export function appOfEntrypoint(entrypoint: string | null): string | null {
+  switch (entrypoint) {
+    case 'claude-desktop': return 'Claude';
+    case 'claude-vscode': return 'VS Code';
+    case 'sdk-ts': case 'sdk-py': case 'sdk-cli': return 'SDK';
+    default: return null;
+  }
+}
+
+/** Ancêtres d'un pid (parent d'abord), bornés. */
+export function ancestorsOf(pid: number, byPid: Map<number, PsRow>): number[] {
+  const out: number[] = [];
+  let cur = byPid.get(pid);
+  while (cur && cur.ppid > 1 && out.length < 32 && !out.includes(cur.ppid)) {
+    out.push(cur.ppid);
+    cur = byPid.get(cur.ppid);
+  }
+  return out;
+}
+
+/** Fichier `sessions/<pid>.json` → champs utiles (null si illisible). */
+export function parsePidFile(txt: string): PidFile | null {
+  try {
+    const j = JSON.parse(txt);
+    if (typeof j?.pid !== 'number') return null;
+    const iso = (v: unknown) => (typeof v === 'number' && v > 0 ? new Date(v).toISOString() : typeof v === 'string' ? v : null);
+    const str = (v: unknown) => (typeof v === 'string' && v ? v : null);
+    return {
+      pid: j.pid,
+      sessionId: str(j.sessionId) && SESSION_ID.test(j.sessionId) ? j.sessionId : null,
+      cwd: str(j.cwd),
+      startedAt: iso(j.startedAt),
+      entrypoint: str(j.entrypoint),
+      status: j.status === 'busy' || j.status === 'idle' ? j.status : null,
+      updatedAt: iso(j.statusUpdatedAt ?? j.updatedAt),
+      name: str(j.name),
+    };
+  } catch {
+    return null;
+  }
+}
+
+export function readPidFiles(claudeDir: string): Map<number, PidFile> {
+  const out = new Map<number, PidFile>();
+  const dir = path.join(claudeDir, 'sessions');
+  let files: string[] = [];
+  try { files = fs.readdirSync(dir).filter((f) => /^\d+\.json$/.test(f)); } catch { return out; }
+  for (const f of files) {
+    try {
+      const p = parsePidFile(fs.readFileSync(path.join(dir, f), 'utf8'));
+      if (p && String(p.pid) === f.slice(0, -5)) out.set(p.pid, p);
+    } catch { /* fichier en cours d'écriture */ }
+  }
+  return out;
+}
+
+/**
+ * Process d'agents à partir des sorties brutes (testable) : process `claude` qui ne sont pas eux-mêmes lancés par
+ * un autre process `claude` (outils internes), avec ancêtres, app parente et fichier de session.
+ */
+export function agentProcsFrom(rows: PsRow[], cwds: Map<number, string>, pidFiles: Map<number, PidFile>, opts: { now?: number; appFromAncestors?: boolean } = {}): AgentProc[] {
+  const now = opts.now ?? Date.now();
+  const byPid = new Map(rows.map((r) => [r.pid, r]));
+  const claude = rows.filter((r) => isClaudeProcess(r.comm, r.args));
+  const claudePids = new Set(claude.map((r) => r.pid));
+  return claude.flatMap((r) => {
+    const ancestors = ancestorsOf(r.pid, byPid);
+    if (ancestors.some((a) => claudePids.has(a))) return [];
+    const pidFile = pidFiles.get(r.pid) ?? null;
+    let app = appOfEntrypoint(pidFile?.entrypoint ?? null);
+    if (!app && opts.appFromAncestors !== false) {
+      for (const a of ancestors) {
+        const name = appOfComm(byPid.get(a)?.comm ?? '');
+        if (name) { app = name; break; }
+      }
+    }
+    return [{
+      agent: 'claude' as const,
+      pid: r.pid,
+      ppid: r.ppid,
+      cwd: cwds.get(r.pid) ?? pidFile?.cwd ?? null,
+      args: r.args,
+      startedAt: pidFile?.startedAt ?? new Date(Math.floor((now - r.etimeSec * 1000) / 1000) * 1000).toISOString(),
+      ancestors,
+      app,
+      pidFile,
+    }];
+  });
+}
+
+/** `lsof -Fpn` → pid → cwd. */
+export function parseLsofCwd(out: string): Map<number, string> {
+  const m = new Map<number, string>();
+  let pid = 0;
+  for (const l of out.split('\n')) {
+    if (l.startsWith('p')) pid = Number(l.slice(1));
+    else if (l.startsWith('n/') && pid) m.set(pid, l.slice(1));
+  }
+  return m;
+}
+
+export interface ScanOptions {
+  claudeDir: string;
+  /** Mode démo : seuls les process dont le dossier est dans ce HOME (factice) sont gardés, sans app parente. */
+  onlyUnder?: string | null;
+  /** Âge maximal du cache (2,5 s par défaut). */
+  maxAgeMs?: number;
+}
+
+let cache: { at: number; key: string; procs: AgentProc[] } | null = null;
+let inflight: Promise<AgentProc[]> | null = null;
+
+/** Process d'agents en cours (cache de 2,5 s, une seule lecture à la fois). */
+export async function scanAgentProcs(opts: ScanOptions): Promise<AgentProc[]> {
+  const key = `${opts.claudeDir}|${opts.onlyUnder ?? ''}`;
+  if (cache && cache.key === key && Date.now() - cache.at < (opts.maxAgeMs ?? 2500)) return cache.procs;
+  inflight ??= (async () => {
+    let rows: PsRow[] = [];
+    try {
+      const [a, b] = await Promise.all([
+        exec('ps', ['-axo', 'pid=,ppid=,etime=,comm='], { timeout: 5000, maxBuffer: 16 * 1024 * 1024 }),
+        exec('ps', ['-axo', 'pid=,args='], { timeout: 5000, maxBuffer: 32 * 1024 * 1024 }),
+      ]);
+      rows = parsePs(a.stdout, b.stdout);
+    } catch { return []; }
+    const candidates = rows.filter((r) => isClaudeProcess(r.comm, r.args));
+    let cwds = new Map<number, string>();
+    if (candidates.length) {
+      try {
+        const { stdout } = await exec('lsof', ['-a', '-d', 'cwd', '-Fpn', '-p', candidates.map((r) => r.pid).join(',')], { timeout: 5000 });
+        cwds = parseLsofCwd(stdout);
+      } catch (e: any) {
+        cwds = parseLsofCwd(String(e?.stdout ?? '')); // lsof sort en erreur si un pid vient de disparaître
+      }
+    }
+    let procs = agentProcsFrom(rows, cwds, readPidFiles(opts.claudeDir), { appFromAncestors: !opts.onlyUnder });
+    if (opts.onlyUnder) {
+      const root = opts.onlyUnder;
+      procs = procs.filter((p) => p.cwd && (p.cwd === root || p.cwd.startsWith(root + path.sep)));
+    }
+    cache = { at: Date.now(), key, procs };
+    return procs;
+  })().finally(() => (inflight = null));
+  return inflight;
+}
+
+export type AttachMatch = 'pidfile' | 'arg' | 'recent' | 'none';
+
+/**
+ * Rattache chaque process à sa session, du plus précis au moins précis :
+ * 1. fichier `sessions/<pid>.json` (sessionId écrit par Claude Code) ;
+ * 2. arguments `--resume` / `--session-id` ;
+ * 3. sinon, dans le même dossier, le transcript le plus récent pas encore attribué et écrit depuis le début du
+ *    process (les process les plus récents choisissent en premier). Aucun transcript écrit depuis : session
+ *    inconnue (process qui vient de démarrer), plutôt qu'une ancienne session prise à tort.
+ */
+export function attachSessions(
+  procs: Array<Pick<AgentProc, 'pid' | 'cwd' | 'args' | 'startedAt' | 'pidFile'>>,
+  transcripts: Array<{ id: string; cwd: string; updatedAt: string }>,
+): Map<number, { sessionId: string | null; match: AttachMatch }> {
+  const out = new Map<number, { sessionId: string | null; match: AttachMatch }>();
+  const claimed = new Set<string>();
+  for (const p of procs) {
+    const id = p.pidFile?.sessionId ?? null;
+    if (id) { out.set(p.pid, { sessionId: id, match: 'pidfile' }); claimed.add(id); }
+  }
+  for (const p of procs) {
+    if (out.has(p.pid)) continue;
+    const id = sessionFromArgs(p.args);
+    if (id && !claimed.has(id)) { out.set(p.pid, { sessionId: id, match: 'arg' }); claimed.add(id); }
+  }
+  const rest = procs.filter((p) => !out.has(p.pid)).sort((a, b) => b.startedAt.localeCompare(a.startedAt));
+  for (const p of rest) {
+    const since = Date.parse(p.startedAt) - 5000;
+    const t = transcripts
+      .filter((s) => s.cwd === p.cwd && !claimed.has(s.id) && Date.parse(s.updatedAt) >= since)
+      .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt))[0];
+    if (t) { out.set(p.pid, { sessionId: t.id, match: 'recent' }); claimed.add(t.id); }
+    else out.set(p.pid, { sessionId: null, match: 'none' });
+  }
+  return out;
+}

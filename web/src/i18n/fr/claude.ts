@@ -10,7 +10,7 @@ export default {
   // Ligne de session (SessionRow)
   'claude.row.openHere': 'ouverte ici',
   'claude.row.active': 'active',
-  'claude.row.activeTitle': 'Un process claude tourne dans ce dossier (terminal, VS Code…)',
+  'claude.row.activeTitle': 'Session en cours hors de Tarmac (terminal, app Claude, IDE…)',
   'claude.row.show': 'Afficher',
   'claude.row.resume': 'Reprendre',
   'claude.row.resumeActiveTitle': 'Session déjà ouverte ailleurs : la reprendre ici crée un second client sur la même conversation',
@@ -29,7 +29,6 @@ export default {
   'claude.view.closeConfirm': 'Fermer « {label} » ? La session Claude sera arrêtée (elle reste reprenable).',
   'claude.view.noTabs': 'Aucune session ouverte — lance-en une depuis un projet (onglet Claude) ou l\'historique.',
   'claude.view.history': 'Historique',
-  'claude.view.activeElsewhere': 'Actives hors de Tarmac :',
   'claude.view.allTitle': 'Toutes les sessions Claude Code',
   'claude.view.allSub': 'rattachées à un projet scanné',
   'claude.view.noSession': 'Aucune session',

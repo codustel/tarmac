@@ -1,11 +1,12 @@
 import { useMemo, useState } from 'react';
 import { useMutation, useQuery } from '@tanstack/react-query';
-import { ExternalLink, GitBranch, History, MessageSquare, Play, Plus, Radio, RefreshCw, Search, SquareTerminal, X } from 'lucide-react';
+import { ChevronDown, ChevronRight, ExternalLink, GitBranch, History, MessageSquare, Play, Plus, Radio, RefreshCw, Search, SquareTerminal, X } from 'lucide-react';
 import { api, type ClaudeSession, type Project, type TerminalSession } from '../api';
 import { TechIcon } from '../icons';
 import { Badge, Button, Card, Empty, IconButton, cx, timeAgo, useToast } from '../ui';
 import { useT } from '../i18n';
 import { TerminalView } from './TerminalView';
+import { AgentLed, RunningAgentRow, agentsUnder, useRunningAgents } from './Agents';
 
 export const ClaudeIcon = ({ size = 14, className }: { size?: number; className?: string }) => (
   <TechIcon id="claude" label="Claude" size={size} className={className} />
@@ -74,6 +75,8 @@ export function ProjectClaudeTab({ project, onOpenTab }: { project: Project; onO
     onError: (e: Error) => toast('err', e.message),
   });
   const list = (sessions.data ?? []).filter((s) => !q || `${s.title} ${s.firstPrompt ?? ''} ${s.gitBranch ?? ''}`.toLowerCase().includes(q.toLowerCase()));
+  const agents = useRunningAgents();
+  const running = agentsUnder(agents.data, project.dir);
 
   return (
     <div className="flex h-full flex-col">
@@ -91,6 +94,17 @@ export function ProjectClaudeTab({ project, onOpenTab }: { project: Project; onO
         <IconButton title={tr('claude.refresh')} onClick={() => api.claudeSessions(project.id, true).then(() => sessions.refetch())}><RefreshCw className="size-3.5" /></IconButton>
       </div>
       <div className="min-h-0 flex-1 overflow-auto">
+        {/* Agents en cours dans ce projet (Tarmac ou ailleurs) : détail ouvert par le badge de la liste des projets. */}
+        {running.length > 0 && (
+          <section className="border-b border-line bg-emerald-500/[0.04]">
+            <h3 className="flex items-center gap-2 px-4 pt-2.5 text-[11px] font-semibold uppercase tracking-wide text-muted">
+              <AgentLed working={running.some((a) => a.working)} />{tr('agents.project.title')}<span className="tabular-nums text-faint">{running.length}</span>
+            </h3>
+            <div className="divide-y divide-line/70">
+              {running.map((a) => <RunningAgentRow key={a.key} a={a} onShowTerminal={onOpenTab} showProject={a.project?.id !== project.id} />)}
+            </div>
+          </section>
+        )}
         {sessions.isLoading ? (
           <div className="p-6 text-muted">{tr('claude.loading')}</div>
         ) : list.length === 0 ? (
@@ -133,7 +147,12 @@ export function ClaudeSessionsView({ terminals, activeId, onActive, projects }: 
     () => (all.data ?? []).filter((s) => s.project && (!q || `${s.title} ${s.project.name} ${s.gitBranch ?? ''}`.toLowerCase().includes(q.toLowerCase()))),
     [all.data, q],
   );
-  const activeElsewhere = (all.data ?? []).filter((s) => s.active && !s.terminalId);
+  const agents = useRunningAgents();
+  const outside = (agents.data ?? []).filter((a) => a.where === 'external');
+  const [outsideOpen, setOutsideOpen] = useState(() => { try { return localStorage.getItem('claude:outside') !== 'closed'; } catch { return true; } });
+  const toggleOutside = () => {
+    setOutsideOpen((v) => { try { localStorage.setItem('claude:outside', v ? 'closed' : 'open'); } catch { /* stockage indisponible */ } return !v; });
+  };
 
   const close = (t: TerminalSession) => {
     if (t.status === 'running' && !confirm(tr('claude.view.closeConfirm', { label: t.label }))) return;
@@ -169,11 +188,22 @@ export function ClaudeSessionsView({ terminals, activeId, onActive, projects }: 
         </Button>
       </div>
 
-      {activeElsewhere.length > 0 && !showHistory && (
-        <div className="flex flex-wrap items-center gap-1.5 text-[11px] text-muted">
-          <Radio className="size-3 text-emerald-500" /> {tr('claude.view.activeElsewhere')}
-          {activeElsewhere.map((s) => <Badge key={s.id} tone="green" title={s.title}>{s.project?.name ?? s.cwd.split('/').pop()}</Badge>)}
-        </div>
+      {/* Sessions en cours hors Tarmac (terminal, app Claude, IDE) avec leurs agents en arrière-plan. */}
+      {outside.length > 0 && !showHistory && (
+        <Card className="shrink-0 overflow-hidden">
+          <button onClick={toggleOutside} aria-expanded={outsideOpen} className="flex w-full items-center gap-2 px-4 h-9 text-left hover:bg-panel-2/50">
+            {outsideOpen ? <ChevronDown className="size-3.5 text-faint" /> : <ChevronRight className="size-3.5 text-faint" />}
+            <AgentLed working={outside.some((a) => a.working)} title={outside.some((a) => a.working) ? tr('agents.ledWorking') : tr('agents.ledIdle')} />
+            <span className="font-medium">{tr('agents.outside.title')}</span>
+            <span className="text-[11px] tabular-nums text-faint">{outside.length}</span>
+            <span className="ml-2 hidden truncate text-[11px] text-faint lg:inline">{tr('agents.outside.sub')}</span>
+          </button>
+          {outsideOpen && (
+            <div className="max-h-[42vh] divide-y divide-line overflow-auto border-t border-line">
+              {outside.map((a) => <RunningAgentRow key={a.key} a={a} />)}
+            </div>
+          )}
+        </Card>
       )}
 
       {showHistory ? (

@@ -8,8 +8,9 @@ import github from './fr/github';
 import supabase from './fr/supabase';
 import docker from './fr/docker';
 import android from './fr/android';
+import activity from './fr/activity';
 
 /** Dictionnaire français : référence des clés (`en` est typé dessus). Un fichier par espace de noms. */
-export const fr = { ...common, ...settings, ...claude, ...todolist, ...projects, ...ide, ...github, ...supabase, ...docker, ...android };
+export const fr = { ...common, ...settings, ...claude, ...todolist, ...projects, ...ide, ...github, ...supabase, ...docker, ...android, ...activity };
 export type Dict = typeof fr;
 export type TKey = keyof Dict;

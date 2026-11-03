@@ -210,3 +210,24 @@ body {
 @container sidebar-free (max-height: 160px) { .usage-panel[data-rows="4"] { display: none; } }
 @container sidebar-free (max-height: 246px) { .sidebar-free-inner:has(.usage-panel[data-rows="5"]) .sidebar-logo { display: none; } }
 @container sidebar-free (max-height: 188px) { .usage-panel[data-rows="5"] { display: none; } }
+
+/* ─── Agents en cours et timeline d'activité (5.10 / 5.11) ───
+   Une couleur par agent (--agent-<id>) et par type d'évènement (--act-*) : teintes 600-700 en clair,
+   300-400 en sombre, comme les badges. LED : verte, clignote quand un agent travaille. */
+:root {
+  --agent-claude: #c15f3c;
+  --act-commit: #4f46e5; --act-push: #0369a1; --act-task: #b45309;
+  --led: #10b981; --led-glow: rgb(16 185 129 / .45);
+}
+.dark {
+  --agent-claude: #e08a68;
+  --act-commit: #a5b4fc; --act-push: #7dd3fc; --act-task: #fcd34d;
+  --led: #34d399; --led-glow: rgb(52 211 153 / .5);
+}
+.agent-led { display: inline-block; border-radius: 9999px; background: var(--led); }
+.agent-led[data-working='true'] { animation: agent-led-blink 1.2s ease-in-out infinite; }
+@keyframes agent-led-blink {
+  0%, 100% { opacity: 1; box-shadow: 0 0 0 0 var(--led-glow); }
+  50% { opacity: .3; box-shadow: 0 0 0 3px transparent; }
+}
+@media (prefers-reduced-motion: reduce) { .agent-led[data-working='true'] { animation: none; } }

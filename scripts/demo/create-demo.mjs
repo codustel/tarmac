@@ -14,7 +14,7 @@ import path from 'node:path';
 import { execFileSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { PROJECTS } from './projects.mjs';
-import { SESSIONS, fixtures, todolistInsights, todolistPilot, todolistPlatform, todolistRocketApi, todolistStorefront, transcript } from './sessions.mjs';
+import { RUNNING_AGENTS, SESSIONS, fixtures, sessionIdOf, todolistInsights, todolistPilot, todolistPlatform, todolistRocketApi, todolistStorefront, transcript } from './sessions.mjs';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const argv = process.argv.slice(2);
@@ -216,6 +216,20 @@ for (const s of SESSIONS) {
 for (const [enc, entries] of indexes) write(path.join(claudeProjects, enc, 'sessions-index.json'), JSON.stringify({ version: 1, entries }, null, 2));
 say(`${SESSIONS.length} sessions Claude Code factices`);
 
+// Sessions « en cours hors Tarmac » : faux agents en arrière-plan (lancés par run-demo.sh via agents-demo.mjs).
+fs.rmSync(path.join(HOME, '.claude', 'sessions'), { recursive: true, force: true });
+const running = RUNNING_AGENTS.map((a) => {
+  const cwd = path.join(DEV, a.project);
+  const sessionId = sessionIdOf(a.project, a.session);
+  const sub = path.join(claudeProjects, cwd.replace(/[^a-zA-Z0-9]/g, '-'), sessionId, 'subagents');
+  for (const s of a.subagents) {
+    const at = new Date(NOW - 3 * 60_000).toISOString();
+    write(path.join(sub, `agent-${s.id}.jsonl`), JSON.stringify({ type: 'user', isSidechain: true, agentId: s.id, sessionId, cwd, timestamp: at, message: { role: 'user', content: s.description } }) + '\n');
+    write(path.join(sub, `agent-${s.id}.meta.json`), JSON.stringify({ agentType: s.type, description: s.description, ...(s.finished ? { finished: true } : {}) }));
+  }
+  return { cwd, sessionId, entrypoint: a.entrypoint, status: a.status };
+});
+
 // ─── Données de Tarmac (DATA_DIR = <home>/.tarmac) ──────────────────────────
 const dataDir = path.join(HOME, '.tarmac');
 const settingsFile = path.join(dataDir, 'settings.json');
@@ -241,4 +255,8 @@ write(path.join(fx, 'fixtures.json'), JSON.stringify(data, null, 2));
 fs.rmSync(path.join(fx, 'bin'), { recursive: true, force: true });
 write(path.join(fx, 'bin', 'claude'), fs.readFileSync(path.join(HERE, 'claude-demo.mjs'), 'utf8'), 0o755);
 write(path.join(fx, 'bin', 'gh'), fs.readFileSync(path.join(HERE, 'gh-demo.mjs'), 'utf8'), 0o755);
+// Faux `claude` des sessions en cours hors Tarmac (dossier à part : jamais dans le PATH des consoles).
+fs.rmSync(path.join(fx, 'bin-agents'), { recursive: true, force: true });
+write(path.join(fx, 'bin-agents', 'claude'), fs.readFileSync(path.join(HERE, 'agents-demo.mjs'), 'utf8'), 0o755);
+write(path.join(fx, 'running-agents.json'), JSON.stringify(running, null, 2));
 say(`Espace de démo prêt : ${HOME}`);

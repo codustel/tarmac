@@ -33,7 +33,6 @@ const fixtures: DemoFixtures = {
   },
   android: { sdk: '~/Library/Android/sdk', checks: [{ id: 'jdk', label: 'JDK 17', ok: true, detail: 'Temurin 17' }], avds: [{ name: 'Pixel_8_API_35', device: 'pixel_8', api: '35', image: 'Google Play', state: 'ready', serial: 'emulator-5554' }] },
   editors: [{ editor: 'vscode', editorLabel: 'VS Code', path: '~/Developer/nebula-store' }],
-  claudeActiveCwds: ['~/Developer/nebula-store'],
   claudeCommand: 'bin/claude',
 };
 

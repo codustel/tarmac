@@ -100,12 +100,16 @@ export function bindSocket(qc: QueryClient) {
     if (msg.type === 'terminals:all') {
       qc.setQueryData<TerminalSession[]>(['terminals'], msg.sessions as TerminalSession[]);
       qc.invalidateQueries({ queryKey: ['claude'] });
+      qc.invalidateQueries({ queryKey: ['agents'] });
     }
     if (msg.type === 'editors') {
       const open = msg.open as Record<string, OpenIn>;
       qc.setQueryData<Project[]>(['projects'], (list) => list?.map((p) => ({ ...p, openIn: open[p.id] ?? null })));
     }
-    if (msg.type === 'suivi:changed') qc.invalidateQueries({ queryKey: ['suivi'] });
+    if (msg.type === 'suivi:changed') {
+      qc.invalidateQueries({ queryKey: ['suivi'] });
+      qc.invalidateQueries({ queryKey: ['timeline'] });
+    }
     if (msg.type === 'scan' || msg.type === 'reconnect') qc.invalidateQueries();
   });
 }

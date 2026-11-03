@@ -101,8 +101,11 @@ export interface Project {
   loose: boolean;
   synthetic: boolean;
   group: GroupInfo;
-  /** Sessions Claude Code dont le dossier de travail est ce projet (hors sous-projets). */
-  claude: { count: number; active: number; lastAt: string | null };
+  /**
+   * Sessions Claude Code dont le dossier de travail est ce projet (hors sous-projets) : `count` au total,
+   * `active` en cours (Tarmac ou ailleurs), `working` dont un agent travaille.
+   */
+  claude: { count: number; active: number; working: number; lastAt: string | null };
   /** Fenêtre d'éditeur (VS Code, Cursor…) ouverte sur ce dossier ou un dossier parent. */
   openIn: OpenIn | null;
 }
@@ -150,6 +153,51 @@ export interface ClaudeSession {
   active: boolean;
   terminalId: string | null;
   project?: { id: string; name: string } | null;
+}
+
+/** Agent de code (Claude Code aujourd'hui ; Codex prévu, tâche 7.7). */
+export type AgentKind = 'claude';
+
+/** Agent en arrière-plan d'une session (sous-agent). */
+export interface BackgroundAgent { id: string; type: string | null; description: string; startedAt: string | null; lastActivityAt: string }
+
+/** Session d'agent en cours (`/api/agents/running`), dans Tarmac ou ailleurs. */
+export interface RunningAgent {
+  key: string;
+  agent: AgentKind;
+  pid: number;
+  sessionId: string | null;
+  match: 'pidfile' | 'arg' | 'recent' | 'none' | 'tarmac';
+  cwd: string | null;
+  title: string | null;
+  startedAt: string;
+  lastActivityAt: string | null;
+  where: 'tarmac' | 'external';
+  app: string | null;
+  terminalId: string | null;
+  state: 'working' | 'idle';
+  background: BackgroundAgent[];
+  working: boolean;
+  project: { id: string; name: string } | null;
+}
+
+export type TimelineType = 'commit' | 'push' | 'session' | 'task';
+/** Évènement de la timeline (`/api/timeline`) ; `text` est une donnée non fiable, affichée en texte. */
+export interface TimelineEvent {
+  id: string;
+  type: TimelineType;
+  at: string;
+  projectId: string | null;
+  projectName: string;
+  text: string;
+  branch?: string | null;
+  hash?: string;
+  author?: string;
+  remote?: string;
+  commits?: number | null;
+  agent?: AgentKind;
+  sessionId?: string;
+  task?: { suiviId: string; taskId: string; num: string; status: 'created' | 'toTest' | 'done' };
 }
 
 export interface OpenIn {
@@ -467,6 +515,8 @@ export const api = {
   action: (id: string, action: 'start' | 'stop' | 'restart') => request<Runtime>(`/api/projects/${id}/${action}`, { method: 'POST' }),
   claudeSessions: (id: string, force = false) => request<ClaudeSession[]>(`/api/projects/${id}/claude-sessions${force ? '?force=1' : ''}`),
   allClaudeSessions: () => request<ClaudeSession[]>('/api/claude/sessions'),
+  runningAgents: () => request<RunningAgent[]>('/api/agents/running'),
+  timeline: () => request<{ events: TimelineEvent[]; days: number }>('/api/timeline'),
   openClaude: (id: string, resume?: string, prompt?: string) => request<TerminalSession>(`/api/projects/${id}/claude`, json({ resume, prompt, cols: 140, rows: 40 })),
   frameCheck: (id: string) => request<{ url: string | null; frameable: boolean; reason: string | null; pending?: boolean }>(`/api/projects/${id}/frame-check`),
   suiviProjects: () => request<SuiviProjectSummary[]>('/api/suivi/projects'),

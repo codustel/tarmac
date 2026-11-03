@@ -344,6 +344,12 @@ export class SuiviService {
     return rows.map((r) => ({ seq: r.seq, taskId: r.task_id, rev: r.rev, field: r.field, before: parse(r.before), after: parse(r.after), origin: r.origin, lost: !!r.lost, at: r.at }));
   }
 
+  /** Tâches passées « à tester » depuis une date (transition false → true du journal), pour la timeline. */
+  toTestSince(projectId: string, sinceIso: string): Array<{ taskId: string; at: string }> {
+    return (this.db.prepare(`SELECT task_id, max(at) AS at FROM journal WHERE project_id = ? AND field = 'toTest' AND before = 'false' AND after = 'true' AND at >= ?
+      GROUP BY task_id ORDER BY at DESC LIMIT 300`).all(projectId, sinceIso) as any[]).map((r) => ({ taskId: r.task_id, at: r.at }));
+  }
+
   // ─── Synchronisations ──────────────────────────────────────────────────────
   recordSync(projectId: string, channel: Channel, result: string, marker: string | null = null) {
     this.db.prepare('INSERT INTO syncs (project_id, channel, at, result, marker) VALUES (?, ?, ?, ?, ?) ON CONFLICT(project_id, channel) DO UPDATE SET at = excluded.at, result = excluded.result, marker = excluded.marker')

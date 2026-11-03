@@ -12,6 +12,8 @@ import { openInIde } from '../ide/store';
 import { EnvModal } from './EnvModal';
 import { STATUS_KEY, hasBrowser, type PanelTab } from './ProjectPanel';
 import { ClaudeIcon } from './ClaudeSessions';
+import { AgentLed, useAgentSummary, useRunningAgents } from './Agents';
+import type { RunningAgent } from '../api';
 import { Globe, KeyRound, Plus, Smartphone, Star } from 'lucide-react';
 
 type KindFilter = 'all' | 'favorites' | 'web' | 'console' | 'running' | 'editor';
@@ -103,6 +105,8 @@ function useCollapsed() {
  * nom et badges sur une ligne, actions à droite sur la même ligne).
  */
 const CompactRows = createContext(false);
+/** Agents en cours par projet (id), pour les badges des lignes. */
+const RunningByProject = createContext<Map<string, RunningAgent[]>>(new Map());
 
 export function ProjectsView({ projects, query, onOpen, selectedId }: {
   projects: Project[];
@@ -116,6 +120,12 @@ export function ProjectsView({ projects, query, onOpen, selectedId }: {
   const [gh, setGh] = useStored<GhFilter>('ghFilter', 'all');
   const [langs, setLangs] = useState<Set<string>>(new Set());
   const collapse = useCollapsed();
+  const agents = useRunningAgents();
+  const runningByProject = useMemo(() => {
+    const m = new Map<string, RunningAgent[]>();
+    for (const a of agents.data ?? []) if (a.project) m.set(a.project.id, [...(m.get(a.project.id) ?? []), a]);
+    return m;
+  }, [agents.data]);
 
   const matches = (p: Project) => {
     const q = query.trim().toLowerCase();
@@ -177,6 +187,7 @@ export function ProjectsView({ projects, query, onOpen, selectedId }: {
   };
   return (
     <CompactRows.Provider value={selectedId !== null}>
+    <RunningByProject.Provider value={runningByProject}>
     <div className="@container space-y-4">
       <div className="flex flex-wrap items-center gap-2">
         <div className="inline-flex flex-wrap rounded-md border border-line bg-panel p-0.5">
@@ -263,6 +274,7 @@ export function ProjectsView({ projects, query, onOpen, selectedId }: {
         </div>
       )}
     </div>
+    </RunningByProject.Provider>
     </CompactRows.Provider>
   );
 }
@@ -322,11 +334,7 @@ function GroupCard({ group, open, onToggle, onOpen, selectedId, sort }: {
         onOpen={onOpen}
         selected={selectedId === root.id}
         badges={<>{typeBadge}{active > 0 && hasChildren && <Badge tone="green">{t('projects.group.activeCount', { count: active })}</Badge>}</>}
-        claude={{
-          count: group.all.reduce((n, x) => n + x.claude.count, 0),
-          active: group.all.reduce((n, x) => n + x.claude.active, 0),
-          lastAt: group.all.map((x) => x.claude.lastAt).filter(Boolean).sort().at(-1) ?? null,
-        }}
+        agentProjects={group.all.map((x) => x.id)}
         stack={stack}
         dates={group.dates}
         sort={sort}
@@ -382,7 +390,7 @@ function LooseGroup({ items, open, onToggle, onOpen, selectedId }: {
 /** Projet Expo / React Native : lançable sur l'émulateur Android. */
 const isAndroidApp = (p: Project) => p.kind === 'mobile' || p.framework?.id === 'expo' || p.framework?.id === 'react-native';
 
-function ProjectRow({ p, header, child, loose, expandable, open, onToggle, onOpen, selected, badges, stack, groupName, claude = p.claude, dates, sort, url = p.prodUrl, groupApps }: {
+function ProjectRow({ p, header, child, loose, expandable, open, onToggle, onOpen, selected, badges, stack, groupName, agentProjects, dates, sort, url = p.prodUrl, groupApps }: {
   p: Project;
   header?: boolean;
   child?: boolean;
@@ -395,8 +403,8 @@ function ProjectRow({ p, header, child, loose, expandable, open, onToggle, onOpe
   badges?: React.ReactNode;
   stack?: Array<[string, string]>;
   groupName?: string;
-  /** Sessions Claude à afficher (en-tête de groupe : total du groupe). */
-  claude?: Project['claude'];
+  /** Projets dont les agents en cours sont comptés (en-tête de groupe : toutes les apps du groupe). */
+  agentProjects?: string[];
   dates?: ReturnType<typeof groupDates>;
   sort?: SortKey;
   /** URL de prod affichée (en-tête : celle du projet ou de son app web). */
@@ -405,6 +413,9 @@ function ProjectRow({ p, header, child, loose, expandable, open, onToggle, onOpe
   groupApps?: Project[];
 }) {
   const compact = useContext(CompactRows);
+  const runningByProject = useContext(RunningByProject);
+  const running = (agentProjects ?? [p.id]).flatMap((id) => runningByProject.get(id) ?? []);
+  const runningSummary = useAgentSummary(running);
   const qc = useQueryClient();
   const toast = useToast();
   const t = useT();
@@ -522,14 +533,15 @@ function ProjectRow({ p, header, child, loose, expandable, open, onToggle, onOpe
             {rt.adopted && <Badge title={t('projects.row.adoptedHint')}>{t('projects.row.adopted')}</Badge>}
             {p.openIn && (!child || p.openIn.via === 'exact') && <EditorBadge openIn={p.openIn} />}
             {(url || header || loose) && <UrlChip p={p} url={url ?? null} />}
-            {claude && claude.count > 0 && (
+            {/* Sessions d'agent en cours (Tarmac ou ailleurs) ; rien quand aucune. Clic → détail dans le volet. */}
+            {running.length > 0 && (
               <button
                 onClick={() => onOpen(p.id, 'claude')}
-                title={t('projects.row.claudeSessions', { count: claude.count }) + (claude.active ? t('projects.row.claudeActive', { count: claude.active }) : '') + t('projects.row.claudeLast', { when: timeAgo(claude.lastAt) })}
-                className={cx('inline-flex h-5 items-center gap-1 rounded border px-1.5 text-[11px] font-medium', claude.active ? 'border-emerald-500/30 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300' : 'border-line bg-panel-2 text-muted hover:text-fg')}
+                title={runningSummary + t('projects.row.claudeOpenDetail')}
+                className="inline-flex h-5 items-center gap-1 rounded border border-emerald-500/30 bg-emerald-500/10 px-1.5 text-[11px] font-medium text-emerald-700 hover:bg-emerald-500/15 dark:text-emerald-300"
               >
-                <ClaudeIcon size={11} />{claude.count}
-                {claude.active > 0 && <span className="size-1.5 rounded-full bg-emerald-500" />}
+                <AgentLed working={running.some((a) => a.working)} size={6} />
+                <ClaudeIcon size={11} />{running.length}
               </button>
             )}
           </div>

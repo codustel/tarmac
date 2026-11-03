@@ -88,8 +88,6 @@ export interface DemoFixtures {
   };
   /** Dossiers « ouverts dans VS Code » (`~` accepté). */
   editors: Array<{ editor: string; editorLabel: string; path: string }>;
-  /** Dossiers où un process `claude` « tourne » (`~` accepté) : leur session la plus récente est active. */
-  claudeActiveCwds: string[];
   /** Faux `claude` (relatif au dossier des fixtures, ou absolu ; nommé `claude`) ; le faux `gh` est à côté. */
   claudeCommand: string;
   /** Utilisation Claude affichée dans la sidebar (facultatif : valeurs par défaut sinon). */
@@ -192,7 +190,6 @@ export function demoAndroid(d: DemoFixtures) {
 
 export const demoEditors = (d: DemoFixtures) => d.editors.map((e) => ({ ...e, path: expand(e.path), workspaceFile: null }));
 
-export const demoClaudeCwds = (d: DemoFixtures) => new Map(d.claudeActiveCwds.map((c) => [expand(c), 1]));
 
 /**
  * Dossier des faux outils du mode démo (`claude`, `gh`), placé en tête du PATH des consoles qui les lancent :

@@ -18,7 +18,9 @@ import { processes } from './processes.js';
 import { SYSTEM_ID, terminals } from './terminals.js';
 import { EDITOR_APPS, matchOpen, openEditorFolders } from './editors.js';
 import crypto from 'node:crypto';
-import { assignSessions, claudeCommand, claudeDir, claudeTurnState, listClaudeSessions } from './claude.js';
+import { assignSessions, claudeCommand, claudeDir, claudeProcs, claudeTurnState, listClaudeSessions, transcriptFile } from './claude.js';
+import { buildRunningAgents, type RunningAgent } from './agents.js';
+import { RepoEventsCache, TIMELINE_DAYS, mergeTimeline, type TimelineEvent, type TimelineRepo } from './timeline.js';
 import { ClaudeUsageService, readCredentials } from './claudeUsage.js';
 import { GIT_COMMANDS, buildGitCommand } from './gitCommands.js';
 import { msg, runWithRequestLang, tr, uiLang } from './i18n.js';
@@ -267,6 +269,7 @@ app.get('/api/projects', async () => {
   const sbConfigs = new Map(lastScan.supabaseConfigs.map((c) => [c.projectId, c]));
   const folders = await openEditorFolders().catch(() => []);
   const claude = assignSessions(await listClaudeSessions().catch(() => []), lastScan.projects.map((p) => p.dir));
+  const running = assignSessions((await runningAgents().catch(() => [])).flatMap((a) => (a.cwd ? [{ ...a, cwd: a.cwd }] : [])), lastScan.projects.map((p) => p.dir));
   const ghPushed = new Map(cachedGithubRepos().map((r) => [r.key, r.pushedAt]));
   return Promise.all(
     lastScan.projects.map(async (p) => {
@@ -307,7 +310,9 @@ app.get('/api/projects', async () => {
         favorite: settings.favorites.includes(p.dir),
         claude: (() => {
           const list = claude.get(p.dir) ?? [];
-          return { count: list.length, active: list.filter((s) => s.active).length, lastAt: list[0]?.updatedAt ?? null };
+          // `active` : sessions en cours (Tarmac ou ailleurs), `working` : celles où un agent travaille.
+          const live = running.get(p.dir) ?? [];
+          return { count: list.length, active: live.length, working: live.filter((a) => a.working).length, lastAt: list[0]?.updatedAt ?? null };
         })(),
       };
     }),
@@ -650,16 +655,100 @@ const claudeUsage = new ClaudeUsageService({
 });
 app.get('/api/claude/usage', async () => claudeUsage.get());
 
+/** Nom affiché d'un projet (« Groupe › app » pour une app d'un groupe). */
+const projectLabel = (p: Project) => {
+  const child = p.name === p.group.name ? p.techName : p.name;
+  return { id: p.id, name: p.group.isRoot || p.group.type === 'single' ? p.name : `${p.group.name} › ${child}` };
+};
+/** Projet le plus profond qui contient chaque élément (par son `cwd`). */
+function projectsOf<T extends { cwd: string }>(items: T[], key: (x: T) => string) {
+  const out = new Map<string, { id: string; name: string }>();
+  for (const [dir, list] of assignSessions(items, lastScan.projects.map((p) => p.dir))) {
+    const p = lastScan.projects.find((x) => x.dir === dir)!;
+    for (const x of list) out.set(key(x), projectLabel(p));
+  }
+  return out;
+}
+
 app.get('/api/claude/sessions', async () => {
   const all = await listClaudeSessions();
-  const byDir = assignSessions(all, lastScan.projects.map((p) => p.dir));
-  const projectOf = new Map<string, { id: string; name: string }>();
-  for (const [dir, list] of byDir) {
-    const p = lastScan.projects.find((x) => x.dir === dir)!;
-    const child = p.name === p.group.name ? p.techName : p.name;
-    for (const s of list) projectOf.set(s.id, { id: p.id, name: p.group.isRoot || p.group.type === 'single' ? p.name : `${p.group.name} › ${child}` });
-  }
+  const projectOf = projectsOf(all, (s) => s.id);
   return all.map((s) => ({ ...withTerminal(s), project: projectOf.get(s.id) ?? null }));
+});
+
+// ─── Agents en cours (Tarmac et ailleurs) ───────────────────────────────────
+/** Sessions d'agent en cours, rattachées à leur session, console de Tarmac et sous-agents (voir agents.ts). */
+async function runningAgents(): Promise<RunningAgent[]> {
+  const [procs, sessions] = await Promise.all([claudeProcs().catch(() => []), listClaudeSessions().catch(() => [])]);
+  const dirOf = new Map(lastScan.projects.map((p) => [p.id, p.dir]));
+  return buildRunningAgents({
+    procs,
+    sessions,
+    terminals: terminals.list().map((t) => ({ ...t, cwd: dirOf.get(t.projectId) ?? null })),
+    turn: claudeTurnState,
+    transcriptOf: transcriptFile,
+  });
+}
+
+app.get('/api/agents/running', async () => {
+  const list = await runningAgents();
+  const projectOf = projectsOf(list.flatMap((a) => (a.cwd ? [{ ...a, cwd: a.cwd }] : [])), (a) => a.key);
+  return list.map((a) => ({ ...a, project: projectOf.get(a.key) ?? null }));
+});
+
+// ─── Timeline de tous les projets ───────────────────────────────────────────
+const repoEvents = new RepoEventsCache();
+let timelineMemo: { at: number; events: TimelineEvent[] } | null = null;
+let timelineRun: Promise<TimelineEvent[]> | null = null;
+
+/** Projet qui représente un dépôt : celui de sa racine, sinon la racine du groupe, sinon la première app. */
+function repoProject(dir: string): Project | undefined {
+  const inRepo = lastScan.projects.filter((p) => (p.repoDir ?? p.dir) === dir);
+  return inRepo.find((p) => p.dir === dir) ?? inRepo.find((p) => p.group.isRoot) ?? inRepo[0];
+}
+
+async function computeTimeline(): Promise<TimelineEvent[]> {
+  const since = Date.now() - TIMELINE_DAYS * 86_400_000;
+  const repos: TimelineRepo[] = lastScan.repos.map((r) => {
+    const p = repoProject(r.dir);
+    return { dir: r.dir, projectId: p?.id ?? null, projectName: p ? projectLabel(p).name : r.name };
+  });
+  repoEvents.retain(repos.map((r) => r.dir));
+  const git = await pool(repos, 6, (r) => repoEvents.events(r, since).catch(() => []));
+
+  const sessions = (await listClaudeSessions().catch(() => [])).filter((s) => s.createdAt && Date.parse(s.createdAt) >= since);
+  const sessionProject = projectsOf(sessions, (s) => s.id);
+  const sessionEvents: TimelineEvent[] = sessions.map((s) => {
+    const p = sessionProject.get(s.id);
+    return { id: `session:claude:${s.id}`, type: 'session', at: s.createdAt!, projectId: p?.id ?? null, projectName: p?.name ?? path.basename(s.cwd), text: s.title, agent: 'claude', sessionId: s.id, branch: s.gitBranch };
+  });
+
+  const taskEvents: TimelineEvent[] = [];
+  const sinceIso = new Date(since).toISOString();
+  for (const sp of suivi.projects()) {
+    const candidates = lastScan.projects.filter((p) => sp.paths.includes(p.repoDir ?? p.dir));
+    const p = candidates.find((x) => sp.paths.includes(x.dir)) ?? candidates[0];
+    const where = { projectId: p?.id ?? null, projectName: p ? projectLabel(p).name : sp.name };
+    const tasks = new Map(suivi.tasks(sp.projectId).map((t) => [t.id, t]));
+    const ev = (t: ReturnType<typeof suivi.tasks>[number], status: 'created' | 'toTest' | 'done', at: string): TimelineEvent =>
+      ({ id: `task:${sp.projectId}:${t.id}:${status}`, type: 'task', at, ...where, text: t.title, task: { suiviId: sp.projectId, taskId: t.id, num: t.num, status } });
+    for (const t of tasks.values()) {
+      if (t.createdAt && t.createdAt >= sinceIso) taskEvents.push(ev(t, 'created', t.createdAt));
+      if (t.done && t.doneAt && t.doneAt >= sinceIso) taskEvents.push(ev(t, 'done', t.doneAt));
+    }
+    for (const x of suivi.toTestSince(sp.projectId, sinceIso)) {
+      const t = tasks.get(x.taskId);
+      if (t && !t.done) taskEvents.push(ev(t, 'toTest', x.at));
+    }
+  }
+  return mergeTimeline([...git, sessionEvents, taskEvents], since);
+}
+
+/** Timeline (calcul paresseux, mémorisé 15 s ; git relu seulement pour les dépôts qui ont changé). */
+app.get('/api/timeline', async () => {
+  if (timelineMemo && Date.now() - timelineMemo.at < 15_000) return { events: timelineMemo.events, days: TIMELINE_DAYS };
+  timelineRun ??= computeTimeline().then((events) => ((timelineMemo = { at: Date.now(), events }), events)).finally(() => (timelineRun = null));
+  return { events: await timelineRun, days: TIMELINE_DAYS };
 });
 
 /**

@@ -1,12 +1,10 @@
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { execFile } from 'node:child_process';
-import { promisify } from 'node:util';
 import { tr } from './i18n.js';
-import { demo, demoClaudeCwds } from './demo/index.js';
+import { isDemo } from './demo/index.js';
+import { attachSessions, scanAgentProcs } from './agentProcs.js';
 
-const exec = promisify(execFile);
 
 /**
  * Sessions Claude Code locales.
@@ -31,7 +29,7 @@ export interface ClaudeSession {
   messages: number;
   sizeBytes: number;
   version: string | null;
-  /** Un process `claude` tourne dans ce dossier et ce transcript est le plus récent qui y a été écrit. */
+  /** Session rattachée à un process `claude` en cours (voir attachSessions dans agentProcs.ts). */
   active: boolean;
   /** Session ouverte depuis Tarmac (onglet console). */
   terminalId: string | null;
@@ -127,31 +125,9 @@ function readIndex(dir: string): Map<string, any> {
   return m;
 }
 
-/** Process `claude` en cours → leurs dossiers de travail. */
-async function runningClaudeCwds(): Promise<Map<string, number>> {
-  const d = demo();
-  if (d) return demoClaudeCwds(d);
-  const cwds = new Map<string, number>();
-  let pids: number[] = [];
-  try {
-    const { stdout } = await exec('ps', ['-axo', 'pid=,comm=,args='], { timeout: 5000, maxBuffer: 16 * 1024 * 1024 });
-    pids = stdout.split('\n').flatMap((l) => {
-      const m = l.trim().match(/^(\d+)\s+(\S+)\s+(.*)$/);
-      if (!m) return [];
-      const [, pid, comm, args] = m;
-      const isClaude = path.basename(comm) === 'claude' || /(^|\/)claude(\s|$)/.test(args.split(' ').slice(0, 2).join(' '));
-      return isClaude && !/remote-control\s+--?help/.test(args) ? [Number(pid)] : [];
-    });
-  } catch { return cwds; }
-  if (!pids.length) return cwds;
-  try {
-    const { stdout } = await exec('lsof', ['-a', '-d', 'cwd', '-Fn', '-p', pids.join(',')], { timeout: 5000 });
-    for (const l of stdout.split('\n')) if (l.startsWith('n/')) cwds.set(l.slice(1), (cwds.get(l.slice(1)) ?? 0) + 1);
-  } catch (e: any) {
-    for (const l of String(e.stdout ?? '').split('\n')) if (l.startsWith('n/')) cwds.set(l.slice(1), (cwds.get(l.slice(1)) ?? 0) + 1);
-  }
-  return cwds;
-}
+/** Process `claude` en cours (mode démo : seulement ceux du HOME factice, sans app parente). */
+export const claudeProcs = () => scanAgentProcs({ claudeDir: claudeDir(), onlyUnder: isDemo() ? realHome() : null });
+const realHome = () => { try { return fs.realpathSync(os.homedir()); } catch { return os.homedir(); } };
 
 let cache: { at: number; sessions: Omit<ClaudeSession, 'terminalId'>[] } = { at: 0, sessions: [] };
 
@@ -194,19 +170,10 @@ export async function listClaudeSessions(force = false): Promise<Omit<ClaudeSess
   }
   for (const k of fileCache.keys()) if (!seen.has(k)) fileCache.delete(k);
 
-  // Session active : un process `claude` tourne dans ce cwd → les N transcripts les plus récents du cwd
-  // (N = nombre de process), s'ils ont été écrits dans les dernières 24 h.
-  const running = await runningClaudeCwds();
-  const byCwd = new Map<string, typeof found>();
-  for (const s of found) byCwd.set(s.cwd, [...(byCwd.get(s.cwd) ?? []), s]);
-  const active = new Set<string>();
-  for (const [cwd, n] of running) {
-    const recent = (byCwd.get(cwd) ?? [])
-      .filter((s) => Date.now() - new Date(s.updatedAt).getTime() < 24 * 3600_000)
-      .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt))
-      .slice(0, n);
-    for (const s of recent) active.add(s.id);
-  }
+  // Session active : rattachée à un process `claude` en cours (fichier de session, arguments, sinon transcript
+  // le plus récent du dossier écrit depuis le début du process ; voir attachSessions).
+  const procs = await claudeProcs().catch(() => []);
+  const active = new Set([...attachSessions(procs, found).values()].flatMap((a) => (a.sessionId ? [a.sessionId] : [])));
 
   const sessions = found
     .map((s) => ({ ...s, active: active.has(s.id) }))
@@ -248,8 +215,9 @@ export function claudeCommand(opts: { name?: string; resume?: string; sessionId?
 export type TurnState = 'idle' | 'working' | 'none';
 const transcriptPath = new Map<string, string>();
 
-export function claudeTurnState(sessionId: string): TurnState {
-  if (!/^[0-9a-f-]{8,64}$/i.test(sessionId)) return 'none';
+/** Transcript d'une session (`projects/<dossier>/<id>.jsonl`), ou null. */
+export function transcriptFile(sessionId: string): string | null {
+  if (!/^[0-9a-f-]{8,64}$/i.test(sessionId)) return null;
   let file = transcriptPath.get(sessionId);
   if (!file || !fs.existsSync(file)) {
     file = undefined;
@@ -261,6 +229,11 @@ export function claudeTurnState(sessionId: string): TurnState {
       }
     } catch { /* pas de dossier projects */ }
   }
+  return file ?? null;
+}
+
+export function claudeTurnState(sessionId: string): TurnState {
+  const file = transcriptFile(sessionId);
   if (!file) return 'none';
   let st: fs.Stats;
   try { st = fs.statSync(file); } catch { return 'none'; }

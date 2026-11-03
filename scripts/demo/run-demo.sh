@@ -64,4 +64,6 @@ env -i \
 echo $! > "$PIDFILE"
 for _ in $(seq 1 50); do curl -fsS "$URL/api/meta" -o /dev/null 2>/dev/null && break; sleep 0.2; done
 curl -fsS "$URL/api/meta" -o /dev/null || die "L'instance ne répond pas (journal : $DEMO_HOME/tarmac-demo.log)"
+# 4. Sessions « en cours hors Tarmac » (faux `claude` qui dort, avec un faux sous-agent).
+node "$HERE/run-agents.mjs" --home "$DEMO_HOME"
 ok "Tarmac (démo) → $URL   (arrêt : $0 --stop)"

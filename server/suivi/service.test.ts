@@ -173,3 +173,20 @@ test('migration de la base : origines `app-manager` → `tarmac`', () => {
   assert.equal(JSON.parse(row.data).updatedBy, 'tarmac');
   assert.equal((db2.prepare('SELECT origin FROM journal').get() as { origin: string }).origin, 'tarmac');
 });
+
+test('note réécrite par Claude pendant que l’artefact renvoie l’ancienne version : aucun bloc ⟂', () => {
+  const { s } = fresh();
+  s.importFile('acme/demo', file([T('a', 1)]));
+  const v1 = s.upsertTask('acme/demo', { id: 'a', note: 'Première note' });
+  const v2 = s.upsertTask('acme/demo', { id: 'a', note: 'Note réécrite' });
+  assert.equal(v2.note, 'Note réécrite');
+  // Le pont de l'artefact renvoie la version qu'il avait avant (canal A), puis Claude y copie la nouvelle.
+  s.pushTasks('acme/demo', [v1], 'A', { uiOnly: true });
+  s.pushTasks('acme/demo', [v2], 'A', { uiOnly: true });
+  assert.equal(s.task('acme/demo', 'a')!.note, 'Note réécrite');
+  // Une note déjà empilée est nettoyée par une simple réécriture.
+  s.upsertTask('acme/demo', { id: 'a', note: 'Note réécrite\n⟂ (autre appareil, 01/11/2026 10:00) Première note' });
+  assert.equal(s.upsertTask('acme/demo', { id: 'a', note: 'Note réécrite' }).note, 'Note réécrite');
+  s.pushTasks('acme/demo', [v1, v2], 'A', { uiOnly: true });
+  assert.equal(s.task('acme/demo', 'a')!.note, 'Note réécrite');
+});
