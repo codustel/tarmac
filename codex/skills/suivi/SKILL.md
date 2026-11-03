@@ -1,6 +1,6 @@
 ---
 name: suivi
-description: Todolist — project tracking kept by Tarmac (source of truth, MCP server tarmac) with a Todolist/ copy in the repo. Subcommands $suivi init, sync, import, theme, restructure. Use when the user asks to create, show, sync, update or fill a project's tracker (its "todolist"), or when the session-start hook suggests it. Do not use for unrelated to-do lists.
+description: Todolist — project tracking kept by Tarmac (source of truth, MCP server tarmac) with a Todolist/ copy in the repo. Subcommands $suivi init, sync, import, theme, restructure, audit. Use when the user asks to create, show, sync, update or fill a project's tracker (its "todolist"), or when the session-start hook suggests it. Do not use for unrelated to-do lists.
 ---
 
 # $suivi — Todolist (Codex)
@@ -69,6 +69,16 @@ Task ids never change; only `phase`, `phaseTitle`, `num` and `order` move.
 3. `suivi_restructure` with `dryRun: true`; show the phases and the old → new numbers (`mapping`), wait for the
    user's OK. Then the same call without `dryRun`, then `suivi_write_copy`. The artifact side is caught up by the
    next Claude `/suivi sync`.
+
+## $suivi audit — set already-coded tasks to "to test"
+
+1. `suivi_get` with `includeDone: false`; keep untreated tasks (not done, not `toTest`, not archived).
+2. For each, look for evidence: `git log --all --oneline -i --grep "<num>\b"` (and its id), commits in its
+   `sources`, otherwise the code matching its title and steps. Verdict: coded (all steps, committed), partial,
+   not coded.
+3. Show the coded and partial lists, wait for the user's OK; then `suivi_upsert_task` with `toTest: true`, a note
+   "Audit: coded in <sha> …" (appended, never overwriting) and the commit in `sources`; never `done`. Then
+   `suivi_write_copy`.
 
 ## $suivi import — fill the tracker from past work
 

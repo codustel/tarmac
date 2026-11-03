@@ -143,6 +143,7 @@ copy (see [Codex](docs/codex.md)).
 | `/suivi upgrade [--all]` | Republishes the artifact page with the latest template (new buttons such as **▶ Claude**, fixes) at the same URL, data kept. Run it after updating Tarmac. `--all` does every project. |
 | `/suivi theme` | Shows the artifact's colors and fonts and lets you fix them if the detection got them wrong. |
 | `/suivi restructure` | Reorganizes the tracker when a phase grows too big: splits it into several phases, shifts or merges the following ones (e.g. phase 7 → 7 backend, 8 mobile, 9 frontend; old 8 → 10). Claude shows you a preview of the new numbers first; task ids and history are kept. |
+| `/suivi audit [--yes]` | Catches up forgotten statuses: Claude looks for tasks already coded but still "to do" (commits citing them, code present), shows you the list, then sets them to test with the commit as evidence. Partial work stays to do, with what is missing in the note. |
 
 ## Documentation
 

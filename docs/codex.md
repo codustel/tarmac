@@ -42,6 +42,7 @@ Codex keeps the Todolist through the `tarmac` MCP server, like Claude Code. Skil
 | `$suivi import` | Fills the tracker from past Codex sessions and the git history, after your review. |
 | `$suivi theme` | Shows and fixes the colors and fonts detected for the project. |
 | `$suivi restructure` | Splits, merges or renumbers phases after you review a preview; task ids and history are kept. |
+| `$suivi audit` | Finds tasks already coded but still "to do" and sets them to test after your review, with the commit as evidence. |
 
 The claude.ai artifact is Claude-only: with Codex, use Tarmac's **Todolist** view (and the repo copy). When Codex
 is ticked, "Claude Todolist" is simply called **Todolist** in Tarmac.

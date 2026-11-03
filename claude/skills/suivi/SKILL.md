@@ -1,6 +1,6 @@
 ---
 name: suivi
-description: Claude Todolist — project tracking shared between Tarmac (source of truth, MCP server tarmac) and one claude.ai artifact per project. Subcommands /suivi init, open, import, sync [--all], upgrade [--all], theme, restructure. Use whenever the user asks to create, show, sync, update or fill a project's tracker (its "todolist"), or when the session-start hook suggests it.
+description: Claude Todolist — project tracking shared between Tarmac (source of truth, MCP server tarmac) and one claude.ai artifact per project. Subcommands /suivi init, open, import, sync [--all], upgrade [--all], theme, restructure, audit [--yes]. Use whenever the user asks to create, show, sync, update or fill a project's tracker (its "todolist"), or when the session-start hook suggests it.
 ---
 
 # /suivi — Claude Todolist
@@ -118,6 +118,30 @@ artifact db keeps its documents, history stays attached): only `phase`, `phaseTi
 6. Sum up in one line (phases, tasks renumbered). Numbers quoted elsewhere (commits, notes) keep their old value:
    the `mapping` is the correspondence table, put it in the commit message of the `Todolist/` copy if useful.
 
+## /suivi audit [--yes] — set already-coded tasks to "to test"
+
+For tasks that were coded but never switched to "to test" (status forgotten, work done in another session).
+1. Candidates: `suivi_get` with `includeDone: false`, keep the untreated tasks (not done, not `toTest`, not
+   archived). Skip tasks whose work is not code (`who: "toi"`: a purchase, an account, a publication) unless the
+   repo shows it done.
+2. Evidence, for each candidate, in the project's clone and worktrees (`git worktree list`):
+   - commits citing its number or id: `git log --all --oneline -i --grep "<num>\b"` (and `<id>`), plus the
+     commits listed in its `sources`;
+   - otherwise the code itself: files, routes, components, docs matching its title and steps (`grep`), and
+     commits since its `createdAt` touching them;
+   - uncommitted changes in a worktree count as "partial", not as coded.
+   Many tasks: one subagent per batch, brief in a file, report in a file, reply ≤ 3 lines.
+3. Verdict per task: **coded** (every step is in the code, with a commit), **partial** (some steps, or not
+   committed / not merged), **not coded**. Write the list (num, title, verdict, evidence: short sha + message or
+   file) to a file in the scratchpad.
+4. **Review**: show the "coded" and "partial" lists and wait for the user's OK (with `--yes`: apply "coded"
+   directly, still report "partial"). Never guess: no evidence, no change.
+5. Apply to each approved task: `suivi_upsert_task` with `toTest: true`, a `note` "Audit: coded in <sha> …"
+   (append to an existing note, never overwrite it) and the commit in `sources` (`kind: "commit"`); never
+   `done` (only the user checks a task). A "partial" task stays to do; its note says what is missing.
+6. Artifact db: one `ArtifactData` `batch` of `update` (`if_version` from a `list` of `tasks`), then
+   `suivi_write_copy` and the final check. Sum up in one line (checked, to test, partial, not coded).
+
 ## /suivi import — fill the tracker from sessions
 
 1. Collect: the project's local sessions (clone and worktrees) — Tarmac's `GET /api/projects/<id>/claude-sessions`
@@ -134,7 +158,7 @@ artifact db keeps its documents, history stays attached): only `phase`, `phaseTi
    db** (`ArtifactData` `batch` of `set`, batches of 50, data = `suivi_get` without the `id` field), then
    `suivi_write_copy`.
 
-## Final check — mandatory after init, import, sync, restructure and any series of writes
+## Final check — mandatory after init, import, sync, restructure, audit and any series of writes
 
 `ArtifactData` `list` of `tasks` (`query.limit` 1000, `out_dir` in the scratchpad) and compare with the total from
 `suivi_get` (archived included). If tasks are missing from the artifact, write them there (`set`) before replying,
