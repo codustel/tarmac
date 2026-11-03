@@ -6,6 +6,7 @@ import { tr } from './i18n.js';
 import { isDemo } from './demo/index.js';
 import { attachSessions, scanAgentProcs } from './agentProcs.js';
 import { claudeDir, type ClaudeSession, type TurnState } from './claude.js';
+import { quote } from './platform.js';
 
 /**
  * Sessions Codex (ChatGPT) locales, en lecture seule.
@@ -240,7 +241,7 @@ export function codexTurnState(sessionId: string): TurnState {
  * l'app ChatGPT (doc « Remote connections »).
  */
 export function codexCommand(opts: { resume?: string; prompt?: string }) {
-  const q = (s: string) => `'${s.replace(/'/g, `'\\''`)}'`;
+  const q = (s: string) => quote(s);
   if (opts.resume) return `codex resume ${q(opts.resume)}`;
   // Un message qui commencerait par « - » serait lu comme une option.
   const prompt = opts.prompt?.replace(/^-+/, '').trim();

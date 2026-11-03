@@ -40,7 +40,7 @@ async function setup(dirs: string[], dataDir = tmp()) {
 
 test('parseModuleDirs : séparateur de la plateforme, chemins absolus, vides ignorés', () => {
   assert.deepEqual(parseModuleDirs(undefined), []);
-  assert.deepEqual(parseModuleDirs(['/a', '', ' /b '].join(path.delimiter)), ['/a', '/b']);
+  assert.deepEqual(parseModuleDirs(['/a', '', ' /b '].join(path.delimiter)), [path.resolve('/a'), path.resolve('/b')]);
   assert.equal(path.isAbsolute(parseModuleDirs('rel')[0]), true);
 });
 

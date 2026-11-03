@@ -4,7 +4,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { execFileSync } from 'node:child_process';
-import { fileURLToPath } from 'node:url';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 
@@ -16,7 +16,7 @@ function inDataDir(script: string, initial?: object): any {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'tarmac-settings-'));
   try {
     if (initial) fs.writeFileSync(path.join(dir, 'settings.json'), JSON.stringify(initial));
-    const code = `const { settings, updateSettings } = await import(${JSON.stringify(path.join(HERE, 'settings.ts'))});\n`
+    const code = `const { settings, updateSettings } = await import(${JSON.stringify(pathToFileURL(path.join(HERE, 'settings.ts')).href)});\n`
       + `const out = await (async () => { ${script} })();\nprocess.stdout.write(JSON.stringify(out));`;
     const out = execFileSync(process.execPath, ['--import', 'tsx', '--input-type=module', '-e', code], {
       env: { ...process.env, DATA_DIR: dir, HOME: dir, DEV_ROOTS: dir },

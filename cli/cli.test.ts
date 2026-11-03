@@ -69,7 +69,7 @@ test('options : erreurs (inconnue, valeur manquante, domaine invalide, conflit, 
 });
 
 // ─── Plan de setup ─────────────────────────────────────────────────────────
-test('setup sur un Mac neuf : env, LaunchAgent, hosts et pf (sudo), vérification', () => {
+test('setup sur un Mac neuf : env, LaunchAgent, hosts et pf (sudo), vérification', { skip: process.platform === 'win32' && 'CLI macOS seulement (Windows : Tarmac Desktop)' }, () => {
   const { ctx, appDir, home } = sandbox();
   fs.mkdirSync(path.join(home, 'Developer'));
   fs.mkdirSync(path.join(home, 'code'));
@@ -121,7 +121,7 @@ test('setup : domaines déjà dans /etc/hosts → pas d’étape hosts ; ligne :
   assert.ok(custom.actions.some((a) => a.kind === 'exec' && a.input === '127.0.0.1\trunway.localhost\n127.0.0.1\ttarmac.test\n'));
 });
 
-test('setup --dry-run : tout est affiché, rien n’est lancé ni écrit', async () => {
+test('setup --dry-run : tout est affiché, rien n’est lancé ni écrit', { skip: process.platform === 'win32' && 'CLI macOS seulement (Windows : Tarmac Desktop)' }, async () => {
   const { ctx, home } = sandbox();
   const { runner, runs, captures } = fakeRunner();
   const out = capture();
@@ -145,7 +145,7 @@ test('setup : la préparation refuse un Node trop ancien ou un paquet non constr
 });
 
 // ─── Migration depuis App Manager ──────────────────────────────────────────
-test('migration : service App Manager retiré, données copiées, port conservé, réseau nettoyé (sudo)', async () => {
+test('migration : service App Manager retiré, données copiées, port conservé, réseau nettoyé (sudo)', { skip: process.platform === 'win32' && 'CLI macOS seulement (Windows : Tarmac Desktop)' }, async () => {
   const { ctx, home } = sandbox('127.0.0.1\tmanager.localhost\n127.0.0.1\tmanager.test\n');
   const old = path.join(home, '.app-manager');
   fs.mkdirSync(old);
@@ -196,7 +196,7 @@ test('deux dossiers : sans accord, ~/.tarmac est gardé tel quel', () => {
   assert.ok(!ids.includes('replace-stale-data') && !ids.includes('migrate-data'));
 });
 
-test('deux dossiers : avec accord, ~/.tarmac mis de côté (jamais supprimé) puis ~/.app-manager copié', async () => {
+test('deux dossiers : avec accord, ~/.tarmac mis de côté (jamais supprimé) puis ~/.app-manager copié', { skip: process.platform === 'win32' && 'CLI macOS seulement (Windows : Tarmac Desktop)' }, async () => {
   const { ctx, home, tarmac, old } = twoDirs();
   const { runner, runs } = fakeRunner();
   const steps = planSetup(ctx, opts({ replaceStale: true }), runner);
@@ -215,7 +215,7 @@ test('deux dossiers : avec accord, ~/.tarmac mis de côté (jamais supprimé) pu
   assert.ok(fs.existsSync(path.join(old, 'suivi.db')), '~/.app-manager conservé');
 });
 
-test('deux dossiers : setup --dry-run explique et montre l’étape, sans rien changer', async () => {
+test('deux dossiers : setup --dry-run explique et montre l’étape, sans rien changer', { skip: process.platform === 'win32' && 'CLI macOS seulement (Windows : Tarmac Desktop)' }, async () => {
   const { ctx, home } = twoDirs();
   const before = fs.readdirSync(home).sort();
   const out = capture();
@@ -263,7 +263,7 @@ test('setEnvVar : remplace l’ancien nom MANAGER_URL, sinon ajoute la ligne', (
 });
 
 // ─── Désinstallation, doctor, divers ───────────────────────────────────────
-test('uninstall : service, domaines (sudo), --purge ; dry-run sans effet', async () => {
+test('uninstall : service, domaines (sudo), --purge ; dry-run sans effet', { skip: process.platform === 'win32' && 'CLI macOS seulement (Windows : Tarmac Desktop)' }, async () => {
   const { ctx, home } = sandbox('127.0.0.1\ttarmac.localhost\n127.0.0.1\ttarmac.test\n');
   assert.deepEqual(planUninstall(ctx, { sudo: true, purge: false }).map((s) => s.id), ['service', 'hosts']);
   assert.deepEqual(planUninstall(ctx, { sudo: false, purge: true }).map((s) => s.id), ['service', 'purge']);

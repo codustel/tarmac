@@ -5,7 +5,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { execFileSync } from 'node:child_process';
 import {
-  agentProcsFrom, appOfComm, attachSessions, isClaudeProcess, parseEtime, parseLsofCwd, parsePidFile, parsePs, scanAgentProcs, sessionFromArgs,
+  agentProcsFrom, appOfComm, attachSessions, isClaudeProcess, isCodexProcess, parseEtime, parseLsofCwd, parsePidFile, parsePs, scanAgentProcs, sessionFromArgs,
   type AgentProc, type PidFile,
 } from './agentProcs.js';
 import { backgroundAgents, buildRunningAgents } from './agents.js';
@@ -205,4 +205,28 @@ test('détection réelle : un faux `claude` (script qui dort) en tête du PATH e
     try { process.kill(pid); } catch { /* déjà arrêté */ }
     fs.rmSync(root, { recursive: true, force: true });
   }
+});
+
+test('process d’agents sous Windows (lignes Get-CimInstance)', () => {
+  const win = (comm: string, args: string) => ({ claude: isClaudeProcess(comm, args), codex: isCodexProcess(comm, args) });
+  // Installateur natif de Claude Code.
+  assert.deepEqual(win('claude.exe', '"C:\\Users\\Ana Lopez\\.local\\bin\\claude.exe" --resume 0f1e2d3c-aaaa'), { claude: true, codex: false });
+  assert.deepEqual(win('Claude.EXE', 'C:\\Users\\a\\.local\\bin\\Claude.EXE --remote-control Shop'), { claude: false, codex: false }, 'casse : comme sous macOS, « Claude » n’est pas la CLI');
+  // Lanceur npm : node.exe + cli.js (chemins avec espaces entre guillemets).
+  assert.deepEqual(win('node.exe', '"C:\\Program Files\\nodejs\\node.exe" "C:\\Users\\a\\AppData\\Roaming\\npm\\node_modules\\@anthropic-ai\\claude-code\\cli.js" --session-id x --remote-control Shop'), { claude: true, codex: false });
+  assert.deepEqual(win('node.exe', '"C:\\Program Files\\nodejs\\node.exe" C:\\Users\\a\\AppData\\Roaming\\npm\\node_modules\\@openai\\codex\\bin\\codex.js resume abc'), { claude: false, codex: true });
+  assert.deepEqual(win('codex.exe', '"C:\\Users\\a\\AppData\\Roaming\\npm\\node_modules\\@openai\\codex\\vendor\\x86_64-pc-windows-msvc\\codex\\codex.exe" "corrige le test"'), { claude: false, codex: true });
+  // Pas des sessions.
+  assert.deepEqual(win('claude.exe', 'claude.exe --version'), { claude: false, codex: false });
+  assert.deepEqual(win('node.exe', '"C:\\Program Files\\nodejs\\node.exe" "C:\\npm\\node_modules\\@anthropic-ai\\claude-code\\cli.js" mcp serve'), { claude: false, codex: false });
+  assert.deepEqual(win('codex.exe', 'codex.exe login'), { claude: false, codex: false });
+  assert.deepEqual(win('node.exe', '"C:\\Program Files\\nodejs\\node.exe" C:\\src\\app\\server.js'), { claude: false, codex: false });
+});
+
+test('macOS : guillemets ou « .exe » dans un prompt ne changent pas la décision', () => {
+  assert.ok(isClaudeProcess('claude', 'claude --remote-control Shop "fix \\"x\\""'));
+  assert.ok(isClaudeProcess('claude', 'claude update.exe'), 'prompt « update.exe » : pas la sous-commande update');
+  assert.ok(!isClaudeProcess('claude', 'claude "a b" --version'));
+  assert.ok(isCodexProcess('codex', 'codex "lance setup.exe"'));
+  assert.ok(!isCodexProcess('codex', 'codex login'));
 });

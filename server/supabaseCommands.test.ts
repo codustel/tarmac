@@ -29,7 +29,7 @@ test('pathStaysInside : chemins du projet acceptés, liens vers l’extérieur r
   }
 });
 
-test('buildSupabaseCommand : chemin vers un lien refusé quand le dossier est connu', () => {
+test('buildSupabaseCommand : chemin vers un lien refusé quand le dossier est connu', { skip: process.platform === 'win32' && 'redirection sh (PowerShell : Out-File)' }, () => {
   const { root, proj } = sandbox();
   try {
     assert.match(buildSupabaseCommand('types-local-file', 'src/types.ts', proj).shell, /> 'src\/types\.ts'$/);

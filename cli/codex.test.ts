@@ -93,7 +93,7 @@ function sandbox() {
 const quiet: Out = { log: () => {}, error: () => {} };
 const noRun: Runner = { run: () => { throw new Error('aucune commande attendue'); }, capture: () => null };
 
-test('tarmac setup --with-codex (HOME de test) : MCP, règle, skill, hook ; deuxième passage sans doublon ; désinstallation', async () => {
+test('tarmac setup --with-codex (HOME de test) : MCP, règle, skill, hook ; deuxième passage sans doublon ; désinstallation', { skip: process.platform === 'win32' && 'CLI et hooks sh : macOS seulement' }, async () => {
   const { root, home, ctx } = sandbox();
   try {
     const codexHome = path.join(home, '.codex');
@@ -161,7 +161,7 @@ test('doctor : seuls les agents cochés sont vérifiés (Claude seul = comme ava
   assert.equal(diagnose(facts({ agents: { claude: true, codex: true }, codex: { installed: true, mcp: true, rule: true, skill: true, hook: true } })).find((c) => c.name === 'Codex')!.level, 'ok');
 });
 
-test('hook SessionStart pour Codex (argument codex) : texte Todolist, $suivi, AGENTS.md ; sans dépôt git : rien', () => {
+test('hook SessionStart pour Codex (argument codex) : texte Todolist, $suivi, AGENTS.md ; sans dépôt git : rien', { skip: process.platform === 'win32' && 'CLI et hooks sh : macOS seulement' }, () => {
   const { root } = sandbox();
   try {
     const repo = path.join(root, 'shop');

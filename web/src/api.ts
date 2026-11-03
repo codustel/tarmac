@@ -593,5 +593,6 @@ export const api = {
   fsRawUrl: (id: string, path: string) => `/api/projects/${id}/fs/raw?path=${encodeURIComponent(path)}`,
   env: (id: string, file: string) => request<{ files: string[]; lines: EnvLine[] }>(`/api/projects/${id}/env?file=${encodeURIComponent(file)}`),
   saveSettings: (patch: SettingsPatch) => request<Settings>('/api/settings', json(patch, 'PUT')),
+  pickFolder: (start?: string) => request<{ path: string | null }>('/api/pick-folder', json({ start })),
   open: (dir: string, withApp: 'finder' | 'editor' | 'terminal') => request('/api/open', json({ dir, with: withApp })),
 };

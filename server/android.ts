@@ -4,6 +4,7 @@ import path from 'node:path';
 import { execFile, spawn } from 'node:child_process';
 import { promisify } from 'node:util';
 import { tr } from './i18n.js';
+import { chain, isWindows, quote, shell } from './platform.js';
 import { demo, demoAndroid, isDemo } from './demo/index.js';
 
 const exec = promisify(execFile);
@@ -20,20 +21,25 @@ const run = async (cmd: string, args: string[], timeout = 8000) => {
 /** SDK : variables d'environnement, sinon l'emplacement par défaut d'Android Studio. */
 export function sdkDir(): string {
   for (const d of [process.env.ANDROID_HOME, process.env.ANDROID_SDK_ROOT]) if (d && fs.existsSync(d)) return d;
-  return path.join(os.homedir(), 'Library/Android/sdk');
+  return isWindows()
+    ? path.join(process.env.LOCALAPPDATA ?? path.join(os.homedir(), 'AppData', 'Local'), 'Android', 'Sdk')
+    : path.join(os.homedir(), 'Library/Android/sdk');
 }
+// Sous Windows : `.exe` pour les binaires, `.bat` pour les outils Java (lancés seulement via PowerShell).
+const exe = (p: string, ext: '.exe' | '.bat') => (isWindows() ? p + ext : p);
 const avdHome = () => process.env.ANDROID_AVD_HOME || path.join(os.homedir(), '.android/avd');
 const bin = {
-  emulator: () => path.join(sdkDir(), 'emulator/emulator'),
-  adb: () => path.join(sdkDir(), 'platform-tools/adb'),
-  sdkmanager: () => path.join(sdkDir(), 'cmdline-tools/latest/bin/sdkmanager'),
-  avdmanager: () => path.join(sdkDir(), 'cmdline-tools/latest/bin/avdmanager'),
+  emulator: () => exe(path.join(sdkDir(), 'emulator', 'emulator'), '.exe'),
+  adb: () => exe(path.join(sdkDir(), 'platform-tools', 'adb'), '.exe'),
+  sdkmanager: () => exe(path.join(sdkDir(), 'cmdline-tools', 'latest', 'bin', 'sdkmanager'), '.bat'),
+  avdmanager: () => exe(path.join(sdkDir(), 'cmdline-tools', 'latest', 'bin', 'avdmanager'), '.bat'),
 };
 const exists = (p: string) => fs.existsSync(p);
 
 /** JDK 17 (Temurin) : Gradle / `expo run:android` en ont besoin. */
 let javaHome17: string | null = null;
 async function findJdk17() {
+  if (isWindows()) return (javaHome17 = windowsJdk17());
   const out = await run('/usr/libexec/java_home', ['-v', '17'], 5000);
   javaHome17 = out?.trim() || null;
   if (!javaHome17) {
@@ -41,6 +47,17 @@ async function findJdk17() {
     if (exists(temurin)) javaHome17 = temurin;
   }
   return javaHome17;
+}
+
+/** Windows : JAVA_HOME s'il pointe sur un JDK 17, sinon Temurin 17 (winget) ou le JDK d'Android Studio. */
+function windowsJdk17(): string | null {
+  const pf = process.env.ProgramFiles ?? 'C:\\Program Files';
+  const adoptium = path.join(pf, 'Eclipse Adoptium');
+  let temurin: string[] = [];
+  try { temurin = fs.readdirSync(adoptium).filter((d) => d.startsWith('jdk-17')).sort().reverse().map((d) => path.join(adoptium, d)); } catch { /* absent */ }
+  const cur = process.env.JAVA_HOME;
+  return [...(cur && /17/.test(cur) ? [cur] : []), ...temurin, path.join(pf, 'Android', 'Android Studio', 'jbr')]
+    .find((d) => exists(path.join(d, 'bin', 'java.exe'))) ?? null;
 }
 
 /**
@@ -53,8 +70,8 @@ export async function applyAndroidEnv() {
   if (exists(sdk)) {
     process.env.ANDROID_HOME = sdk;
     const dirs = ['platform-tools', 'emulator', 'cmdline-tools/latest/bin'].map((d) => path.join(sdk, d)).filter(exists);
-    const current = (process.env.PATH ?? '').split(':');
-    process.env.PATH = [...dirs.filter((d) => !current.includes(d)), ...current].join(':');
+    const current = (process.env.PATH ?? '').split(path.delimiter);
+    process.env.PATH = [...dirs.filter((d) => !current.includes(d)), ...current].join(path.delimiter);
   }
   const jdk = await findJdk17();
   const cur = process.env.JAVA_HOME;
@@ -74,12 +91,13 @@ export interface AndroidCheck {
   optional?: boolean;
 }
 
-const q = (s: string) => `'${s.replace(/'/g, `'\\''`)}'`;
+const q = (s: string) => quote(s);
 const abi = () => (process.arch === 'arm64' ? 'arm64-v8a' : 'x86_64');
 const DEFAULT_IMAGE = () => `system-images;android-36;google_apis_playstore;${abi()}`;
-const CMDLINE_TOOLS_URL = 'https://dl.google.com/android/repository/commandlinetools-mac-14742923_latest.zip';
+const CMDLINE_TOOLS_URL = `https://dl.google.com/android/repository/commandlinetools-${isWindows() ? 'win' : 'mac'}-14742923_latest.zip`;
 
 function installCommands(): Record<string, string> {
+  if (isWindows()) return windowsInstallCommands();
   const sdk = q(sdkDir());
   const sdkm = `${q(bin.sdkmanager())} --sdk_root=${sdk}`;
   const tmp = '"$(mktemp -d)"';
@@ -90,6 +108,31 @@ function installCommands(): Record<string, string> {
     'platform-tools': `yes | ${sdkm} --licenses > /dev/null; ${sdkm} platform-tools`,
     emulator: `yes | ${sdkm} --licenses > /dev/null; ${sdkm} emulator`,
     avd: `yes | ${sdkm} --licenses > /dev/null; ${sdkm} ${q(DEFAULT_IMAGE())} && echo no | ${q(bin.avdmanager())} create avd -n Pixel_API_36 -k ${q(DEFAULT_IMAGE())} -d pixel_7`,
+  };
+}
+
+/** Les mêmes installations en PowerShell, avec winget à la place de Homebrew. */
+function windowsInstallCommands(): Record<string, string> {
+  const sdk = q(sdkDir());
+  const sdkm = `& ${q(bin.sdkmanager())} --sdk_root=${sdk}`;
+  const licenses = `1..30 | ForEach-Object { 'y' } | ${sdkm} --licenses | Out-Null`;
+  const latest = q(path.join(sdkDir(), 'cmdline-tools', 'latest'));
+  return {
+    brew: 'Start-Process ms-windows-store://pdp/?productid=9NBLGGH4NNS1',
+    jdk: 'winget install --id EclipseAdoptium.Temurin.17.JDK -e --accept-package-agreements --accept-source-agreements',
+    cmdline: [
+      `$T = Join-Path ([IO.Path]::GetTempPath()) ([Guid]::NewGuid())`,
+      `New-Item -ItemType Directory $T | Out-Null`,
+      `Invoke-WebRequest -UseBasicParsing -OutFile "$T/tools.zip" ${q(CMDLINE_TOOLS_URL)}`,
+      `Expand-Archive "$T/tools.zip" $T`,
+      `New-Item -ItemType Directory -Force ${q(path.join(sdkDir(), 'cmdline-tools'))} | Out-Null`,
+      `Remove-Item -Recurse -Force -ErrorAction SilentlyContinue ${latest}`,
+      `Move-Item "$T/cmdline-tools" ${latest}`,
+      `Remove-Item -Recurse -Force $T`,
+    ].join('; '),
+    'platform-tools': `${licenses}; ${sdkm} platform-tools`,
+    emulator: `${licenses}; ${sdkm} emulator`,
+    avd: `${licenses}; ${sdkm} ${q(DEFAULT_IMAGE())}; if ($?) { 'no' | & ${q(bin.avdmanager())} create avd -n Pixel_API_36 -k ${q(DEFAULT_IMAGE())} -d pixel_7 }`,
   };
 }
 
@@ -108,13 +151,14 @@ async function checkAccel() {
 
 async function checks(avdCount: number): Promise<AndroidCheck[]> {
   const cmds = installCommands();
-  const brew = (await run('brew', ['--version'], 5000)) !== null;
+  // Windows : winget (App Installer) tient le rôle de Homebrew.
+  const brew = (await run(isWindows() ? 'winget' : 'brew', ['--version'], 5000)) !== null;
   const jdk = await findJdk17();
   const has = { cmdline: exists(bin.sdkmanager()), adb: exists(bin.adb()), emulator: exists(bin.emulator()) };
   const acc = await checkAccel();
   const sdkTools = [...(jdk ? [] : ['jdk']), ...(has.cmdline ? [] : ['cmdline'])];
   const list: AndroidCheck[] = [
-    { id: 'brew', label: 'Homebrew', ok: brew, detail: brew ? tr({ en: 'Installed', fr: 'Installé' }) : tr({ en: 'Required to install the JDK', fr: 'Requis pour installer le JDK' }), install: cmds.brew, blockedBy: [] },
+    { id: 'brew', label: isWindows() ? 'winget' : 'Homebrew', ok: brew, detail: brew ? tr({ en: 'Installed', fr: 'Installé' }) : tr({ en: 'Required to install the JDK', fr: 'Requis pour installer le JDK' }), install: cmds.brew, blockedBy: [] },
     { id: 'jdk', label: 'JDK 17 (Temurin)', ok: !!jdk, detail: jdk ?? tr({ en: 'Required by Gradle (expo run:android) and sdkmanager', fr: 'Requis par Gradle (expo run:android) et sdkmanager' }), install: cmds.jdk, blockedBy: brew ? [] : ['brew'] },
     { id: 'cmdline', label: 'Android cmdline-tools', ok: has.cmdline, detail: has.cmdline ? bin.sdkmanager() : tr({ en: 'sdkmanager / avdmanager: installs SDK components', fr: 'sdkmanager / avdmanager : installation des composants du SDK' }), install: cmds.cmdline, blockedBy: [] },
     { id: 'platform-tools', label: 'platform-tools (adb)', ok: has.adb, detail: has.adb ? bin.adb() : tr({ en: 'Talks to the emulator', fr: 'Communication avec l’émulateur' }), install: cmds['platform-tools'], blockedBy: sdkTools },
@@ -181,7 +225,9 @@ function listAvdNames(): string[] {
 
 /** Process émulateur en cours (lancés par Tarmac ou par Android Studio) : nom d'AVD → pid. */
 async function emulatorProcesses() {
-  const out = (await run('ps', ['-Ao', 'pid=,args='])) ?? '';
+  const out = (isWindows()
+    ? await run(shell().file, ['-NoProfile', '-Command', "Get-CimInstance Win32_Process -Filter \"Name LIKE 'qemu-system%' OR Name = 'emulator.exe'\" | ForEach-Object { \"$($_.ProcessId) $($_.CommandLine)\" }"], 10000)
+    : await run('ps', ['-Ao', 'pid=,args='])) ?? '';
   const map = new Map<string, number>();
   for (const line of out.split('\n')) {
     if (!/qemu-system|\/emulator\b/.test(line)) continue;
@@ -312,5 +358,10 @@ export function waitForBootCommand() {
   // Textes sans « " », « $ » ni « ` » : insérés tels quels entre guillemets doubles.
   const waiting = tr({ en: 'Waiting for the emulator to boot…', fr: 'Attente du démarrage de l’émulateur…' });
   const ready = tr({ en: 'Emulator ready.', fr: 'Émulateur prêt.' });
+  if (shell().kind !== 'posix') {
+    // `’` ferme une chaîne PowerShell : textes échappés par `quote`.
+    return chain([`Write-Output ${q(waiting)}`, `& ${adb} wait-for-device`], shell())
+      + `; while ((& ${adb} shell getprop sys.boot_completed 2>$null) -ne '1') { Start-Sleep 1 }; Write-Output ${q(ready)}`;
+  }
   return `echo "${waiting}" && ${adb} wait-for-device && until [ "$(${adb} shell getprop sys.boot_completed 2>/dev/null | tr -d '\\r')" = 1 ]; do sleep 1; done && echo "${ready}"`;
 }

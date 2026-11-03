@@ -1,6 +1,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { quote } from './gitCommands.js';
+import { shell } from './platform.js';
 import { appError, type Loc } from './i18n.js';
 
 /**
@@ -176,7 +177,9 @@ export function buildSupabaseCommand(id: string, arg?: string, dir?: string): { 
     if (dir && !pathStaysInside(dir, a)) throw appError('supabase.badPath', undefined, 400);
     value = quote(a);
   }
-  return { cmd, shell: cmd.cmd.replace('{arg}', value) };
+  const line = cmd.cmd.replace('{arg}', value);
+  // Windows PowerShell 5.1 écrit `>` en UTF-16 : fichier TypeScript illisible. Out-File en UTF-8.
+  return { cmd, shell: shell().kind === 'powershell' ? line.replace(' > ', ' | Out-File -Encoding utf8 ') : line };
 }
 
 const SKIP = new Set(['node_modules', '.git', 'dist', 'build', '.next', '.turbo', '.expo', 'vendor', 'coverage', '.venv', 'venv']);

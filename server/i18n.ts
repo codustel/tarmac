@@ -43,6 +43,8 @@ const M = {
   'api.unknownAvd': { en: 'Unknown AVD', fr: 'AVD inconnu' },
   'api.demoMode': { en: 'Not available in demo mode', fr: 'Indisponible en mode démo' },
   'api.outsideRoots': { en: 'Path outside the scanned folders', fr: 'Chemin hors des dossiers scannés' },
+  'api.pickFolderPrompt': { en: 'Choose a folder', fr: 'Choisir un dossier' },
+  'api.pickFolderUnsupported': { en: 'The folder picker is only available on macOS', fr: 'Le sélecteur de dossier n’existe que sur macOS' },
   'api.openFailed': { en: 'Could not open: {error}', fr: 'Ouverture impossible : {error}' },
   'api.dockerUnavailable': { en: 'Docker is not running', fr: 'Docker n’est pas démarré' },
   'api.dockerUnknownContainer': { en: 'Unknown container', fr: 'Conteneur inconnu' },

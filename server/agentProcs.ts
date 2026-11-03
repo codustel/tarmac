@@ -2,6 +2,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
+import { isWindows, windowsProcesses } from './platform.js';
 
 const exec = promisify(execFile);
 
@@ -77,11 +78,22 @@ export function parsePs(commOut: string, argsOut: string): PsRow[] {
 const NOT_A_SESSION_FLAG = /\s(--help|-h|--version|-v|--chrome-native-host)(\s|$)/;
 const NOT_A_SESSION_CMD = new Set(['mcp', 'doctor', 'update', 'install', 'setup-token', 'config', 'migrate-installer', 'plugin']);
 
+/** Arguments d'une ligne de commande, guillemets respectés (chemins Windows avec espaces : `"C:\Program Files\…"`). */
+export function splitArgs(args: string): string[] {
+  return [...args.matchAll(/"([^"]*)"|(\S+)/g)].map((m) => m[1] ?? m[2]);
+}
+/** Exécutable ou script : `\` → `/`, `.exe` retiré (seulement pour les deux premiers arguments, pas un prompt). */
+const normExe = (s: string) => s.replace(/\\/g, '/').replace(/\.exe$/i, '');
+
+/** Lanceur npm de Claude Code sous Windows : `node …\node_modules\@anthropic-ai\claude-code\cli.js`. */
+const CLAUDE_NPM_CLI = /\/node_modules\/@anthropic-ai\/claude-code\/cli\.m?js$/;
+
 /** Process Claude Code : exécutable `claude`, ou script `claude` lancé par un interpréteur (`node …/claude`). */
 export function isClaudeProcess(comm: string, args: string): boolean {
-  const tokens = args.split(/\s+/);
-  const byInterpreter = /(^|\/)(node|bun|deno)$/.test(tokens[0] ?? '') && /(^|\/)claude$/.test(tokens[1] ?? '');
-  const isClaude = path.basename(comm) === 'claude' || /(^|\/)claude$/.test(tokens[0] ?? '') || byInterpreter;
+  const tokens = splitArgs(args);
+  const [t0, t1] = [normExe(tokens[0] ?? ''), normExe(tokens[1] ?? '')];
+  const byInterpreter = /(^|\/)(node|bun|deno)$/.test(t0) && (/(^|\/)claude$/.test(t1) || CLAUDE_NPM_CLI.test(t1));
+  const isClaude = path.posix.basename(normExe(comm)) === 'claude' || /(^|\/)claude$/.test(t0) || byInterpreter;
   if (!isClaude) return false;
   const first = tokens[byInterpreter ? 2 : 1] ?? '';
   return !NOT_A_SESSION_CMD.has(first) && !NOT_A_SESSION_FLAG.test(` ${args}`);
@@ -102,9 +114,10 @@ const CODEX_NOT_A_SESSION_FLAG = /\s(--help|-h|--version|-V)(\s|$)/;
  * natif lancé par le lanceur npm est un descendant d'un process Codex : `agentProcsFrom` l'écarte.
  */
 export function isCodexProcess(comm: string, args: string): boolean {
-  const tokens = args.split(/\s+/);
-  const byInterpreter = /(^|\/)(node|bun|deno)$/.test(tokens[0] ?? '') && /(^|\/)codex(\.js)?$/.test(tokens[1] ?? '');
-  const isCodex = path.basename(comm) === 'codex' || /(^|\/)codex$/.test(tokens[0] ?? '') || byInterpreter;
+  const tokens = splitArgs(args);
+  const [t0, t1] = [normExe(tokens[0] ?? ''), normExe(tokens[1] ?? '')];
+  const byInterpreter = /(^|\/)(node|bun|deno)$/.test(t0) && /(^|\/)codex(\.js)?$/.test(t1);
+  const isCodex = path.posix.basename(normExe(comm)) === 'codex' || /(^|\/)codex$/.test(t0) || byInterpreter;
   if (!isCodex) return false;
   const first = tokens[byInterpreter ? 2 : 1] ?? '';
   return !CODEX_NOT_A_SESSION_CMD.has(first) && !CODEX_NOT_A_SESSION_FLAG.test(` ${args}`);
@@ -277,15 +290,20 @@ export async function scanAgentProcs(opts: ScanOptions): Promise<AgentProc[]> {
   const inflight = (async () => {
     let rows: PsRow[] = [];
     try {
-      const [a, b] = await Promise.all([
-        exec('ps', ['-axo', 'pid=,ppid=,etime=,comm='], { timeout: 5000, maxBuffer: 16 * 1024 * 1024 }),
-        exec('ps', ['-axo', 'pid=,args='], { timeout: 5000, maxBuffer: 32 * 1024 * 1024 }),
-      ]);
-      rows = parsePs(a.stdout, b.stdout);
+      // Windows : Get-CimInstance, sans dossier de travail (Claude le donne par sessions/<pid>.json ;
+      // un Codex sans dossier reste « projet inconnu »).
+      if (isWindows()) rows = await windowsProcesses();
+      else {
+        const [a, b] = await Promise.all([
+          exec('ps', ['-axo', 'pid=,ppid=,etime=,comm='], { timeout: 5000, maxBuffer: 16 * 1024 * 1024 }),
+          exec('ps', ['-axo', 'pid=,args='], { timeout: 5000, maxBuffer: 32 * 1024 * 1024 }),
+        ]);
+        rows = parsePs(a.stdout, b.stdout);
+      }
     } catch { return []; }
     const candidates = rows.filter((r) => { const a = agentOf(r.comm, r.args); return !!a && kinds.includes(a); });
     let cwds = new Map<number, string>();
-    if (candidates.length) {
+    if (candidates.length && !isWindows()) {
       try {
         const { stdout } = await exec('lsof', ['-a', '-d', 'cwd', '-Fpn', '-p', candidates.map((r) => r.pid).join(',')], { timeout: 5000 });
         cwds = parseLsofCwd(stdout);
