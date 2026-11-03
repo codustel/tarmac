@@ -138,6 +138,7 @@ body {
 .tl .tl-task.tl-done .tl-ttl { color: var(--tl-muted); text-decoration: line-through; }
 .tl .tl-tags { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; justify-content: flex-end; }
 .tl .tl-pill { font-size: 12px; font-weight: 600; border-radius: 99px; padding: 3px 9px; white-space: nowrap; }
+.tl .tl-pill-icon { padding: 2px 6px; cursor: default; }
 .tl .tl-who-toi { background: var(--tl-primarySoft); color: var(--tl-primaryText); }
 .tl .tl-who-ensemble { background: var(--tl-amber-soft); color: var(--tl-amber); }
 .tl .tl-who-claude { background: var(--tl-cyan-soft); color: var(--tl-cyan); }

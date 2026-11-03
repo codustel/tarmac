@@ -261,6 +261,7 @@ h1{font-family:var(--display);font-weight:700;font-size:clamp(24px,4vw,32px);lin
 .task.done .ttl{color:var(--muted);text-decoration:line-through;text-decoration-color:color-mix(in srgb,var(--muted) 60%,transparent)}
 .tags{display:flex;gap:6px;align-items:center;flex-wrap:wrap;justify-content:flex-end}
 .pill{font-size:12px;font-weight:600;border-radius:99px;padding:3px 9px;white-space:nowrap}
+.pill.icon{padding:2px 6px;cursor:default}
 .who-toi{background:var(--primary-soft);color:var(--primary-text)}
 .who-ensemble{background:var(--amber-soft);color:var(--amber)}
 .who-claude{background:var(--cyan-soft);color:var(--cyan)}
@@ -390,6 +391,9 @@ button.btn.small{font-size:13px;padding:6px 12px;align-self:flex-start}
   document.querySelectorAll('[data-i18n-title]').forEach(el=>{el.title=t(el.dataset.i18nTitle);});
   document.querySelectorAll('[data-i18n-aria]').forEach(el=>{el.setAttribute('aria-label',t(el.dataset.i18nAria));});
   const WHO={toi:t('who.toi'),ensemble:t('who.ensemble'),claude:t('who.claude')};
+  // Pastille « qui » : l'icône seule, le libellé au survol et pour les lecteurs d'écran (« 👤 Toi » → 👤 + « Toi »).
+  const whoPill=w=>{const l=WHO[w]||w,i=l.indexOf(' '),icon=i>0?l.slice(0,i):l,name=i>0?l.slice(i+1):l;
+    return `<span class="pill icon who-${esc(w)}" role="img" title="${esc(name)}" aria-label="${esc(name)}">${esc(icon)}</span>`;};
   const UI_KEY=CFG.uiKey||('suivi-ui:'+CFG.projectId);
   let tasks=[], db=null, mcp=null, filters={status:'all',who:'all'}, open=new Set(), openPhases=new Set();
   // Pont Tarmac (canal A) : état, curseur du journal, dernière synchro réussie.
@@ -550,7 +554,7 @@ button.btn.small{font-size:13px;padding:6px 12px;align-self:flex-start}
 <input type="checkbox" id="cb-${id}" data-id="${id}" ${task.done?'checked':''} aria-label="${esc(t('task.markDone',{num:task.num}))}">
 <span class="num">${esc(task.num)}</span>
 <button class="ttl" type="button" data-toggle="${id}" aria-expanded="${o}">${esc(task.title)}</button>
-<span class="tags">${isToTest(task)?`<button type="button" class="badge-totest" data-tested="${id}" title="${esc(t('task.toTestTitle'))}">${esc(t('task.toTest'))}</button>`:task.tested?`<button type="button" class="badge-tested" data-untest="${id}" title="${esc(testedTitle)}">${esc(t('task.tested'))}</button>`:''}${isRequested(task)?`<span class="badge-requested" title="${esc(t('requested.title',{date:new Date(task.requestedAt).toLocaleString(LOCALE,{dateStyle:'medium',timeStyle:'short'}),to:task.requestedTo==='new'?t('requested.new'):task.requestedTo&&task.requestedTo!=='copy'?task.requestedTo:t('requested.copy')}))}">${esc(t('requested.badge'))}</span>`:''}${isUntreated(task)?`<button type="button" class="send-btn" data-send="${id}" aria-haspopup="menu" title="${esc(t('send.title'))}"${sending.has(task.id)?' disabled':''}>${esc(sending.has(task.id)?t('send.sending'):t('send.button'))}</button>`:''}<span class="pill who-${esc(task.who)}">${esc(WHO[task.who]||task.who)}</span>${task.createdAt?`<span class="created" title="${esc(t('task.createdOn',{date:fmtDT(task.createdAt)}))}">${esc(fmtShort(task.createdAt))}</span>`:''}<span class="time">${fmtMin(task.minutes)}</span></span></div>
+<span class="tags">${isToTest(task)?`<button type="button" class="badge-totest" data-tested="${id}" title="${esc(t('task.toTestTitle'))}">${esc(t('task.toTest'))}</button>`:task.tested?`<button type="button" class="badge-tested" data-untest="${id}" title="${esc(testedTitle)}">${esc(t('task.tested'))}</button>`:''}${isRequested(task)?`<span class="badge-requested" title="${esc(t('requested.title',{date:new Date(task.requestedAt).toLocaleString(LOCALE,{dateStyle:'medium',timeStyle:'short'}),to:task.requestedTo==='new'?t('requested.new'):task.requestedTo&&task.requestedTo!=='copy'?task.requestedTo:t('requested.copy')}))}">${esc(t('requested.badge'))}</span>`:''}${isUntreated(task)?`<button type="button" class="send-btn" data-send="${id}" aria-haspopup="menu" title="${esc(t('send.title'))}"${sending.has(task.id)?' disabled':''}>${esc(sending.has(task.id)?t('send.sending'):t('send.button'))}</button>`:''}${whoPill(task.who)}${task.createdAt?`<span class="created" title="${esc(t('task.createdOn',{date:fmtDT(task.createdAt)}))}">${esc(fmtShort(task.createdAt))}</span>`:''}<span class="time">${fmtMin(task.minutes)}</span></span></div>
 <div class="detail" ${o?'':'hidden'}>
 ${isUntreated(task)?`<button type="button" class="btn small" data-send="${id}" aria-haspopup="menu"${sending.has(task.id)?' disabled':''}>${esc(sending.has(task.id)?t('send.sending'):t('send.detail'))}</button>`:''}
 ${task.why?`<p class="why">${t('task.why',{text:rich(task.why)})}</p>`:''}

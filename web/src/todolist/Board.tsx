@@ -11,6 +11,15 @@ const fmtShortDate = (d: string) =>
 
 /** Libellés « qui » (clés traduites au rendu). */
 export const WHO: Record<string, TKey> = { toi: 'todolist.who.toi', ensemble: 'todolist.who.ensemble', claude: 'todolist.who.claude' };
+
+/** « Qui » en icône seule, le libellé au survol et pour les lecteurs d'écran (« 👤 Toi » → 👤 + « Toi »). */
+export function WhoIcon({ who, className }: { who: string; className?: string }) {
+  const tr = useT();
+  const label = WHO[who] ? tr(WHO[who]) : who;
+  const i = label.indexOf(' ');
+  const name = i > 0 ? label.slice(i + 1) : label;
+  return <span className={className} role="img" title={name} aria-label={name}>{i > 0 ? label.slice(0, i) : label}</span>;
+}
 const FIELDS = ['created', 'done', 'tested', 'testedAt', 'testNote', 'doneAt', 'note', 'toTest', 'title', 'archived',
   'order', 'phase', 'who', 'minutes', 'why', 'steps', 'check', 'sources', 'requestedAt', 'requestedTo'] as const;
 const FIELD = Object.fromEntries(FIELDS.map((f) => [f, `todolist.field.${f}`])) as Record<string, TKey>;
@@ -273,7 +282,7 @@ export function Board({ suiviId, appProjectId, focusTaskId, onOpenTerminal }: {
                             ) : null}
                             <RequestedBadge task={t} />
                             <SendToClaude suiviId={suiviId} task={t} onOpenTerminal={onOpenTerminal} />
-                            <span className={`tl-pill tl-who-${t.who}`}>{WHO[t.who] ? tr(WHO[t.who]) : t.who}</span>
+                            <WhoIcon who={t.who} className={`tl-pill tl-pill-icon tl-who-${t.who}`} />
                             {t.createdAt && <span className="tl-created" title={tr('todolist.board.createdOn', { date: fmtDateTime(t.createdAt) })}>{fmtShortDate(t.createdAt)}</span>}
                             <span className="tl-time">{fmtMin(t.minutes)}</span>
                           </span>

@@ -3,7 +3,7 @@ import { useMutation, useQueries } from '@tanstack/react-query';
 import { ArrowLeft, ExternalLink, ListChecks, Search, Star } from 'lucide-react';
 import { api, type AgentKind, type Project, type SuiviProjectSummary, type SuiviTask } from '../api';
 import { useEnabledAgents } from './Agents';
-import { Board, WHO, fmtMin, isToTest, useAppDark } from '../todolist/Board';
+import { Board, WhoIcon, fmtMin, isToTest, useAppDark } from '../todolist/Board';
 import { compareText, useT } from '../i18n';
 import { Badge, Button, Card, Empty, cx, timeAgo, useToast } from '../ui';
 
@@ -78,7 +78,7 @@ export function TodolistView({ summaries, projects, query, onOpenTask, onOpenTer
           <span className={cx('line-clamp-2 text-[13px]', t.done && 'text-faint line-through')}>{t.title}</span>
           <span className="mt-0.5 flex flex-wrap items-center gap-2 text-[11px] text-muted">
             <span className="font-semibold" style={{ color: c.primary }}>{p.name}</span>
-            <span>{WHO[t.who] ? tr(WHO[t.who]) : t.who}</span>
+            <WhoIcon who={t.who} />
             {t.minutes > 0 && <span>{fmtMin(t.minutes)}</span>}
             {isToTest(t) && <Badge tone="amber">{tr('todolist.status.totest')}</Badge>}
           </span>
