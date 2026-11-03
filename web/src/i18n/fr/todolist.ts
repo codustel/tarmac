@@ -86,6 +86,8 @@ export default {
   'todolist.board.note': 'Note (optionnel)',
   'todolist.board.notePlaceholder': 'Ex. : valeur saisie dans Render le…',
   'todolist.board.doneAt': 'Fait le {date}',
+  'todolist.board.createdOn': 'Créée le {date}',
+  'todolist.board.testedAt': '✓ Testée le {date}',
   'todolist.board.testNote': 'Test : {text}',
   'todolist.board.sources': 'Sources',
   'todolist.board.session': 'Session',

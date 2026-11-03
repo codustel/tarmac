@@ -5,6 +5,10 @@ import { copy, useToast } from '../ui';
 import { fmtDate, fmtDateTime, translateNow, useT, type TKey } from '../i18n';
 import { RequestedBadge, SendToClaude } from './SendToClaude';
 
+/** Date courte d'une tâche (« 3 nov. »), avec l'année si ce n'est pas l'année en cours. */
+const fmtShortDate = (d: string) =>
+  fmtDate(d, new Date(d).getFullYear() === new Date().getFullYear() ? { day: 'numeric', month: 'short' } : { day: 'numeric', month: 'short', year: 'numeric' });
+
 /** Libellés « qui » (clés traduites au rendu). */
 export const WHO: Record<string, TKey> = { toi: 'todolist.who.toi', ensemble: 'todolist.who.ensemble', claude: 'todolist.who.claude' };
 const FIELDS = ['created', 'done', 'tested', 'testedAt', 'testNote', 'doneAt', 'note', 'toTest', 'title', 'archived',
@@ -270,6 +274,7 @@ export function Board({ suiviId, appProjectId, focusTaskId, onOpenTerminal }: {
                             <RequestedBadge task={t} />
                             <SendToClaude suiviId={suiviId} task={t} onOpenTerminal={onOpenTerminal} />
                             <span className={`tl-pill tl-who-${t.who}`}>{WHO[t.who] ? tr(WHO[t.who]) : t.who}</span>
+                            {t.createdAt && <span className="tl-created" title={tr('todolist.board.createdOn', { date: fmtDateTime(t.createdAt) })}>{fmtShortDate(t.createdAt)}</span>}
                             <span className="tl-time">{fmtMin(t.minutes)}</span>
                           </span>
                         </div>
@@ -285,6 +290,7 @@ export function Board({ suiviId, appProjectId, focusTaskId, onOpenTerminal }: {
                                 onBlur={(e) => { if (e.target.value !== t.note) patch.mutate({ t, changes: { note: e.target.value } }); }} />
                             </label>
                             {t.done && t.doneAt && <span className="tl-doneat">{tr('todolist.board.doneAt', { date: fmtDateTime(t.doneAt) })}</span>}
+                            {t.tested && t.testedAt && <span className="tl-doneat">{tr('todolist.board.testedAt', { date: fmtDateTime(t.testedAt) })}</span>}
                             {t.testNote && <p className="tl-why">{tr.node('todolist.board.testNote', { text: <Rich text={t.testNote} /> })}</p>}
                             {t.sources.length > 0 && (
                               <div className="tl-sources">

@@ -86,6 +86,8 @@ const en: typeof fr = {
   'todolist.board.note': 'Note (optional)',
   'todolist.board.notePlaceholder': 'E.g. value entered in Render on…',
   'todolist.board.doneAt': 'Done on {date}',
+  'todolist.board.createdOn': 'Created on {date}',
+  'todolist.board.testedAt': '✓ Tested on {date}',
   'todolist.board.testNote': 'Test: {text}',
   'todolist.board.sources': 'Sources',
   'todolist.board.session': 'Session',

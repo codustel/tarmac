@@ -59,6 +59,8 @@ __FONTS__
   "task.note":"Note (optionnel)",
   "task.notePlaceholder":"Ex. : valeur saisie le…",
   "task.doneAt":"Fait le {date}",
+  "task.createdOn":"Créée le {date}",
+  "task.testedAt":"✓ Testée le {date}",
   "time.min":"{n} min",
   "time.h":"{h} h",
   "time.hm":"{h} h {m}",
@@ -158,6 +160,8 @@ __FONTS__
   "task.note":"Note (optional)",
   "task.notePlaceholder":"E.g. value entered on…",
   "task.doneAt":"Done on {date}",
+  "task.createdOn":"Created on {date}",
+  "task.testedAt":"✓ Tested on {date}",
   "time.min":"{n} min",
   "time.h":"{h}h",
   "time.hm":"{h}h {m}m",
@@ -267,6 +271,8 @@ button.badge-totest:hover{background:var(--amber-soft)}
 /* Badge « Testé » : même forme, en vert ; un clic sur « À tester » le pose, un clic sur « Testé » l'enlève. */
 .badge-tested{font:700 11px var(--body);letter-spacing:.06em;text-transform:uppercase;color:var(--ok);background:var(--ok-soft);border:1px solid var(--ok);border-radius:6px;padding:2px 7px;white-space:nowrap;cursor:pointer}
 .time{color:var(--muted);font-size:12px;font-variant-numeric:tabular-nums;white-space:nowrap}
+.created{color:var(--muted);font-size:12px;white-space:nowrap}
+.testedat{font-size:12px;color:var(--ok)}
 .detail{padding:4px 18px 18px 68px;display:flex;flex-direction:column;gap:12px}
 .detail[hidden]{display:none!important}
 .why{color:var(--muted);margin:0}
@@ -392,6 +398,8 @@ button.btn.small{font-size:13px;padding:6px 12px;align-self:flex-start}
   const saveUi=()=>{try{localStorage.setItem(UI_KEY,JSON.stringify({openPhases:[...openPhases]}))}catch(e){}};
   const $=id=>document.getElementById(id);
   const esc=s=>String(s??'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+  const fmtDT=d=>new Date(d).toLocaleString(LOCALE,{dateStyle:'medium',timeStyle:'short'});
+  const fmtShort=d=>{const x=new Date(d);return x.toLocaleDateString(LOCALE,x.getFullYear()===new Date().getFullYear()?{day:'numeric',month:'short'}:{day:'numeric',month:'short',year:'numeric'});};
   const fmtMin=m=>!m?'':m>=60?(m%60?t('time.hm',{h:Math.floor(m/60),m:String(m%60).padStart(2,'0')}):t('time.h',{h:Math.floor(m/60)})):t('time.min',{n:m});
   const rich=s=>esc(s).replace(/`([^`]+)`/g,'<code>$1</code>');
   // « À tester » : traitée mais pas encore validée. Une tâche cochée (done) n'est plus à tester.
@@ -542,14 +550,15 @@ button.btn.small{font-size:13px;padding:6px 12px;align-self:flex-start}
 <input type="checkbox" id="cb-${id}" data-id="${id}" ${task.done?'checked':''} aria-label="${esc(t('task.markDone',{num:task.num}))}">
 <span class="num">${esc(task.num)}</span>
 <button class="ttl" type="button" data-toggle="${id}" aria-expanded="${o}">${esc(task.title)}</button>
-<span class="tags">${isToTest(task)?`<button type="button" class="badge-totest" data-tested="${id}" title="${esc(t('task.toTestTitle'))}">${esc(t('task.toTest'))}</button>`:task.tested?`<button type="button" class="badge-tested" data-untest="${id}" title="${esc(testedTitle)}">${esc(t('task.tested'))}</button>`:''}${isRequested(task)?`<span class="badge-requested" title="${esc(t('requested.title',{date:new Date(task.requestedAt).toLocaleString(LOCALE,{dateStyle:'medium',timeStyle:'short'}),to:task.requestedTo==='new'?t('requested.new'):task.requestedTo&&task.requestedTo!=='copy'?task.requestedTo:t('requested.copy')}))}">${esc(t('requested.badge'))}</span>`:''}${isUntreated(task)?`<button type="button" class="send-btn" data-send="${id}" aria-haspopup="menu" title="${esc(t('send.title'))}"${sending.has(task.id)?' disabled':''}>${esc(sending.has(task.id)?t('send.sending'):t('send.button'))}</button>`:''}<span class="pill who-${esc(task.who)}">${esc(WHO[task.who]||task.who)}</span><span class="time">${fmtMin(task.minutes)}</span></span></div>
+<span class="tags">${isToTest(task)?`<button type="button" class="badge-totest" data-tested="${id}" title="${esc(t('task.toTestTitle'))}">${esc(t('task.toTest'))}</button>`:task.tested?`<button type="button" class="badge-tested" data-untest="${id}" title="${esc(testedTitle)}">${esc(t('task.tested'))}</button>`:''}${isRequested(task)?`<span class="badge-requested" title="${esc(t('requested.title',{date:new Date(task.requestedAt).toLocaleString(LOCALE,{dateStyle:'medium',timeStyle:'short'}),to:task.requestedTo==='new'?t('requested.new'):task.requestedTo&&task.requestedTo!=='copy'?task.requestedTo:t('requested.copy')}))}">${esc(t('requested.badge'))}</span>`:''}${isUntreated(task)?`<button type="button" class="send-btn" data-send="${id}" aria-haspopup="menu" title="${esc(t('send.title'))}"${sending.has(task.id)?' disabled':''}>${esc(sending.has(task.id)?t('send.sending'):t('send.button'))}</button>`:''}<span class="pill who-${esc(task.who)}">${esc(WHO[task.who]||task.who)}</span>${task.createdAt?`<span class="created" title="${esc(t('task.createdOn',{date:fmtDT(task.createdAt)}))}">${esc(fmtShort(task.createdAt))}</span>`:''}<span class="time">${fmtMin(task.minutes)}</span></span></div>
 <div class="detail" ${o?'':'hidden'}>
 ${isUntreated(task)?`<button type="button" class="btn small" data-send="${id}" aria-haspopup="menu"${sending.has(task.id)?' disabled':''}>${esc(sending.has(task.id)?t('send.sending'):t('send.detail'))}</button>`:''}
 ${task.why?`<p class="why">${t('task.why',{text:rich(task.why)})}</p>`:''}
 ${(task.steps||[]).length?`<ol>${task.steps.map(s=>`<li>${rich(s)}</li>`).join('')}</ol>`:''}
 ${task.check?`<div class="check"><b>${esc(t('task.check'))}</b><span>${rich(task.check)}</span></div>`:''}
 <label class="note" for="note-${id}">${esc(t('task.note'))}<textarea id="note-${id}" data-note="${id}" placeholder="${esc(t('task.notePlaceholder'))}">${esc(task.note||'')}</textarea></label>
-${task.done&&task.doneAt?`<span class="doneat">${esc(t('task.doneAt',{date:new Date(task.doneAt).toLocaleString(LOCALE,{dateStyle:'medium',timeStyle:'short'})}))}</span>`:''}
+${task.done&&task.doneAt?`<span class="doneat">${esc(t('task.doneAt',{date:fmtDT(task.doneAt)}))}</span>`:''}
+${task.tested&&task.testedAt?`<span class="testedat">${esc(t('task.testedAt',{date:fmtDT(task.testedAt)}))}</span>`:''}
 </div></div>`;
       }
       html+='</div></details>';
