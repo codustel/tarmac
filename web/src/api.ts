@@ -50,8 +50,10 @@ export interface TerminalSession {
   id: string;
   projectId: string;
   projectName: string;
-  kind: 'command' | 'shell' | 'claude' | 'system';
+  kind: 'command' | 'shell' | 'claude' | 'codex' | 'system';
   claudeSessionId: string | null;
+  /** Session Codex de la console (reprise, ou repérée après le lancement). */
+  codexSessionId?: string | null;
   label: string;
   command: string | null;
   status: 'running' | 'exited';
@@ -106,6 +108,8 @@ export interface Project {
    * `active` en cours (Tarmac ou ailleurs), `working` dont un agent travaille.
    */
   claude: { count: number; active: number; working: number; lastAt: string | null };
+  /** Même chose pour Codex, seulement si Codex est coché dans Réglages → Agents (sinon null). */
+  codex?: { count: number; active: number; working: number; lastAt: string | null } | null;
   /** Fenêtre d'éditeur (VS Code, Cursor…) ouverte sur ce dossier ou un dossier parent. */
   openIn: OpenIn | null;
 }
@@ -155,8 +159,8 @@ export interface ClaudeSession {
   project?: { id: string; name: string } | null;
 }
 
-/** Agent de code (Claude Code aujourd'hui ; Codex prévu, tâche 7.7). */
-export type AgentKind = 'claude';
+/** Agent de code : Claude Code ou Codex (ChatGPT). */
+export type AgentKind = 'claude' | 'codex';
 
 /** Agent en arrière-plan d'une session (sous-agent). */
 export interface BackgroundAgent { id: string; type: string | null; description: string; startedAt: string | null; lastActivityAt: string }
@@ -262,6 +266,9 @@ export interface Settings {
   editor: 'vscode' | 'cursor' | 'zed' | 'webstorm';
   showAllProjects: boolean;
   showClaudeUsage: boolean;
+  showCodexUsage: boolean;
+  /** Agents affichés et pris en charge (au moins un ; Claude seul par défaut). */
+  agents: { claude: boolean; codex: boolean };
   cloneDir: string;
   theme: 'light' | 'dark' | 'system';
   language: 'auto' | 'fr' | 'en';
@@ -282,6 +289,8 @@ export interface SettingsPatch {
   editor?: Settings['editor'];
   showAllProjects?: boolean;
   showClaudeUsage?: boolean;
+  showCodexUsage?: boolean;
+  agents?: { claude?: boolean; codex?: boolean };
   cloneDir?: string;
   theme?: Settings['theme'];
   language?: Settings['language'];
@@ -290,6 +299,8 @@ export interface SettingsPatch {
 
 /** Utilisation de l'abonnement Claude (`/api/claude/usage`). */
 export interface ClaudeUsageLimit { id: string; kind: 'session' | 'week' | 'model'; label: string | null; utilization: number; resetsAt: string | null }
+/** Utilisation du plan ChatGPT pour Codex (`/api/codex/usage`), lue dans les transcripts locaux de Codex. */
+export interface CodexUsage { status: 'ok' | 'disabled' | 'none' | 'error'; plan: string | null; limits: ClaudeUsageLimit[]; fetchedAt: string | null }
 export interface ClaudeUsage {
   status: 'ok' | 'disabled' | 'not-connected' | 'expired' | 'error';
   plan: string | null;
@@ -311,7 +322,7 @@ export interface SuiviTask {
 }
 /** Session Claude en cours dans une console de Tarmac, pour un projet de suivi (« Envoyer à Claude »). */
 export interface SuiviClaudeSession {
-  terminalId: string; name: string; title: string | null; claudeSessionId: string | null; appProjectId: string; startedAt: string; lastActivityAt: string | null;
+  terminalId: string; agent?: AgentKind; name: string; title: string | null; claudeSessionId: string | null; codexSessionId?: string | null; appProjectId: string; startedAt: string; lastActivityAt: string | null;
   /** Lu sur l'écran de la console (et le transcript) : seule une session `idle` (invite vide) peut recevoir une tâche. */
   state: 'idle' | 'busy' | 'permission' | 'unknown'; available: boolean;
 }
@@ -518,14 +529,17 @@ export const api = {
   runningAgents: () => request<RunningAgent[]>('/api/agents/running'),
   timeline: () => request<{ events: TimelineEvent[]; days: number }>('/api/timeline'),
   openClaude: (id: string, resume?: string, prompt?: string) => request<TerminalSession>(`/api/projects/${id}/claude`, json({ resume, prompt, cols: 140, rows: 40 })),
+  codexSessions: (id: string, force = false) => request<ClaudeSession[]>(`/api/projects/${id}/codex-sessions${force ? '?force=1' : ''}`),
+  allCodexSessions: () => request<ClaudeSession[]>('/api/codex/sessions'),
+  openCodex: (id: string, resume?: string, prompt?: string) => request<TerminalSession>(`/api/projects/${id}/codex`, json({ resume, prompt, cols: 140, rows: 40 })),
   frameCheck: (id: string) => request<{ url: string | null; frameable: boolean; reason: string | null; pending?: boolean }>(`/api/projects/${id}/frame-check`),
   suiviProjects: () => request<SuiviProjectSummary[]>('/api/suivi/projects'),
   suivi: (projectId: string) => request<SuiviDetail>(`/api/suivi/projects/${encodeURIComponent(projectId)}`),
   suiviPatch: (projectId: string, taskId: string, baseRev: number, changes: Partial<Pick<SuiviTask, 'done' | 'doneAt' | 'note' | 'toTest' | 'tested' | 'testedAt'>>) =>
     request<SuiviTask>(`/api/suivi/projects/${encodeURIComponent(projectId)}/tasks/${encodeURIComponent(taskId)}`, json({ baseRev, changes }, 'PATCH')),
   suiviSessions: (projectId: string) => request<SuiviClaudeSession[]>(`/api/suivi/projects/${encodeURIComponent(projectId)}/sessions`),
-  suiviDispatch: (projectId: string, taskId: string, target: string) =>
-    request<SuiviDispatchResult>(`/api/suivi/projects/${encodeURIComponent(projectId)}/tasks/${encodeURIComponent(taskId)}/dispatch`, json({ target })),
+  suiviDispatch: (projectId: string, taskId: string, target: string, agent?: AgentKind) =>
+    request<SuiviDispatchResult>(`/api/suivi/projects/${encodeURIComponent(projectId)}/tasks/${encodeURIComponent(taskId)}/dispatch`, json(agent ? { target, agent } : { target })),
   suiviHistory: (projectId: string, taskId: string) => request<SuiviJournalEntry[]>(`/api/suivi/projects/${encodeURIComponent(projectId)}/history/${encodeURIComponent(taskId)}`),
   suiviExportUrl: (projectId: string) => `/api/suivi/projects/${encodeURIComponent(projectId)}/export`,
   terminals: () => request<TerminalSession[]>('/api/terminals'),
@@ -556,6 +570,7 @@ export const api = {
   fetchGit: () => request('/api/git/fetch', { method: 'POST' }),
   settings: () => request<Settings>('/api/settings'),
   claudeUsage: () => request<ClaudeUsage>('/api/claude/usage'),
+  codexUsage: () => request<CodexUsage>('/api/codex/usage'),
   clone: (fullName: string) => request<TerminalSession>('/api/github/clone', json({ fullName, cols: 110, rows: 22 })),
   ghCli: () => request<GhCliStatus>('/api/github/cli'),
   ghLogin: (cols?: number, rows?: number) => request<TerminalSession>('/api/github/cli/login', json({ cols, rows })),

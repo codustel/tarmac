@@ -15,6 +15,10 @@ What `tarmac uninstall` removes:
 - the port 80 redirect (`/etc/pf.anchors/com.codustel.tarmac` and the LaunchDaemon `com.codustel.tarmac.pf`);
 - the `tarmac.localhost` and `tarmac.test` lines (and your custom domain) in `/etc/hosts`;
 - the `tarmac` MCP server in Claude Code (`claude mcp remove --scope user tarmac`), if Claude Code is installed;
+- the Codex integration, if `tarmac setup` set it up: the marked `[mcp_servers.tarmac]` block of
+  `~/.codex/config.toml`, the marked "Project tracking" block of `~/.codex/AGENTS.md`, the Tarmac entry of
+  `~/.codex/hooks.json` and `~/.codex/hooks/tarmac-suivi-check.sh`, and `~/.agents/skills/suivi/` (backup copies
+  `.bak-<date>` are left next to each edited file; the rest of your Codex settings is not touched);
 - with `--purge`, the data folder `~/.tarmac`.
 
 What it leaves, to remove by hand if you set up the Claude Code integration:

@@ -1,8 +1,8 @@
 import { Fragment, createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { api } from '../api';
-import { resolveLang, translate, interpolate, pickPlural, type Lang, type LanguageSetting, type Loc, type Params } from './core';
-import { browserLangs, dicts, getLang, readStored, setCurrentLang } from './state';
+import { resolveLang, translate, interpolate, neutralTodolist, pickPlural, type Lang, type LanguageSetting, type Loc, type Params } from './core';
+import { browserLangs, dicts, getLang, readStored, setCurrentLang, setNeutralNames } from './state';
 import type { TKey } from './fr';
 
 export type { Lang, LanguageSetting, Loc, Params } from './core';
@@ -18,14 +18,15 @@ export interface T {
   lang: Lang;
 }
 
-function makeT(lang: Lang): T {
+function makeT(lang: Lang, neutral = false): T {
   const dict = dicts[lang];
-  const t = ((key: TKey, params?: Params) => translate(dict, lang, key, params)) as T;
+  const fix = neutral ? neutralTodolist : (s: string) => s;
+  const t = ((key: TKey, params?: Params) => fix(translate(dict, lang, key, params))) as T;
   t.node = (key, params) => {
     const e = dict[key] as string | { zero?: string; one: string; other: string } | undefined;
     if (e === undefined) return key;
     const count = typeof params.count === 'number' ? params.count : 0;
-    const s = typeof e === 'string' ? e : pickPlural(e, lang, count);
+    const s = fix(typeof e === 'string' ? e : pickPlural(e, lang, count));
     const parts = s.split(/(\{\w+\})/);
     return parts.map((p, i) => {
       const m = /^\{(\w+)\}$/.exec(p);
@@ -72,12 +73,15 @@ export function I18nProvider({ children }: { children: ReactNode }) {
     }
   }, [lang, qc]);
   // Rendu avec la bonne langue dès ce passage (avant l'effet) pour les fonctions hors React.
+  // Codex coché : « Todolist » au lieu de « Todolist Claude » (voir neutralTodolist).
+  const neutral = !!server.data?.agents?.codex;
   setCurrentLang(lang);
+  setNeutralNames(neutral);
   const setSetting = useCallback((s: LanguageSetting) => {
     setSettingState(s);
     api.saveSettings({ language: s }).then((r) => qc.setQueryData(['settings'], r)).catch(() => null);
   }, [qc]);
-  const value = useMemo(() => ({ t: makeT(lang), lang, setting, setSetting }), [lang, setting, setSetting]);
+  const value = useMemo(() => ({ t: makeT(lang, neutral), lang, setting, setSetting }), [lang, neutral, setting, setSetting]);
   return <I18nCtx.Provider value={value}>{children}</I18nCtx.Provider>;
 }
 

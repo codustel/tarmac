@@ -2,6 +2,7 @@
 // Génère l'espace de démo de Tarmac dans un HOME factice (idempotent) :
 //   <home>/Developer/…          projets fictifs Orbit Labs (thème spatial) (git avec historique, dépendances installées)
 //   <home>/.claude/projects/…   sessions Claude Code factices (CLAUDE_CONFIG_DIR)
+//   <home>/.codex/sessions/…    sessions Codex factices (CODEX_HOME)
 //   <home>/.tarmac/             données de Tarmac (DATA_DIR) : réglages de démo
 //   <home>/demo-fixtures/       fixtures du mode démo (TARMAC_DEMO_FIXTURES) et faux Claude Code
 //   <home>/.gitconfig, .zshrc   identité git et invite de console neutres, réseau git coupé
@@ -14,7 +15,7 @@ import path from 'node:path';
 import { execFileSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { PROJECTS } from './projects.mjs';
-import { RUNNING_AGENTS, SESSIONS, fixtures, sessionIdOf, todolistInsights, todolistPilot, todolistPlatform, todolistRocketApi, todolistStorefront, transcript } from './sessions.mjs';
+import { CODEX_RUNNING, CODEX_SESSIONS, RUNNING_AGENTS, SESSIONS, codexRollout, codexSessionIdOf, fixtures, sessionIdOf, todolistInsights, todolistPilot, todolistPlatform, todolistRocketApi, todolistStorefront, transcript } from './sessions.mjs';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const argv = process.argv.slice(2);
@@ -227,8 +228,23 @@ const running = RUNNING_AGENTS.map((a) => {
     write(path.join(sub, `agent-${s.id}.jsonl`), JSON.stringify({ type: 'user', isSidechain: true, agentId: s.id, sessionId, cwd, timestamp: at, message: { role: 'user', content: s.description } }) + '\n');
     write(path.join(sub, `agent-${s.id}.meta.json`), JSON.stringify({ agentType: s.type, description: s.description, ...(s.finished ? { finished: true } : {}) }));
   }
-  return { cwd, sessionId, entrypoint: a.entrypoint, status: a.status };
+  return { agent: 'claude', cwd, sessionId, entrypoint: a.entrypoint, status: a.status };
 });
+
+// ─── Sessions Codex (CODEX_HOME = <home>/.codex) ────────────────────────────
+// Visibles quand Codex est coché dans Réglages → Agents ; jamais le vrai ~/.codex.
+const codexSessions = path.join(HOME, '.codex', 'sessions');
+fs.rmSync(codexSessions, { recursive: true, force: true });
+for (const s of CODEX_SESSIONS) {
+  const r = codexRollout(s, path.join(DEV, s.project), NOW);
+  const file = path.join(codexSessions, r.rel);
+  write(file, r.jsonl);
+  const end = new Date(NOW - s.age);
+  fs.utimesSync(file, end, end);
+}
+write(path.join(HOME, '.codex', 'session_index.jsonl'), CODEX_SESSIONS.map((s) => JSON.stringify({ id: codexSessionIdOf(s.project, s.title), thread_name: s.title, updated_at: new Date(NOW - s.age).toISOString() })).join('\n') + '\n');
+for (const a of CODEX_RUNNING) running.push({ agent: 'codex', cwd: path.join(DEV, a.project), sessionId: codexSessionIdOf(a.project, a.session) });
+say(`${CODEX_SESSIONS.length} sessions Codex factices`);
 
 // ─── Données de Tarmac (DATA_DIR = <home>/.tarmac) ──────────────────────────
 const dataDir = path.join(HOME, '.tarmac');
@@ -254,9 +270,11 @@ const { home: _h, ...data } = fixtures(HOME);
 write(path.join(fx, 'fixtures.json'), JSON.stringify(data, null, 2));
 fs.rmSync(path.join(fx, 'bin'), { recursive: true, force: true });
 write(path.join(fx, 'bin', 'claude'), fs.readFileSync(path.join(HERE, 'claude-demo.mjs'), 'utf8'), 0o755);
+write(path.join(fx, 'bin', 'codex'), fs.readFileSync(path.join(HERE, 'codex-demo.mjs'), 'utf8'), 0o755);
 write(path.join(fx, 'bin', 'gh'), fs.readFileSync(path.join(HERE, 'gh-demo.mjs'), 'utf8'), 0o755);
 // Faux `claude` des sessions en cours hors Tarmac (dossier à part : jamais dans le PATH des consoles).
 fs.rmSync(path.join(fx, 'bin-agents'), { recursive: true, force: true });
 write(path.join(fx, 'bin-agents', 'claude'), fs.readFileSync(path.join(HERE, 'agents-demo.mjs'), 'utf8'), 0o755);
+write(path.join(fx, 'bin-agents', 'codex'), fs.readFileSync(path.join(HERE, 'agents-demo.mjs'), 'utf8'), 0o755);
 write(path.join(fx, 'running-agents.json'), JSON.stringify(running, null, 2));
 say(`Espace de démo prêt : ${HOME}`);

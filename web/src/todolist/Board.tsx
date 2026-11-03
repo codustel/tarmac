@@ -1,6 +1,6 @@
 import { Fragment, useEffect, useMemo, useState, type CSSProperties } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { api, type SuiviDetail, type SuiviJournalEntry, type SuiviTask, type SuiviTheme } from '../api';
+import { api, type AgentKind, type SuiviDetail, type SuiviJournalEntry, type SuiviTask, type SuiviTheme } from '../api';
 import { copy, useToast } from '../ui';
 import { fmtDate, fmtDateTime, translateNow, useT, type TKey } from '../i18n';
 import { RequestedBadge, SendToClaude } from './SendToClaude';
@@ -70,7 +70,7 @@ export function Board({ suiviId, appProjectId, focusTaskId, onOpenTerminal }: {
   appProjectId?: string;
   focusTaskId?: string | null;
   /** Une session Claude vient d'être ouverte dans ce terminal. */
-  onOpenTerminal?: (sid: string) => void;
+  onOpenTerminal?: (sid: string, agent?: AgentKind) => void;
 }) {
   const tr = useT();
   const toast = useToast();

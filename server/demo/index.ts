@@ -192,11 +192,11 @@ export const demoEditors = (d: DemoFixtures) => d.editors.map((e) => ({ ...e, pa
 
 
 /**
- * Dossier des faux outils du mode démo (`claude`, `gh`), placé en tête du PATH des consoles qui les lancent :
+ * Dossier des faux outils du mode démo (`claude`, `codex`, `gh`), placé en tête du PATH des consoles qui les lancent :
  * la console affiche la vraie commande (`claude --resume …`, `gh repo clone …`) mais n'exécute jamais le vrai
  * outil. Le faux exécutable est exigé : sans lui, erreur (jamais de repli sur l'outil réel).
  */
-export function demoBinDir(d: DemoFixtures, tool: 'claude' | 'gh'): string {
+export function demoBinDir(d: DemoFixtures, tool: 'claude' | 'codex' | 'gh'): string {
   const claude = path.isAbsolute(d.claudeCommand) ? d.claudeCommand : path.join(demoDir()!, d.claudeCommand);
   if (path.basename(claude) !== 'claude') throw new Error(`Demo mode: ${claude} must be an executable named claude`);
   const bin = path.join(path.dirname(claude), tool);

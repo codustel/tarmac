@@ -210,17 +210,20 @@ body {
 @container sidebar-free (max-height: 160px) { .usage-panel[data-rows="4"] { display: none; } }
 @container sidebar-free (max-height: 246px) { .sidebar-free-inner:has(.usage-panel[data-rows="5"]) .sidebar-logo { display: none; } }
 @container sidebar-free (max-height: 188px) { .usage-panel[data-rows="5"] { display: none; } }
+/* Deux panneaux (Claude et Codex) : voir useSidebarFit (logo puis panneau Codex effacés si la place manque). */
+.sidebar-free-inner[data-codex-fit="1"] .sidebar-logo, .sidebar-free-inner[data-codex-fit="2"] .sidebar-logo { display: none; }
+.sidebar-free-inner[data-codex-fit="2"] .usage-panel[data-agent="codex"] { display: none; }
 
 /* ─── Agents en cours et timeline d'activité (5.10 / 5.11) ───
    Une couleur par agent (--agent-<id>) et par type d'évènement (--act-*) : teintes 600-700 en clair,
    300-400 en sombre, comme les badges. LED : verte, clignote quand un agent travaille. */
 :root {
-  --agent-claude: #c15f3c;
+  --agent-claude: #c15f3c; --agent-codex: #0f766e;
   --act-commit: #4f46e5; --act-push: #0369a1; --act-task: #b45309;
   --led: #10b981; --led-glow: rgb(16 185 129 / .45);
 }
 .dark {
-  --agent-claude: #e08a68;
+  --agent-claude: #e08a68; --agent-codex: #5eead4;
   --act-commit: #a5b4fc; --act-push: #7dd3fc; --act-task: #fcd34d;
   --led: #34d399; --led-glow: rgb(52 211 153 / .5);
 }

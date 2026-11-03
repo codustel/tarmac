@@ -104,20 +104,21 @@ register('suivi_push', {
 }, ({ projectId, tasks, channel }) => run(() => api('POST', `/api/suivi/projects/${enc(projectId)}/push`, { tasks, channel })));
 
 register('suivi_sessions', {
-  description: 'Lists the Claude Code sessions currently running in Tarmac consoles for this project (terminalId, name, title, start, last activity), most recently active first. Sessions started outside Tarmac are not listed: Tarmac cannot reach them. Used to pick the session that receives a task (suivi_dispatch).',
+  description: 'Lists the agent sessions (Claude Code, and Codex when it is enabled in Tarmac) currently running in Tarmac consoles for this project (terminalId, agent, name, title, state, start, last activity), most recently active first. Only `available` (idle) sessions can receive a task. Sessions started outside Tarmac are not listed: Tarmac cannot reach them. Used to pick the session that receives a task (suivi_dispatch).',
   inputSchema: { projectId: PROJECT },
   annotations: { readOnlyHint: true },
 }, ({ projectId }) => run(async () => ({ sessions: await api<unknown[]>('GET', `/api/suivi/projects/${enc(projectId)}/sessions`) })));
 
 register('suivi_dispatch', {
-  description: 'Sends an untreated task (not done, not to test, not archived) to Claude: types a short instruction ("handle task <num> … read it with suivi_get, do it, then mark it to test") into a running Claude session of this project (`target` = its terminalId from suivi_sessions), or opens a new Claude session in the project with it as the first message (`target: "new"`). Marks the task as requested from Claude (requestedAt, requestedTo). Call it once per user click; never retry automatically.',
+  description: 'Sends an untreated task (not done, not to test, not archived) to a coding agent: types a short instruction ("handle task <num> … read it with suivi_get, do it, then mark it to test") into a running idle session of this project (`target` = its terminalId from suivi_sessions), or opens a new session in the project with it as the first message (`target: "new"`, with `agent` = "claude" or "codex"; default: the first agent enabled in Tarmac). Marks the task as requested (requestedAt, requestedTo). Call it once per user click; never retry automatically.',
   inputSchema: {
     projectId: PROJECT,
     taskId: z.string().describe('Task id (e.g. t-4-12), not its number'),
     target: z.string().describe('terminalId of a running session (from suivi_sessions), or "new" for a new session'),
+    agent: z.enum(['claude', 'codex']).optional().describe('Agent of the new session (target "new"); must be enabled in Tarmac → Settings → Agents'),
   },
   annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: false },
-}, ({ projectId, taskId, target }) => run(() => api('POST', `/api/suivi/projects/${enc(projectId)}/tasks/${enc(taskId)}/dispatch`, { target })));
+}, ({ projectId, taskId, target, agent }) => run(() => api('POST', `/api/suivi/projects/${enc(projectId)}/tasks/${enc(taskId)}/dispatch`, agent ? { target, agent } : { target })));
 
 register('suivi_upsert_task', {
   description: 'Creates or updates a task (channel B). Without `id`: new task (id, number and order computed: end of `phase`, or lettered subtask under `parent`). With `id`: only the given fields change. Never delete: `archived: true` removes the task from the view. Also write the same task to the artifact db (ArtifactData), then call suivi_write_copy. Write task content in the user’s language.',

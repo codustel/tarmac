@@ -4,7 +4,7 @@
 #   scripts/demo/run-demo.sh --stop     arrête les apps de démo puis l'instance
 # Variables : DEMO_HOME (~/tarmac-demo-home), DEMO_PORT (7790), DEMO_BUILD (dossier de build hors du dépôt),
 #   TARMAC_MODULES (modules à charger, docs/extensions.md ; ex. TARMAC_MODULES="$PWD/examples/hello-module").
-# Le service Tarmac habituel, ~/.claude, ~/.tarmac et la config gh ne sont jamais lus ni modifiés.
+# Le service Tarmac habituel, ~/.claude, ~/.codex, ~/.tarmac et la config gh ne sont jamais lus ni modifiés.
 set -euo pipefail
 
 say() { printf '\033[1;34m▸\033[0m %s\n' "$*"; }
@@ -55,7 +55,7 @@ env -i \
   HOME="$DEMO_HOME" USER="$USER" LOGNAME="$USER" SHELL=/bin/zsh TERM=xterm-256color \
   LANG=en_US.UTF-8 LC_ALL=en_US.UTF-8 TMPDIR="${TMPDIR:-/tmp}" \
   PATH="$NODE_DIR:/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin" \
-  DATA_DIR="$DEMO_HOME/.tarmac" CLAUDE_CONFIG_DIR="$DEMO_HOME/.claude" \
+  DATA_DIR="$DEMO_HOME/.tarmac" CLAUDE_CONFIG_DIR="$DEMO_HOME/.claude" CODEX_HOME="$DEMO_HOME/.codex" \
   TARMAC_DEMO_FIXTURES="$DEMO_HOME/demo-fixtures" TARMAC_PORT="$DEMO_PORT" DEV_ROOTS="$DEMO_HOME/Developer" \
   ${TARMAC_MODULES:+TARMAC_MODULES="$TARMAC_MODULES"} \
   GIT_CONFIG_NOSYSTEM=1 NO_UPDATE_NOTIFIER=1 npm_config_update_notifier=false DO_NOT_TRACK=1 ASTRO_TELEMETRY_DISABLED=1 \

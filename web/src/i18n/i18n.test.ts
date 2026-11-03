@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { paramsOf, resolveLang, translate, type Entry } from './core';
+import { neutralTodolist, paramsOf, resolveLang, translate, type Entry } from './core';
 import { fr } from './fr';
 import { en } from './en';
 
@@ -44,4 +44,15 @@ test('traduction : interpolation, pluriel et repli sur la clé', () => {
   assert.equal(translate(d, 'fr', 'm', { count: 1 }), '1 projet');
   assert.equal(translate(d, 'fr', 'm', { count: 2 }), '2 projets');
   assert.equal(translate(d, 'en', 'absent'), 'absent');
+});
+
+test('nom de la Todolist : neutre quand Codex est coché, inchangé avec Claude seul', () => {
+  assert.equal(neutralTodolist(translate(fr, 'fr', 'common.nav.todolist')), 'Todolist');
+  assert.equal(neutralTodolist(translate(en, 'en', 'projects.panel.todo.create')), 'Create the Todolist');
+  assert.equal(neutralTodolist(translate(fr, 'fr', 'projects.panel.todo.none')), 'Pas encore de Todolist');
+  assert.equal(translate(fr, 'fr', 'common.nav.todolist'), 'Todolist Claude', 'Claude seul : texte d’origine');
+  for (const d of [fr, en]) for (const [k, v] of Object.entries(d)) {
+    const all = typeof v === 'string' ? [v] : Object.values(v).filter((x): x is string => typeof x === 'string');
+    for (const s of all) assert.doesNotMatch(neutralTodolist(s), /Todolist Claude|Claude Todolist/, k);
+  }
 });

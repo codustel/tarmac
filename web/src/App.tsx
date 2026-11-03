@@ -15,9 +15,10 @@ import { SettingsView } from './views/SettingsView';
 import { ModuleIcon, ModuleView } from './views/ModuleView';
 import { TodolistView } from './views/TodolistView';
 import { ClaudeIcon, ClaudeSessionsView, StandaloneTerminal } from './views/ClaudeSessions';
-import { ClaudeUsagePanel } from './views/ClaudeUsagePanel';
+import { ClaudeUsagePanel, CodexUsagePanel } from './views/ClaudeUsagePanel';
 import { TimelineView } from './views/TimelineView';
-import { AgentLed, useRunningAgents } from './views/Agents';
+import { AgentLed, CodexIcon, useEnabledAgents, useRunningAgents } from './views/Agents';
+import type { AgentKind } from './api';
 import { LicenseModal } from './views/LicenseModal';
 import { InstallButton, UpdateBanner } from './pwa';
 import { onIdeOpen } from './ide/store';
@@ -26,11 +27,11 @@ import { useLanguageSetting, useT, type TKey } from './i18n';
 // Monaco est lourd : chargé seulement à la première ouverture de l'IDE.
 const IdeView = lazy(() => import('./ide/IdeView'));
 
-type CoreTab = 'projects' | 'ide' | 'todolist' | 'claude' | 'supabase' | 'docker' | 'github' | 'ports' | 'android' | 'settings';
+type CoreTab = 'projects' | 'ide' | 'todolist' | 'claude' | 'codex' | 'supabase' | 'docker' | 'github' | 'ports' | 'android' | 'settings';
 /** Onglet du cœur, ou vue d'un module (`#m/<id>`, docs/extensions.md). */
 type Tab = CoreTab | `m/${string}`;
 type Theme = 'light' | 'dark' | 'system';
-const TABS: CoreTab[] = ['projects', 'ide', 'todolist', 'claude', 'supabase', 'docker', 'github', 'ports', 'android', 'settings'];
+const TABS: CoreTab[] = ['projects', 'ide', 'todolist', 'claude', 'codex', 'supabase', 'docker', 'github', 'ports', 'android', 'settings'];
 
 /** Titre et sous-titre de chaque onglet : clés common.title.<tab> / common.sub.<tab>. */
 const TITLES = Object.fromEntries(TABS.map((t) => [t, [`common.title.${t}`, `common.sub.${t}`]])) as Record<CoreTab, [TKey, TKey]>;
@@ -97,6 +98,7 @@ export default function App() {
 
 function Main({ terminals }: { terminals: import('./api').TerminalSession[] }) {
   const [claudeTab, setClaudeTab] = useState<string | null>(null);
+  const [codexTab, setCodexTab] = useState<string | null>(null);
   const [tab, setTab] = useState<Tab>(tabFromHash);
   // IDE : projets ouverts (persistés), monté à la première visite puis gardé en mémoire.
   const [ideTabs, setIdeTabs] = useState<string[]>(() => { try { return JSON.parse(localStorage.getItem('ide:tabs') ?? '[]'); } catch { return []; } });
@@ -127,7 +129,13 @@ function Main({ terminals }: { terminals: import('./api').TerminalSession[] }) {
   const [todoFocus, setTodoFocus] = useState<string | null>(null);
   const [licenseOpen, setLicenseOpen] = useState(false);
   const agents = useRunningAgents();
-  const agentsWorking = (agents.data ?? []).some((a) => a.working);
+  const enabledAgents = useEnabledAgents();
+  const runningOf = (k: AgentKind) => (agents.data ?? []).filter((a) => a.agent === k);
+  /** Ouvre la console d'une session d'agent dans sa page (Sessions Claude ou Sessions Codex). */
+  const openAgentTab = useCallback((sid: string, agent?: AgentKind) => {
+    const kind = agent ?? (terminals.find((x) => x.id === sid)?.kind === 'codex' ? 'codex' : 'claude');
+    if (kind === 'codex') { setCodexTab(sid); setTab('codex'); } else { setClaudeTab(sid); setTab('claude'); }
+  }, [terminals]);
   const wide = useWide(TIMELINE_AUTO_MIN);
   const [timelinePref, setTimelinePrefState] = useState<TimelinePref>(() => {
     try { return (localStorage.getItem('timeline:pref') as TimelinePref) || 'auto'; } catch { return 'auto'; }
@@ -215,7 +223,15 @@ function Main({ terminals }: { terminals: import('./api').TerminalSession[] }) {
     { id: 'projects', label: t('common.nav.projects'), icon: <Boxes className="size-4" />, count: projects.data ? new Set(list.filter((p) => !p.loose).map((p) => p.group.id)).size : undefined, live: list.filter(isActive).length },
     { id: 'ide', label: t('common.nav.ide'), icon: <Code2 className="size-4" />, count: ideTabs.length || undefined },
     { id: 'todolist', label: t('common.nav.todolist'), icon: <ListChecks className="size-4" />, count: suivi.data ? suivi.data.reduce((a, p) => a + p.counts.toTest, 0) || undefined : undefined },
-    { id: 'claude', label: t('common.nav.claude'), icon: <ClaudeIcon size={15} />, count: terminals.filter((x) => x.kind === 'claude').length || undefined, live: terminals.filter((x) => x.kind === 'claude' && x.status === 'running').length, led: agents.data?.length ? agentsWorking : null },
+    // Une entrée par agent coché (Réglages → Agents) ; LED : sessions de cet agent en cours, partout.
+    ...enabledAgents.map((k) => ({
+      id: k as Tab,
+      label: t(k === 'codex' ? 'common.nav.codex' : 'common.nav.claude'),
+      icon: k === 'codex' ? <CodexIcon size={15} /> : <ClaudeIcon size={15} />,
+      count: terminals.filter((x) => x.kind === k).length || undefined,
+      live: terminals.filter((x) => x.kind === k && x.status === 'running').length,
+      led: runningOf(k).length ? runningOf(k).some((a) => a.working) : null,
+    })),
     { id: 'supabase', label: t('common.nav.supabase'), icon: <Database className="size-4" />, count: supabase.data?.instances.length, live: supabase.data?.instances.filter((i) => i.status !== 'stopped').length },
     // Pas de compteur : la vue Docker n'interroge le moteur que lorsqu'elle est affichée.
     { id: 'docker', label: t('common.nav.docker'), icon: <Container className="size-4" /> },
@@ -282,7 +298,8 @@ function Main({ terminals }: { terminals: import('./api').TerminalSession[] }) {
             puis le panneau s'effacent (règles de hauteur dans index.css) : rien ne déborde ni ne défile. */}
         <div className="sidebar-free min-h-0 flex-1 overflow-hidden">
           <div className="sidebar-free-inner flex h-full flex-col justify-end">
-            <ClaudeUsagePanel />
+            {enabledAgents.includes('claude') && <ClaudeUsagePanel />}
+            {enabledAgents.includes('codex') && <CodexUsagePanel />}
             <div className="sidebar-logo flex shrink-0 justify-center px-6" aria-hidden="true">
               <img src="/tarmac-logo-light.svg" alt="" draggable={false} className="mb-4 w-[116px] select-none opacity-35 dark:hidden" />
               <img src="/tarmac-logo-dark.svg" alt="" draggable={false} className="mb-4 hidden w-[116px] select-none opacity-30 dark:block" />
@@ -364,6 +381,7 @@ function Main({ terminals }: { terminals: import('./api').TerminalSession[] }) {
             <div className={cx(timelineSlot && 'min-w-0 max-w-[1400px] flex-1')}>
             {tab === 'projects' && <ProjectsView projects={list} query={query} onOpen={openProject} selectedId={selected?.id ?? null} />}
             {tab === 'claude' && <ClaudeSessionsView terminals={terminals} activeId={claudeTab} onActive={setClaudeTab} projects={list} />}
+            {tab === 'codex' && <ClaudeSessionsView agent="codex" terminals={terminals} activeId={codexTab} onActive={setCodexTab} projects={list} />}
             {tab === 'supabase' && <SupabaseView data={supabase.data} query={query} />}
             {tab === 'docker' && <DockerView query={query} onOpenProject={(id) => { openProject(id); setTab('projects'); }} />}
             {tab === 'github' && <GithubView data={github.data} error={github.error} query={query} />}
@@ -371,7 +389,7 @@ function Main({ terminals }: { terminals: import('./api').TerminalSession[] }) {
             {tab === 'android' && <AndroidView data={android.data} />}
             {tab === 'todolist' && (
               <TodolistView summaries={suivi.data} projects={list} query={query} onOpenTask={openTodo}
-                onOpenTerminal={(sid) => { setClaudeTab(sid); setTab('claude'); }} />
+                onOpenTerminal={openAgentTab} />
             )}
             {tab === 'settings' && <SettingsView />}
             {isModuleTab && modules.data && <ModuleView module={moduleTab} />}
@@ -401,7 +419,7 @@ function Main({ terminals }: { terminals: import('./api').TerminalSession[] }) {
 
         {selectedProject && tab === 'projects' && (
           <div className="w-[46%] min-w-[440px] max-w-[820px] shrink-0">
-            <ProjectPanel project={selectedProject} webApps={list.filter((p) => p.group.id === selectedProject.group.id && hasBrowser(p))} tab={selected!.tab} todoFocus={todoFocus} onTab={(pt) => setSelected({ id: selectedProject.id, tab: pt })} onClose={closePanel} onOpenClaudeTab={(sid) => { setClaudeTab(sid); setTab('claude'); }} />
+            <ProjectPanel project={selectedProject} webApps={list.filter((p) => p.group.id === selectedProject.group.id && hasBrowser(p))} tab={selected!.tab} todoFocus={todoFocus} onTab={(pt) => setSelected({ id: selectedProject.id, tab: pt })} onClose={closePanel} onOpenClaudeTab={openAgentTab} />
           </div>
         )}
       </div>

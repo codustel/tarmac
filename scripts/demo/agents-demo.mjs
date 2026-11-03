@@ -9,6 +9,17 @@ import os from 'node:os';
 import path from 'node:path';
 
 const args = process.argv.slice(2);
+// Copié aussi en bin-agents/codex : `codex resume <id>` qui ne fait que dormir (Codex n'écrit pas de fichier par
+// process ; Tarmac le rattache à sa session par ses arguments).
+if (path.basename(process.argv[1] ?? '') === 'codex') {
+  const quit = () => process.exit(0);
+  process.on('SIGTERM', quit); process.on('SIGINT', quit); process.on('SIGHUP', quit);
+  setInterval(() => {}, 60_000);
+} else {
+  runClaude();
+}
+
+function runClaude() {
 const i = args.indexOf('--resume');
 const sessionId = i >= 0 ? args[i + 1] : null;
 const cfg = process.env.CLAUDE_CONFIG_DIR || path.join(os.homedir(), '.claude');
@@ -48,3 +59,4 @@ const quit = () => { clearInterval(timer); try { fs.rmSync(pidFile, { force: tru
 process.on('SIGTERM', quit);
 process.on('SIGINT', quit);
 process.on('SIGHUP', quit);
+}

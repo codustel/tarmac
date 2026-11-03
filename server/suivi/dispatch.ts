@@ -12,9 +12,13 @@
  *   touche Entrée pourrait sinon approuver une permission ou valider une saisie en cours.
  *
  * Les sessions lancées hors de Tarmac (Terminal, Claude desktop) ne sont pas joignables : Tarmac n'a pas leur console.
+ *
+ * Codex (ChatGPT) : mêmes règles pour ses consoles quand il est coché dans Réglages → Agents, avec une lecture
+ * d'écran propre à sa TUI (`codexConsoleState`) et son tour de parole lu dans son transcript.
  */
 import path from 'node:path';
 import { tr, type Lang } from '../i18n.js';
+import type { AgentKind } from '../agentProcs.js';
 import type { SuiviService } from './service.js';
 import { isUntreated, SuiviError, TASK_ID_RE, type SuiviProject, type Task } from './types.js';
 
@@ -26,17 +30,22 @@ export interface ConsoleInfo {
   status: string;
   label: string;
   claudeSessionId: string | null;
+  codexSessionId?: string | null;
   startedAt: string;
   lastActivityAt?: string | null;
 }
 
-/** Session Claude en cours dans une console de Tarmac, pour un projet de suivi. */
+/** Session d'agent (Claude ou Codex) en cours dans une console de Tarmac, pour un projet de suivi. */
 export interface ClaudeConsoleSession {
   terminalId: string;
+  /** Agent de la session. */
+  agent: AgentKind;
   name: string;
-  /** Titre de la session Claude (/rename, résumé), s'il est connu. */
+  /** Titre de la session (/rename, résumé), s'il est connu. */
   title: string | null;
   claudeSessionId: string | null;
+  /** Session Codex (si connue). */
+  codexSessionId: string | null;
   appProjectId: string;
   startedAt: string;
   lastActivityAt: string | null;
@@ -99,23 +108,88 @@ export function consoleState(raw: string, quietMs: number, turn: 'idle' | 'worki
   return idle >= 0 && typed < idle ? 'idle' : 'unknown';
 }
 
+// ─── TUI de Codex (codex-rs/tui du code ouvert de Codex) ────────────────────
+// Boîte d'approbation : « Would you like to run the following command? », « … make the following edits? »,
+// « … grant these permissions? », « Do you want to approve network access … », options « Yes, proceed »,
+// « No, and tell Codex what to do differently ».
+const CODEX_PERMISSION_RE = /Would you like to (?:run|make|grant|send)|Do you want to approve|Yes, proceed|No, and tell Codex what to do differently/i;
+// Indicateur de travail : « Working (12s • esc to interrupt) ».
+const CODEX_BUSY_RE = /esc to interrupt|\bWorking \(\d/i;
+// Saisie vide : le texte d'attente de la boîte (« Ask Codex to do anything », ou « Ask a follow-up question »),
+// affiché seulement quand la boîte est vide.
+const CODEX_IDLE_RE = /Ask Codex to do anything|Ask a follow-up question/;
+// Liste d'options d'approbation dans la fin d'écran (« › 1. Yes, proceed », « 2. No… », « Allow », « Approve »…) :
+// toujours `permission`, même si le texte d'attente de la boîte vide a été redessiné après (Entrée l'approuverait).
+const CODEX_OPTIONS_RE = /[›❯]\s*1\.\s*Yes|\b1\.\s*Yes\b|\b\d\.\s*No\b|\b(?:Allow|Approve|Deny|Reject)\b/i;
+const CODEX_OPTIONS_TAIL = 2000;
+// Ligne entière de pied de page, de cadre ou de contexte restant (ou ses seuls chiffres redessinés). L'écran est du
+// contenu non fiable : pas de regex à répétition imbriquée (retour arrière catastrophique). Les expressions connues
+// sont retirées (regex linéaires), puis chaque mot restant doit être un mot de cadre ou un nombre (regex ancrée
+// simple). Ligne trop longue, ou mot inconnu : pas un pied de page.
+const FOOTER_PHRASES = [
+  /\?\s?for shortcuts/gi,
+  /\b(?:ctrl|alt|option|shift)[+-]?\w{1,12} for agents/gi,
+  /⌃\w{1,12} for agents/gi,
+  /\b\d{1,3}% context (?:left|used)/gi,
+  /\(?shift\+tab to cycle\)?/gi,
+];
+const FOOTER_WORD = /^(?:[›>│|─╭╮╰╯·•]+|\d{1,3}%?)$/;
+const FOOTER_MAX_LINE = 300;
+export function isCodexFooterLine(line: string): boolean {
+  if (line.length > FOOTER_MAX_LINE) return false;
+  let rest = line;
+  for (const re of FOOTER_PHRASES) rest = rest.replace(re, ' ');
+  return rest.split(/\s+/).every((w) => !w || FOOTER_WORD.test(w));
+}
+
+/**
+ * État d'une session Codex d'après la fin de sa sortie : comme `consoleState`, avec les textes de la TUI de Codex.
+ * La TUI ne redessine que les cellules qui changent : un ancien « esc to interrupt » peut rester après le texte
+ * d'attente. Le tour de parole lu dans le transcript fait donc foi quand il est connu (`working` = occupée,
+ * `idle` = l'indicateur de travail est périmé) ; sans transcript, l'indicateur récent l'emporte.
+ * Au repos seulement si le texte d'attente de la boîte vide est le dernier élément reconnu, qu'aucune liste
+ * d'options d'approbation n'est dans la fin d'écran, et que chaque ligne écrite après lui est entièrement un pied
+ * de page connu (une saisie commencée, ou toute ligne non reconnue : `unknown`). Dans le doute, jamais `idle`.
+ */
+export function codexConsoleState(raw: string, quietMs: number, turn: 'idle' | 'working' | 'none' = 'none'): ConsoleState {
+  const text = screenText(raw.slice(-16_000)).slice(-6000);
+  const permission = lastMatch(text, CODEX_PERMISSION_RE);
+  const busy = lastMatch(text, CODEX_BUSY_RE);
+  const idle = lastMatch(text, CODEX_IDLE_RE);
+  if (permission >= 0 && permission > idle) return 'permission';
+  if (CODEX_OPTIONS_RE.test(text.slice(-CODEX_OPTIONS_TAIL))) return 'permission';
+  if (quietMs < QUIET_MS || turn === 'working') return 'busy';
+  if (turn === 'none' && busy >= 0 && (busy > idle || text.length - busy < 600)) return 'busy';
+  if (idle < 0) return 'unknown';
+  const after = text.slice(idle).replace(CODEX_IDLE_RE, '').split('\n');
+  return after.every(isCodexFooterLine) ? 'idle' : 'unknown';
+}
+
+/** Lecture d'écran selon l'agent. */
+export const agentConsoleState = (agent: AgentKind, raw: string, quietMs: number, turn: 'idle' | 'working' | 'none' = 'none') =>
+  agent === 'codex' ? codexConsoleState(raw, quietMs, turn) : consoleState(raw, quietMs, turn);
+
+const AGENT_LABEL: Record<AgentKind, string> = { claude: 'Claude', codex: 'Codex' };
+
 export interface DispatchDeps {
   service: SuiviService;
   /** Projets scannés par Tarmac (id, dossier). */
   appProjects: () => { id: string; dir: string }[];
   /** Consoles ouvertes dans Tarmac. */
   consoles: () => ConsoleInfo[];
-  /** Titre connu d'une session Claude (facultatif). */
-  sessionTitle?: (claudeSessionId: string) => string | null;
+  /** Titre connu d'une session (facultatif). */
+  sessionTitle?: (sessionId: string, agent: AgentKind) => string | null;
   write: (terminalId: string, data: string) => void;
   /** Fin de la sortie brute d'une console et date de la dernière sortie (pour `consoleState`). */
   screen: (terminalId: string) => { text: string; lastOutputAt: string | null } | null;
-  /** Tour de parole d'une session Claude d'après son transcript (facultatif). */
-  turn?: (claudeSessionId: string) => 'idle' | 'working' | 'none';
+  /** Tour de parole d'une session d'après son transcript (facultatif). */
+  turn?: (sessionId: string, agent: AgentKind) => 'idle' | 'working' | 'none';
   /** Horloge (tests). */
   now?: () => number;
-  /** Ouvre une nouvelle session Claude (Remote Control) dans un projet scanné, avec un premier message. */
-  openSession: (appProjectId: string, prompt: string) => Promise<{ id: string; label: string }>;
+  /** Agents cochés dans Réglages → Agents (Claude seul par défaut). */
+  agents?: () => AgentKind[];
+  /** Ouvre une nouvelle session de l'agent dans un projet scanné, avec un premier message. */
+  openSession: (appProjectId: string, prompt: string, agent: AgentKind) => Promise<{ id: string; label: string }>;
   lang: () => Lang;
   /** Pause entre le collage et la touche Entrée (la TUI de Claude Code traite le collage d'abord). */
   delay?: (ms: number) => Promise<void>;
@@ -180,40 +254,53 @@ export class SuiviDispatcher {
       .sort((a, b) => Number(roots.includes(b.dir)) - Number(roots.includes(a.dir)) || a.dir.length - b.dir.length);
   }
 
-  /** Sessions Claude en cours dans les consoles de Tarmac pour ce projet (la plus récemment active d'abord). */
+  /** Agents cochés (Claude seul par défaut). */
+  agents(): AgentKind[] {
+    return this.deps.agents?.() ?? ['claude'];
+  }
+
+  /** Sessions d'agent en cours dans les consoles de Tarmac pour ce projet (la plus récemment active d'abord). */
   sessions(projectId: string): ClaudeConsoleSession[] {
     const sp = this.deps.service.requireProject(projectId);
     const ids = new Set(this.appProjectsOf(sp).map((p) => p.id));
+    const agents = this.agents();
     return this.deps.consoles()
-      .filter((c) => c.kind === 'claude' && c.status === 'running' && ids.has(c.projectId))
+      .filter((c) => agents.includes(c.kind as AgentKind) && c.status === 'running' && ids.has(c.projectId))
       .map((c) => {
-        const state = this.state(c.id, c.claudeSessionId);
+        const agent = c.kind as AgentKind;
+        const sid = agent === 'codex' ? c.codexSessionId ?? null : c.claudeSessionId;
+        const state = this.state(c.id, sid, agent);
         return {
-        terminalId: c.id,
-        name: cleanText(c.label, 120),
-        title: c.claudeSessionId ? cleanText(this.deps.sessionTitle?.(c.claudeSessionId) ?? '', 120) || null : null,
-        claudeSessionId: c.claudeSessionId,
-        appProjectId: c.projectId,
-        startedAt: c.startedAt,
-        lastActivityAt: c.lastActivityAt ?? null,
-        state,
-        available: state === 'idle',
-      };
+          terminalId: c.id,
+          agent,
+          name: cleanText(c.label, 120),
+          title: sid ? cleanText(this.deps.sessionTitle?.(sid, agent) ?? '', 120) || null : null,
+          claudeSessionId: c.claudeSessionId,
+          codexSessionId: c.codexSessionId ?? null,
+          appProjectId: c.projectId,
+          startedAt: c.startedAt,
+          lastActivityAt: c.lastActivityAt ?? null,
+          state,
+          available: state === 'idle',
+        };
       })
       .sort((a, b) => (b.lastActivityAt ?? b.startedAt).localeCompare(a.lastActivityAt ?? a.startedAt));
   }
 
-  /** État d'une console (voir `consoleState`) ; sans écran lisible : `unknown`. */
-  state(terminalId: string, claudeSessionId: string | null = null): ConsoleState {
+  /** État d'une console (voir `consoleState` / `codexConsoleState`) ; sans écran lisible : `unknown`. */
+  state(terminalId: string, sessionId: string | null = null, agent: AgentKind = 'claude'): ConsoleState {
     const sc = this.deps.screen(terminalId);
     if (!sc) return 'unknown';
     const last = sc.lastOutputAt ? Date.parse(sc.lastOutputAt) : NaN;
     const quiet = Number.isNaN(last) ? Infinity : (this.deps.now ?? Date.now)() - last;
-    return consoleState(sc.text, quiet, claudeSessionId && this.deps.turn ? this.deps.turn(claudeSessionId) : 'none');
+    return agentConsoleState(agent, sc.text, quiet, sessionId && this.deps.turn ? this.deps.turn(sessionId, agent) : 'none');
   }
 
-  /** Envoie la tâche à une session en cours (`terminalId`) ou à une nouvelle session (`new`), puis la marque demandée. */
-  async dispatch(projectId: string, taskId: string, target: DispatchTarget): Promise<DispatchResult> {
+  /**
+   * Envoie la tâche à une session en cours (`terminalId`) ou à une nouvelle session (`new`) de l'agent choisi
+   * (`agent`, le premier agent coché par défaut), puis la marque demandée.
+   */
+  async dispatch(projectId: string, taskId: string, target: DispatchTarget, agent?: AgentKind): Promise<DispatchResult> {
     const { service } = this.deps;
     const sp = service.requireProject(projectId);
     if (typeof taskId !== 'string' || !TASK_ID_RE.test(taskId)) throw new SuiviError(tr({ en: 'Invalid task ID', fr: 'Identifiant de tâche invalide' }));
@@ -223,23 +310,29 @@ export class SuiviDispatcher {
     if (target !== 'new' && (typeof target !== 'string' || !TERMINAL_ID_RE.test(target))) {
       throw new SuiviError(tr({ en: 'Expected target: a session (terminalId) or "new"', fr: 'Cible attendue : une session (terminalId) ou « new »' }));
     }
+    const enabled = this.agents();
+    if (agent !== undefined && (typeof agent !== 'string' || !enabled.includes(agent))) {
+      throw new SuiviError(tr({ en: 'Unknown or disabled agent (Settings → Agents)', fr: 'Agent inconnu ou désactivé (Réglages → Agents)' }));
+    }
     const prompt = buildPrompt(task, projectId, this.deps.lang());
 
     let terminalId: string, session: string;
     if (target === 'new') {
+      const who = agent ?? enabled[0] ?? 'claude';
       const app = this.appProjectsOf(sp)[0];
-      if (!app) throw new SuiviError(tr({ en: 'No project folder scanned by Tarmac for this tracker: cannot open a Claude session', fr: 'Aucun dossier de ce suivi n’est scanné par Tarmac : impossible d’ouvrir une session Claude' }), 404);
-      const t = await this.deps.openSession(app.id, prompt);
+      if (!app) throw new SuiviError(tr({ en: 'No project folder scanned by Tarmac for this tracker: cannot open a {agent} session', fr: 'Aucun dossier de ce suivi n’est scanné par Tarmac : impossible d’ouvrir une session {agent}' }, { agent: AGENT_LABEL[who] }), 404);
+      const t = await this.deps.openSession(app.id, prompt, who);
       terminalId = t.id;
       session = cleanText(t.label, 120);
     } else {
       const s = this.sessions(projectId).find((x) => x.terminalId === target);
-      if (!s) throw new SuiviError(tr({ en: 'This console is not a running Claude session of this project', fr: 'Cette console n’est pas une session Claude en cours de ce projet' }), 404);
+      if (!s || (agent && s.agent !== agent)) throw new SuiviError(tr({ en: 'This console is not a running agent session of this project', fr: 'Cette console n’est pas une session d’agent en cours de ce projet' }), 404);
       if (s.state !== 'idle') throw new SuiviError(busyMessage(s.state), 409, { state: s.state });
       this.deps.write(s.terminalId, pasteSequence(prompt));
       await (this.deps.delay ?? ((ms) => new Promise((r) => setTimeout(r, ms))))(150);
       // Une boîte de permission apparue entre-temps : pas d'Entrée (elle l'approuverait).
-      if (this.state(s.terminalId, s.claudeSessionId) === 'permission') throw new SuiviError(busyMessage('permission'), 409, { state: 'permission' });
+      const sid = s.agent === 'codex' ? s.codexSessionId : s.claudeSessionId;
+      if (this.state(s.terminalId, sid, s.agent) === 'permission') throw new SuiviError(busyMessage('permission'), 409, { state: 'permission' });
       this.deps.write(s.terminalId, '\r');
       terminalId = s.terminalId;
       session = s.name;

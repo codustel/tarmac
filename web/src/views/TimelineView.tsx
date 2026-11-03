@@ -128,7 +128,7 @@ export function TimelineView({ onOpenProject, onHide }: { onOpenProject: (id: st
 function Entry({ e, onOpenProject }: { e: TimelineEvent; onOpenProject: (id: string, tab?: PanelTab) => void }) {
   const t = useT();
   const color = colorOf(e);
-  const tab: PanelTab | undefined = e.type === 'session' ? 'claude' : e.type === 'task' ? 'todolist' : undefined;
+  const tab: PanelTab | undefined = e.type === 'session' ? (e.agent === 'codex' ? 'codex' : 'claude') : e.type === 'task' ? 'todolist' : undefined;
   let meta: string;
   switch (e.type) {
     case 'commit': meta = [e.hash, e.branch, e.author].filter(Boolean).join(' · '); break;

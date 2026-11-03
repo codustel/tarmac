@@ -5,8 +5,8 @@ import type { TurnState } from './claude.js';
 
 /**
  * Agents en cours, partout (consoles de Tarmac, Terminal, app Claude, IDE) : process rattachés à leur session,
- * état (au travail / au repos) et agents en arrière-plan. Indépendant de l'agent : `agent` vaut `claude`
- * aujourd'hui (Codex : tâche 7.7, mêmes champs).
+ * état (au travail / au repos) et agents en arrière-plan. Indépendant de l'agent (`claude` ou `codex`) : seuls
+ * le tour de parole (`turn`), le transcript et les sous-agents (Claude Code) sont propres à chacun.
  */
 
 /** Agent en arrière-plan d'une session (sous-agent lancé par l'outil Agent / Task de Claude Code). */
@@ -81,36 +81,45 @@ export interface AgentTerminal {
   kind: string;
   status: string;
   claudeSessionId: string | null;
+  /** Session Codex de la console (reprise), si connue. */
+  codexSessionId?: string | null;
   startedAt: string;
   cwd: string | null;
 }
 
 export interface BuildInput {
   procs: AgentProc[];
-  sessions: Array<{ id: string; cwd: string; title: string; updatedAt: string }>;
+  /** Sessions de tous les agents (`agent` absent = Claude). */
+  sessions: Array<{ id: string; cwd: string; title: string; updatedAt: string; agent?: AgentKind }>;
   terminals: AgentTerminal[];
-  turn: (sessionId: string) => TurnState;
-  transcriptOf: (sessionId: string) => string | null;
+  turn: (sessionId: string, agent: AgentKind) => TurnState;
+  transcriptOf: (sessionId: string, agent: AgentKind) => string | null;
+  /** Agents en arrière-plan (sous-agents de Claude Code ; Codex n'en déclare pas). */
   background?: (transcript: string) => BackgroundAgent[];
   now?: number;
 }
+
+/** Agent d'une console de Tarmac (`kind`), ou null pour une console ordinaire. */
+const terminalAgent = (kind: string): AgentKind | null => (kind === 'claude' || kind === 'codex' ? kind : null);
+const terminalSession = (t: AgentTerminal) => (t.kind === 'codex' ? t.codexSessionId ?? null : t.claudeSessionId);
 
 /** Liste des agents en cours (testable : toutes les sources sont fournies). */
 export function buildRunningAgents(input: BuildInput): RunningAgent[] {
   const now = input.now ?? Date.now();
   const background = input.background ?? ((f: string) => backgroundAgents(f, now));
-  const sessions = new Map(input.sessions.map((s) => [s.id, s]));
+  const sessionKey = (agent: AgentKind, id: string) => `${agent}:${id}`;
+  const sessions = new Map(input.sessions.map((s) => [sessionKey(s.agent ?? 'claude', s.id), s]));
   const running = input.terminals.filter((t) => t.status === 'running' && t.pid);
   const attached = attachSessions(input.procs, input.sessions);
   const usedTerminals = new Set<string>();
 
   const finish = (base: Omit<RunningAgent, 'key' | 'state' | 'background' | 'working' | 'title' | 'lastActivityAt'> & { status: 'busy' | 'idle' | null; statusAt: string | null; name: string | null }): RunningAgent => {
-    const s = base.sessionId ? sessions.get(base.sessionId) : undefined;
+    const s = base.sessionId ? sessions.get(sessionKey(base.agent, base.sessionId)) : undefined;
     const lastActivityAt = [s?.updatedAt, base.statusAt].filter((x): x is string => !!x).sort().at(-1) ?? null;
     let state: RunningAgent['state'] = 'idle';
     if (base.status) state = base.status === 'busy' ? 'working' : 'idle';
-    else if (base.sessionId && input.turn(base.sessionId) === 'working' && lastActivityAt && now - Date.parse(lastActivityAt) < TURN_STALE_MS) state = 'working';
-    const file = base.sessionId ? input.transcriptOf(base.sessionId) : null;
+    else if (base.sessionId && input.turn(base.sessionId, base.agent) === 'working' && lastActivityAt && now - Date.parse(lastActivityAt) < TURN_STALE_MS) state = 'working';
+    const file = base.sessionId && base.agent === 'claude' ? input.transcriptOf(base.sessionId, base.agent) : null;
     const bg = file ? background(file) : [];
     const { status: _s, statusAt: _a, name, ...rest } = base;
     return { ...rest, key: `${base.agent}:${base.pid}`, title: s?.title || name || null, lastActivityAt, state, background: bg, working: state === 'working' || bg.length > 0 };
@@ -119,7 +128,7 @@ export function buildRunningAgents(input: BuildInput): RunningAgent[] {
   const out: RunningAgent[] = input.procs.map((p) => {
     const a = attached.get(p.pid) ?? { sessionId: null, match: 'none' as const };
     const term = running.find((t) => t.pid === p.pid || p.ancestors.includes(t.pid!))
-      ?? (a.sessionId ? running.find((t) => t.claudeSessionId === a.sessionId) : undefined);
+      ?? (a.sessionId ? running.find((t) => terminalAgent(t.kind) === p.agent && terminalSession(t) === a.sessionId) : undefined);
     if (term) usedTerminals.add(term.id);
     return finish({
       agent: p.agent, pid: p.pid, sessionId: a.sessionId, match: a.match, cwd: p.cwd, startedAt: p.startedAt,
@@ -127,12 +136,14 @@ export function buildRunningAgents(input: BuildInput): RunningAgent[] {
       status: p.pidFile?.status ?? null, statusAt: p.pidFile?.updatedAt ?? null, name: p.pidFile?.name ?? null,
     });
   });
-  // Consoles Claude de Tarmac dont le process n'a pas (encore) été vu : connues sans `ps`.
+  // Consoles d'agent de Tarmac dont le process n'a pas (encore) été vu : connues sans `ps`.
   for (const t of running) {
-    if (t.kind !== 'claude' || usedTerminals.has(t.id)) continue;
-    if (t.claudeSessionId && out.some((x) => x.sessionId === t.claudeSessionId)) continue;
+    const agent = terminalAgent(t.kind);
+    if (!agent || usedTerminals.has(t.id)) continue;
+    const sid = terminalSession(t);
+    if (sid && out.some((x) => x.agent === agent && x.sessionId === sid)) continue;
     out.push(finish({
-      agent: 'claude', pid: t.pid!, sessionId: t.claudeSessionId, match: 'tarmac', cwd: t.cwd, startedAt: t.startedAt,
+      agent, pid: t.pid!, sessionId: sid, match: 'tarmac', cwd: t.cwd, startedAt: t.startedAt,
       where: 'tarmac', app: 'Tarmac', terminalId: t.id, status: null, statusAt: null, name: null,
     }));
   }

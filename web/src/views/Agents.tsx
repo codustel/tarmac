@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { Bot, ChevronDown, ChevronRight, SquareTerminal } from 'lucide-react';
+import { Bot, ChevronDown, ChevronRight, Hexagon, SquareTerminal } from 'lucide-react';
 import { api, type AgentKind, type RunningAgent } from '../api';
 import { Button, cx, tildify, timeAgo } from '../ui';
 import { useT } from '../i18n';
@@ -8,14 +8,29 @@ import { TechIcon } from '../icons';
 
 /**
  * Agents en cours, partout : LED commune, icône et couleur par agent, liste détaillée (où, état, agents en
- * arrière-plan). Indépendant de l'agent : un nouvel agent (Codex, tâche 7.7) ajoute son entrée à AGENTS.
+ * arrière-plan). Indépendant de l'agent : chaque agent a son entrée dans AGENTS.
  */
-export const AGENTS: Record<AgentKind, { label: string; color: string }> = {
-  claude: { label: 'Claude Code', color: 'var(--agent-claude)' },
+export const AGENTS: Record<AgentKind, { label: string; short: string; color: string }> = {
+  claude: { label: 'Claude Code', short: 'Claude', color: 'var(--agent-claude)' },
+  codex: { label: 'Codex (ChatGPT)', short: 'Codex', color: 'var(--agent-codex)' },
 };
 
+/** Icône de Codex : glyphe neutre à la couleur de l'agent (pas de logo de marque). */
+export const CodexIcon = ({ size = 14, className }: { size?: number; className?: string }) => (
+  <Hexagon aria-label="Codex" className={className} style={{ width: size, height: size, color: 'var(--agent-codex)' }} />
+);
+
 export function AgentIcon({ agent, size = 13 }: { agent: AgentKind; size?: number }) {
-  return agent === 'claude' ? <TechIcon id="claude" label="Claude" size={size} /> : <Bot style={{ width: size, height: size }} />;
+  if (agent === 'claude') return <TechIcon id="claude" label="Claude" size={size} />;
+  if (agent === 'codex') return <CodexIcon size={size} />;
+  return <Bot style={{ width: size, height: size }} />;
+}
+
+/** Agents cochés dans Réglages → Agents (Claude seul tant que les réglages ne sont pas chargés). */
+export function useEnabledAgents(): AgentKind[] {
+  const s = useQuery({ queryKey: ['settings'], queryFn: api.settings, staleTime: 60_000 });
+  const a = s.data?.agents ?? { claude: true, codex: false };
+  return useMemo(() => (['claude', 'codex'] as const).filter((k) => a[k]), [a.claude, a.codex]); // eslint-disable-line react-hooks/exhaustive-deps
 }
 
 /** Agents en cours sur la machine (rafraîchis toutes les 4 s, partagés par toutes les vues). */

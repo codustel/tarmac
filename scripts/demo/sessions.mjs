@@ -80,6 +80,67 @@ export const RUNNING_AGENTS = [
 ];
 export const sessionIdOf = (project, title) => uuidOf(`${project}:${title}`);
 
+// ─── Codex (ChatGPT) ────────────────────────────────────────────────────────
+/** Sessions Codex factices (transcripts « rollout » dans <home>/.codex/sessions), mêmes champs que SESSIONS. */
+export const CODEX_SESSIONS = [
+  {
+    project: 'rocket-api', title: 'Rate limiting on the public endpoints', branch: 'feat/rate-limit', age: 0.4 * H, span: 1.2 * H,
+    chat: [
+      ['user', 'Add rate limiting to the public endpoints: 60 requests per minute per API key, with a Retry-After header.'],
+      ['assistant', 'I added a token-bucket limiter as a Fastify plugin, keyed by API key, and a Retry-After header on 429 responses. Tests cover the limit and the reset.'],
+    ],
+  },
+  {
+    project: 'nebula-store', title: 'Product search with filters', branch: 'feat/search', age: 1.5 * D, span: 2 * H,
+    chat: [
+      ['user', 'Add a search box to the catalogue with category and price filters, debounced.'],
+      ['assistant', 'Search is in place: a debounced input, category chips and a price range, all synced to the URL so results can be shared.'],
+    ],
+  },
+  {
+    project: 'launch-queue', title: 'Dead-letter queue for failed launches', branch: 'main', age: 5 * D, span: 1 * H,
+    chat: [
+      ['user', 'Failed launch jobs should go to a dead-letter queue after 5 attempts.'],
+      ['assistant', 'Done: after the fifth attempt a job moves to the `launches:dead` queue with its last error, and the dashboard lists them.'],
+    ],
+  },
+];
+/** Session Codex « en cours hors Tarmac » (faux `codex` qui dort, lancé par run-agents.mjs). */
+export const CODEX_RUNNING = [{ project: 'launch-queue', session: 'Dead-letter queue for failed launches' }];
+export const codexSessionIdOf = (project, title) => {
+  const u = uuidOf(`codex:${project}:${title}`);
+  return `${u.slice(0, 14)}7${u.slice(15)}`; // identifiants de fil de Codex : UUID v7
+};
+
+/** Transcript « rollout » de Codex (une ligne `{ timestamp, type, payload }` par élément), limites d'usage comprises. */
+export function codexRollout(s, cwd, now, usage = { session: 23, week: 41, plan: 'plus' }) {
+  const id = codexSessionIdOf(s.project, s.title);
+  const end = now - s.age;
+  const start = end - s.span;
+  const at = (ms) => new Date(ms).toISOString();
+  const step = s.span / Math.max(1, s.chat.length + 1);
+  const lines = [{ timestamp: at(start), type: 'session_meta', payload: { id, session_id: id, timestamp: at(start), cwd, originator: 'codex_cli_rs', cli_version: '0.98.0', source: 'cli', git: { branch: s.branch } } }];
+  let t = start;
+  for (const [role, text] of s.chat) {
+    t += step;
+    if (role === 'user') {
+      lines.push({ timestamp: at(t), type: 'event_msg', payload: { type: 'task_started' } });
+      lines.push({ timestamp: at(t), type: 'event_msg', payload: { type: 'user_message', message: text } });
+    } else {
+      lines.push({ timestamp: at(t), type: 'event_msg', payload: { type: 'agent_message', message: text } });
+      lines.push({ timestamp: at(t), type: 'event_msg', payload: { type: 'token_count', info: null, rate_limits: {
+        limit_id: 'codex', primary: { used_percent: usage.session, window_minutes: 300, resets_at: Math.round((now + 2.6 * H) / 1000) },
+        secondary: { used_percent: usage.week, window_minutes: 10080, resets_at: Math.round((now + 4.2 * D) / 1000) }, plan_type: usage.plan,
+      } } });
+      lines.push({ timestamp: at(end), type: 'event_msg', payload: { type: 'task_complete' } });
+    }
+  }
+  const d = new Date(start);
+  const stamp = d.toISOString().slice(0, 19).replace(/:/g, '-');
+  const rel = `${d.getFullYear()}/${String(d.getMonth() + 1).padStart(2, '0')}/${String(d.getDate()).padStart(2, '0')}/rollout-${stamp}-${id}.jsonl`;
+  return { id, rel, jsonl: lines.map((l) => JSON.stringify(l)).join('\n') + '\n' };
+}
+
 /** Lignes JSONL d'un transcript au format lu par Tarmac (et par Claude Code). */
 export function transcript(s, cwd, now) {
   const id = sessionIdOf(s.project, s.title);

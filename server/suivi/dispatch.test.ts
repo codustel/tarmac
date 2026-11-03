@@ -8,7 +8,7 @@ import { spawn } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { openDb } from './db.js';
 import { SuiviService } from './service.js';
-import { buildPrompt, cleanText, consoleState, pasteSequence, screenText, SuiviDispatcher, type ConsoleInfo } from './dispatch.js';
+import { buildPrompt, cleanText, codexConsoleState, consoleState, isCodexFooterLine, pasteSequence, screenText, SuiviDispatcher, type ConsoleInfo } from './dispatch.js';
 import { countTasks, sanitizeTask } from './types.js';
 
 const ROOT = '/dev/acme-shop';
@@ -228,6 +228,120 @@ test('envoi : une permission apparue pendant le collage bloque la touche Entrée
   await assert.rejects(d.dispatch('acme/shop', 't-4-12', 'a'), (e: any) => e.statusCode === 409 && e.data?.state === 'permission');
   assert.deepEqual(writes.map(([, data]) => data.startsWith('\x1b[200~')), [true], 'collage seul, jamais de \\r');
   assert.equal(s.task('acme/shop', 't-4-12')!.requestedAt, null);
+});
+
+// ─── Codex : écrans de sa TUI (ratatui : positionnement du curseur entre les zones redessinées) ───
+const AT = (row: number, col = 1) => `${ESC}[${row};${col}H`;
+const CX_IDLE = `${AT(1)}• Done: the cart drawer is in place.${AT(20)}${ESC}[1m›${ESC}[22m${AT(20, 3)}${ESC}[2mAsk Codex to do anything${ESC}[22m${AT(22, 3)}${ESC}[2m? for shortcuts${ESC}[22m${AT(22, 60)}${ESC}[2m94% context left${ESC}[22m`;
+const CX_BUSY = `${CX_IDLE}${AT(18)}${ESC}[2K• Working ${ESC}[2m(12s • esc to interrupt)${ESC}[22m${AT(20, 3)}${ESC}[2mAsk Codex to do anything${ESC}[22m`;
+const CX_APPROVAL = `${CX_IDLE}${AT(12)}Would you like to run the following command?${AT(14)}  $ rm -rf build${AT(16)}› 1. Yes, proceed (y)${AT(17)}  2. Yes, and don't ask again for commands that start with \`rm\` (p)${AT(18)}  3. No, and tell Codex what to do differently (esc)`;
+const CX_TYPING = `${CX_IDLE}${AT(20, 3)}fix the hea${ESC}[K`;
+
+test('état d’une session Codex lu sur l’écran de sa TUI', () => {
+  assert.equal(codexConsoleState(CX_IDLE, 10_000), 'idle');
+  assert.equal(codexConsoleState(CX_IDLE, 500), 'busy', 'sortie toute récente');
+  assert.equal(codexConsoleState(CX_BUSY, 10_000), 'busy', '« esc to interrupt » : au travail, même si la boîte vide est redessinée après');
+  assert.equal(codexConsoleState(CX_APPROVAL, 10_000), 'permission');
+  assert.equal(codexConsoleState(CX_APPROVAL + CX_IDLE, 10_000), 'permission', 'options d’approbation encore dans la fin d’écran : jamais au repos');
+  assert.equal(codexConsoleState(CX_APPROVAL + CX_IDLE + `${AT(1)}${'• output line\r\n'.repeat(200)}` + CX_IDLE, 10_000), 'idle', 'approbation loin derrière, boîte vide redessinée');
+  // Revue de sécurité : une ligne qui contient seulement un mot du pied de page n'est pas un pied de page.
+  const ctrlApproval = `${CX_IDLE}${AT(23)}Press ctrl+y to approve the command (y)`;
+  assert.equal(codexConsoleState(ctrlApproval, 10_000), 'permission', 'approbation avec « ctrl » dans la ligne');
+  const ctrlLine = `${CX_IDLE}${AT(23)}rm -rf build ⏎ ctrl for shortcuts 94% context left`;
+  assert.equal(codexConsoleState(ctrlLine, 10_000), 'unknown', 'ligne inconnue après la boîte vide (mots du pied de page dedans)');
+  assert.equal(codexConsoleState(`${CX_IDLE}${AT(23)}Allow network access to example.com?`, 10_000), 'permission');
+  assert.equal(codexConsoleState(`${CX_IDLE}${AT(23)}  2. No, and tell Codex`, 10_000), 'permission');
+  assert.equal(codexConsoleState(`${CX_IDLE}${AT(23)}ctrl+a for agents · ? for shortcuts${AT(23, 60)}93`, 10_000), 'idle', 'pied de page connu, chiffres redessinés');
+  assert.equal(codexConsoleState(CX_TYPING, 10_000), 'unknown', 'saisie commencée : le texte d’attente est effacé');
+  assert.equal(codexConsoleState(CX_IDLE, 10_000, 'working'), 'busy', 'transcript : tour en cours');
+  assert.equal(codexConsoleState(CX_BUSY, 10_000, 'idle'), 'idle', 'transcript : tour terminé, l’ancien indicateur non effacé est périmé');
+  assert.equal(codexConsoleState(IDLE, 10_000), 'unknown', 'écran de Claude Code : jamais pris pour Codex au repos');
+  assert.equal(codexConsoleState('', 10_000), 'unknown');
+});
+
+test('état Codex : pied de page lu mot par mot, sans retour arrière catastrophique (écran non fiable)', () => {
+  assert.ok(isCodexFooterLine('  ? for shortcuts            94% context left'));
+  assert.ok(isCodexFooterLine('ctrl+a for agents · ? for shortcuts'));
+  assert.ok(isCodexFooterLine('──────── 93'));
+  assert.ok(!isCodexFooterLine('rm -rf build ⏎ ctrl for shortcuts'));
+  assert.ok(!isCodexFooterLine('─'.repeat(400)), 'ligne trop longue');
+  for (const line of ['─'.repeat(10_000) + 'x', '1 '.repeat(5_000) + 'x', '› '.repeat(5_000) + 'x']) {
+    const t0 = performance.now();
+    assert.equal(codexConsoleState(`${CX_IDLE}${AT(23)}${line}`, 10_000), 'unknown');
+    assert.ok(performance.now() - t0 < 50, `réponse en moins de 50 ms (${Math.round(performance.now() - t0)} ms)`);
+  }
+});
+
+function codexSetup(consoles: ConsoleInfo[], screens: Screens, agents: ('claude' | 'codex')[] = ['claude', 'codex']) {
+  const s = new SuiviService(openDb(':memory:'));
+  s.registerProject({ projectId: 'acme/shop', name: 'shop', paths: [ROOT] });
+  s.importFile('acme/shop', { collection: 'tasks', exportedAt: '2026-10-10T00:00:00Z', tasks: [T('t-4-12', 12, { title: 'Ajouter le tiroir' })] });
+  const writes: [string, string][] = [];
+  const opened: [string, string, string][] = [];
+  const turns: [string, string][] = [];
+  const d = new SuiviDispatcher({
+    service: s,
+    appProjects: () => [{ id: 'shop', dir: ROOT }],
+    consoles: () => consoles,
+    sessionTitle: (id, agent) => (agent === 'codex' && id === 'cx-1' ? 'Tiroir du panier' : null),
+    write: (id, data) => { writes.push([id, data]); },
+    screen: (id) => screens[id] ?? null,
+    turn: (id, agent) => { turns.push([id, agent]); return 'idle'; },
+    agents: () => agents,
+    now: () => NOW,
+    openSession: async (appProjectId, prompt, agent) => { opened.push([appProjectId, prompt, agent]); return { id: 'new-term', label: `${agent === 'codex' ? 'Codex' : 'Claude'} · shop` }; },
+    lang: () => 'fr',
+    delay: async () => {},
+  });
+  return { s, d, writes, opened, turns };
+}
+
+test('▶ vers Codex : sessions Claude et Codex listées, envoi à une session Codex au repos', async () => {
+  const consoles = [
+    C('cl', 'shop', { lastActivityAt: '2026-11-01T10:01:00Z' }),
+    C('cx', 'shop', { kind: 'codex', label: 'Codex · shop', codexSessionId: 'cx-1', lastActivityAt: '2026-11-01T10:05:00Z' }),
+    C('cb', 'shop', { kind: 'codex', label: 'Codex · shop (2)' }),
+  ];
+  const { s, d, writes, turns } = codexSetup(consoles, {
+    cl: { text: IDLE, lastOutputAt: AGO(10_000) },
+    cx: { text: CX_IDLE, lastOutputAt: AGO(10_000) },
+    cb: { text: CX_BUSY, lastOutputAt: AGO(10_000) },
+  });
+  const list = d.sessions('acme/shop');
+  assert.deepEqual(list.map((x) => [x.terminalId, x.agent, x.state]), [['cx', 'codex', 'idle'], ['cl', 'claude', 'idle'], ['cb', 'codex', 'busy']]);
+  assert.equal(list[0].title, 'Tiroir du panier');
+  assert.ok(turns.some(([id, agent]) => id === 'cx-1' && agent === 'codex'), 'tour de parole lu dans le transcript de Codex');
+  // Un écran de Codex n'est jamais lu avec les règles de Claude (et inversement).
+  await assert.rejects(d.dispatch('acme/shop', 't-4-12', 'cb'), (e: any) => e.statusCode === 409 && e.data?.state === 'busy');
+  assert.equal(writes.length, 0);
+  const r = await d.dispatch('acme/shop', 't-4-12', 'cx');
+  assert.deepEqual(writes.map(([id, data]) => [id, data.startsWith('\x1b[200~') ? 'paste' : data]), [['cx', 'paste'], ['cx', '\r']]);
+  assert.equal(s.task('acme/shop', 't-4-12')!.requestedTo, 'Codex · shop');
+  assert.equal(r.session, 'Codex · shop');
+});
+
+test('▶ nouvelle session : agent choisi (Codex), agent désactivé ou inconnu refusé', async () => {
+  const { d, opened } = codexSetup([], {});
+  await d.dispatch('acme/shop', 't-4-12', 'new', 'codex');
+  assert.equal(opened[0][2], 'codex');
+  const off = codexSetup([], {}, ['claude']);
+  await assert.rejects(off.d.dispatch('acme/shop', 't-4-12', 'new', 'codex'), (e: any) => e.statusCode === 400 && /désactivé|disabled/.test(e.message));
+  await assert.rejects(off.d.dispatch('acme/shop', 't-4-12', 'new', 'gpt' as any), (e: any) => e.statusCode === 400);
+  assert.equal(off.opened.length, 0);
+  // Sans agent : le premier agent coché (Codex seul ici).
+  const only = codexSetup([], {}, ['codex']);
+  await only.d.dispatch('acme/shop', 't-4-12', 'new');
+  assert.equal(only.opened[0][2], 'codex');
+});
+
+test('Claude seul (défaut) : les consoles Codex ne sont ni listées ni joignables', async () => {
+  const consoles = [C('cl', 'shop'), C('cx', 'shop', { kind: 'codex' })];
+  const { d, writes } = codexSetup(consoles, { cl: { text: IDLE, lastOutputAt: AGO(10_000) }, cx: { text: CX_IDLE, lastOutputAt: AGO(10_000) } }, ['claude']);
+  assert.deepEqual(d.sessions('acme/shop').map((x) => x.terminalId), ['cl']);
+  await assert.rejects(d.dispatch('acme/shop', 't-4-12', 'cx'), (e: any) => e.statusCode === 404);
+  assert.equal(writes.length, 0);
+  // Dispatcher sans réglage d'agents (comme avant Codex) : Claude seul.
+  assert.deepEqual(setup(consoles).d.agents(), ['claude']);
 });
 
 // ─── Serveur MCP en mode artefact : les outils exposés et le relais vers l'API ───

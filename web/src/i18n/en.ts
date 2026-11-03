@@ -10,6 +10,7 @@ import supabase from './en/supabase';
 import docker from './en/docker';
 import android from './en/android';
 import activity from './en/activity';
+import codex from './en/codex';
 
 /** English dictionary (fallback language). Typed on `fr`: a missing key is a typecheck error. */
-export const en: Dict = { ...common, ...settings, ...claude, ...todolist, ...projects, ...ide, ...github, ...supabase, ...docker, ...android, ...activity };
+export const en: Dict = { ...common, ...settings, ...claude, ...todolist, ...projects, ...ide, ...github, ...supabase, ...docker, ...android, ...activity, ...codex };

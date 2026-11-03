@@ -50,3 +50,9 @@ export function paramsOf(e: Entry): string[] {
   const all = typeof e === 'string' ? [e] : Object.values(e).filter((x): x is string => typeof x === 'string');
   return [...new Set(all.flatMap((s) => [...s.matchAll(/\{(\w+)\}/g)].map((m) => m[1])))].sort();
 }
+
+/**
+ * Nom neutre de la Todolist quand Codex est coché (Réglages → Agents) : « Todolist Claude » / « Claude Todolist »
+ * deviennent « Todolist ». Claude seul : textes inchangés.
+ */
+export const neutralTodolist = (s: string) => s.replace(/Todolist Claude|Claude Todolist/g, 'Todolist');

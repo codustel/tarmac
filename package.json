@@ -48,6 +48,7 @@
     "scripts/suivi-install.sh",
     "templates/",
     "claude/",
+    "codex/",
     "LICENSE",
     "README.md"
   ],

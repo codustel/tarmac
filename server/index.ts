@@ -20,6 +20,8 @@ import { EDITOR_APPS, matchOpen, openEditorFolders } from './editors.js';
 import crypto from 'node:crypto';
 import { assignSessions, claudeCommand, claudeDir, claudeProcs, claudeTurnState, listClaudeSessions, transcriptFile } from './claude.js';
 import { buildRunningAgents, type RunningAgent } from './agents.js';
+import { codexCommand, codexProcs, codexTranscriptFile, codexTurnState, listCodexSessions, readCodexUsage, type CodexUsage } from './codex.js';
+import type { AgentKind } from './agentProcs.js';
 import { RepoEventsCache, TIMELINE_DAYS, mergeTimeline, type TimelineEvent, type TimelineRepo } from './timeline.js';
 import { ClaudeUsageService, readCredentials } from './claudeUsage.js';
 import { GIT_COMMANDS, buildGitCommand } from './gitCommands.js';
@@ -255,6 +257,8 @@ app.put<{ Body: SettingsPatch }>('/api/settings', async (req, reply) => {
   if (errors.length) return reply.code(400).send({ error: errors.join(' · '), errors });
   if (req.body.github) invalidateGithubCache();
   if (req.body.suivi?.folder) setSuiviDir(settings.suivi.folder);
+  // Agents cochés : la timeline (sessions par agent) et l'usage Codex sont recalculés.
+  if (req.body.agents || req.body.showCodexUsage !== undefined) { timelineMemo = null; codexUsageMemo = null; }
   if (req.body.roots || req.body.scanMaxDepth !== undefined || req.body.showAllProjects !== undefined || req.body.suivi?.folder) await rescan();
   return publicSettings();
 });
@@ -269,7 +273,15 @@ app.get('/api/projects', async () => {
   const sbConfigs = new Map(lastScan.supabaseConfigs.map((c) => [c.projectId, c]));
   const folders = await openEditorFolders().catch(() => []);
   const claude = assignSessions(await listClaudeSessions().catch(() => []), lastScan.projects.map((p) => p.dir));
+  const codex = settings.agents.codex ? assignSessions(await listCodexSessions().catch(() => []), lastScan.projects.map((p) => p.dir)) : null;
   const running = assignSessions((await runningAgents().catch(() => [])).flatMap((a) => (a.cwd ? [{ ...a, cwd: a.cwd }] : [])), lastScan.projects.map((p) => p.dir));
+  /** Sessions d'un agent et agents en cours (Tarmac ou ailleurs) dans le dossier d'un projet. */
+  const agentInfo = (sessions: Map<string, { updatedAt: string }[]>, agent: AgentKind, dir: string) => {
+    const list = sessions.get(dir) ?? [];
+    // `active` : sessions en cours (Tarmac ou ailleurs), `working` : celles où un agent travaille.
+    const live = (running.get(dir) ?? []).filter((a) => a.agent === agent);
+    return { count: list.length, active: live.length, working: live.filter((a) => a.working).length, lastAt: list[0]?.updatedAt ?? null };
+  };
   const ghPushed = new Map(cachedGithubRepos().map((r) => [r.key, r.pushedAt]));
   return Promise.all(
     lastScan.projects.map(async (p) => {
@@ -308,12 +320,9 @@ app.get('/api/projects', async () => {
         envFiles: listEnvFiles(p.dir),
         openIn: matchOpen(p.dir, folders),
         favorite: settings.favorites.includes(p.dir),
-        claude: (() => {
-          const list = claude.get(p.dir) ?? [];
-          // `active` : sessions en cours (Tarmac ou ailleurs), `working` : celles où un agent travaille.
-          const live = running.get(p.dir) ?? [];
-          return { count: list.length, active: live.length, working: live.filter((a) => a.working).length, lastAt: list[0]?.updatedAt ?? null };
-        })(),
+        claude: agentInfo(claude, 'claude', p.dir),
+        // Codex : seulement s'il est coché dans Réglages → Agents.
+        codex: codex ? agentInfo(codex, 'codex', p.dir) : null,
       };
     }),
   );
@@ -536,24 +545,30 @@ app.post<{ Params: { id: string }; Body: { commandId?: string; shell?: boolean; 
 );
 app.get('/api/terminals', async () => terminals.list());
 
-// « Envoyer à Claude » : sessions Claude des consoles de Tarmac rattachées aux dossiers d'un projet de suivi.
+/** Agents cochés dans Réglages → Agents (Claude d'abord). */
+const enabledAgents = (): AgentKind[] => (['claude', 'codex'] as const).filter((a) => settings.agents[a]);
+
+// « Envoyer à Claude / Codex » : sessions d'agent des consoles de Tarmac rattachées aux dossiers d'un projet de suivi.
 let claudeTitles = new Map<string, string>();
+let codexTitles = new Map<string, string>();
 const suiviDispatcher = new SuiviDispatcher({
   service: suivi,
   appProjects: () => lastScan.projects.map((p) => ({ id: p.id, dir: p.dir })),
   consoles: () => {
-    // Titres des sessions (/rename, résumé) rafraîchis en arrière-plan (cache de 8 s de listClaudeSessions).
-    listClaudeSessions().then((all) => { claudeTitles = new Map(all.filter((x) => x.titleSource === 'custom' || x.titleSource === 'summary').map((x) => [x.id, x.title])); }).catch(() => {});
+    // Titres des sessions (/rename, résumé) rafraîchis en arrière-plan (cache de 8 s des listes de sessions).
+    if (settings.agents.claude) listClaudeSessions().then((all) => { claudeTitles = new Map(all.filter((x) => x.titleSource === 'custom' || x.titleSource === 'summary').map((x) => [x.id, x.title])); }).catch(() => {});
+    if (settings.agents.codex) runningAgents().then(() => listCodexSessions()).then((all) => { codexTitles = new Map(all.filter((x) => x.titleSource === 'custom').map((x) => [x.id, x.title])); }).catch(() => {});
     return terminals.list();
   },
-  sessionTitle: (id) => claudeTitles.get(id) ?? null,
+  sessionTitle: (id, agent) => (agent === 'codex' ? codexTitles : claudeTitles).get(id) ?? null,
   write: (id, data) => terminals.write(id, data),
   screen: (id) => terminals.screen(id),
-  turn: claudeTurnState,
-  openSession: async (appProjectId, prompt) => {
+  turn: (id, agent) => (agent === 'codex' ? codexTurnState(id) : claudeTurnState(id)),
+  agents: enabledAgents,
+  openSession: async (appProjectId, prompt, agent) => {
     const p = findProject(appProjectId);
     if (!p) throw Object.assign(new Error(msg('api.unknownProject')), { statusCode: 404 });
-    return openClaudeConsole(p, { prompt });
+    return agent === 'codex' ? openCodexConsole(p, { prompt }) : openClaudeConsole(p, { prompt });
   },
   lang: uiLang,
 });
@@ -655,6 +670,40 @@ const claudeUsage = new ClaudeUsageService({
 });
 app.get('/api/claude/usage', async () => claudeUsage.get());
 
+// ─── Sessions Codex (ChatGPT), si Codex est coché ───────────────────────────
+const withCodexTerminal = <T extends { id: string }>(s: T) => ({ ...s, terminalId: terminals.findByCodex(s.id) });
+
+app.get<{ Params: { id: string }; Querystring: { force?: string } }>('/api/projects/:id/codex-sessions', async (req, reply) => {
+  const p = findProject(req.params.id);
+  if (!p) return reply.code(404).send({ error: msg('api.unknownProject') });
+  if (!settings.agents.codex) return [];
+  await runningAgents().catch(() => []); // consoles Codex de Tarmac rattachées à leur session
+  const all = await listCodexSessions(req.query.force === '1');
+  return all.filter((s) => s.cwd === p.dir || s.cwd.startsWith(p.dir + path.sep)).map(withCodexTerminal);
+});
+
+app.get('/api/codex/sessions', async () => {
+  if (!settings.agents.codex) return [];
+  await runningAgents().catch(() => []);
+  const all = await listCodexSessions();
+  const projectOf = projectsOf(all, (s) => s.id);
+  return all.map((s) => ({ ...withCodexTerminal(s), project: projectOf.get(s.id) ?? null }));
+});
+
+/**
+ * Utilisation du plan ChatGPT pour Codex : dernières limites enregistrées par Codex dans ses transcripts locaux
+ * (aucun réseau, aucun jeton lu ; voir readCodexUsage). Rien si Codex n'est pas coché ou si l'affichage est coupé.
+ */
+let codexUsageMemo: { at: number; u: CodexUsage } | null = null;
+app.get('/api/codex/usage', async (): Promise<CodexUsage> => {
+  if (!settings.agents.codex || !settings.showCodexUsage) return { status: 'disabled', plan: null, limits: [], fetchedAt: null };
+  if (codexUsageMemo && Date.now() - codexUsageMemo.at < 30_000) return codexUsageMemo.u;
+  let u: CodexUsage;
+  try { u = readCodexUsage(); } catch { u = { status: 'error', plan: null, limits: [], fetchedAt: null }; }
+  codexUsageMemo = { at: Date.now(), u };
+  return u;
+});
+
 /** Nom affiché d'un projet (« Groupe › app » pour une app d'un groupe). */
 const projectLabel = (p: Project) => {
   const child = p.name === p.group.name ? p.techName : p.name;
@@ -679,15 +728,26 @@ app.get('/api/claude/sessions', async () => {
 // ─── Agents en cours (Tarmac et ailleurs) ───────────────────────────────────
 /** Sessions d'agent en cours, rattachées à leur session, console de Tarmac et sous-agents (voir agents.ts). */
 async function runningAgents(): Promise<RunningAgent[]> {
-  const [procs, sessions] = await Promise.all([claudeProcs().catch(() => []), listClaudeSessions().catch(() => [])]);
+  const { claude, codex } = settings.agents;
+  const [cProcs, cSessions, xProcs, xSessions] = await Promise.all([
+    claude ? claudeProcs().catch(() => []) : [],
+    claude ? listClaudeSessions().catch(() => []) : [],
+    codex ? codexProcs().catch(() => []) : [],
+    codex ? listCodexSessions().catch(() => []) : [],
+  ]);
   const dirOf = new Map(lastScan.projects.map((p) => [p.id, p.dir]));
-  return buildRunningAgents({
-    procs,
-    sessions,
-    terminals: terminals.list().map((t) => ({ ...t, cwd: dirOf.get(t.projectId) ?? null })),
-    turn: claudeTurnState,
-    transcriptOf: transcriptFile,
+  const kinds = new Set<string>(enabledAgents());
+  const list = buildRunningAgents({
+    procs: [...cProcs, ...xProcs],
+    sessions: [...cSessions, ...xSessions],
+    terminals: terminals.list().filter((t) => !['claude', 'codex'].includes(t.kind) || kinds.has(t.kind)).map((t) => ({ ...t, cwd: dirOf.get(t.projectId) ?? null })),
+    turn: (id, agent) => (agent === 'codex' ? codexTurnState(id) : claudeTurnState(id)),
+    transcriptOf: (id, agent) => (agent === 'codex' ? codexTranscriptFile(id) : transcriptFile(id)),
   });
+  // Console Codex de Tarmac : sa session est connue dès que le process est rattaché à son transcript (reprise,
+  // « Relancer », titre dans ▶).
+  for (const a of list) if (a.agent === 'codex' && a.terminalId && a.sessionId) terminals.setCodexSession(a.terminalId, a.sessionId);
+  return list;
 }
 
 app.get('/api/agents/running', async () => {
@@ -716,11 +776,14 @@ async function computeTimeline(): Promise<TimelineEvent[]> {
   repoEvents.retain(repos.map((r) => r.dir));
   const git = await pool(repos, 6, (r) => repoEvents.events(r, since).catch(() => []));
 
-  const sessions = (await listClaudeSessions().catch(() => [])).filter((s) => s.createdAt && Date.parse(s.createdAt) >= since);
-  const sessionProject = projectsOf(sessions, (s) => s.id);
+  const sessions = [
+    ...(settings.agents.claude ? (await listClaudeSessions().catch(() => [])).map((s) => ({ ...s, agent: 'claude' as const })) : []),
+    ...(settings.agents.codex ? await listCodexSessions().catch(() => []) : []),
+  ].filter((s) => s.createdAt && Date.parse(s.createdAt) >= since);
+  const sessionProject = projectsOf(sessions, (s) => `${s.agent}:${s.id}`);
   const sessionEvents: TimelineEvent[] = sessions.map((s) => {
-    const p = sessionProject.get(s.id);
-    return { id: `session:claude:${s.id}`, type: 'session', at: s.createdAt!, projectId: p?.id ?? null, projectName: p?.name ?? path.basename(s.cwd), text: s.title, agent: 'claude', sessionId: s.id, branch: s.gitBranch };
+    const p = sessionProject.get(`${s.agent}:${s.id}`);
+    return { id: `session:${s.agent}:${s.id}`, type: 'session', at: s.createdAt!, projectId: p?.id ?? null, projectName: p?.name ?? path.basename(s.cwd), text: s.title, agent: s.agent, sessionId: s.id, branch: s.gitBranch };
   });
 
   const taskEvents: TimelineEvent[] = [];
@@ -798,6 +861,56 @@ app.post<{ Params: { id: string }; Body: { resume?: string; prompt?: string; col
   if (!p) return reply.code(404).send({ error: msg('api.unknownProject') });
   try {
     return await openClaudeConsole(p, req.body ?? {});
+  } catch (e: any) {
+    return reply.code(e.statusCode ?? 500).send({ error: e.message });
+  }
+});
+
+/**
+ * Ouvre une session Codex dans une console de Tarmac : nouvelle (premier message facultatif) ou reprise
+ * (`codex resume <id>`). Seulement si Codex est coché dans Réglages → Agents. Erreur avec `statusCode`.
+ */
+async function openCodexConsole(p: Project, opts: { resume?: string; prompt?: string; cols?: number; rows?: number }) {
+  if (!settings.agents.codex) throw Object.assign(new Error(msg('api.agentDisabled')), { statusCode: 400 });
+  const { resume, cols, rows } = opts;
+  let prompt = typeof opts.prompt === 'string' ? opts.prompt.trim().slice(0, 4000) : undefined;
+  // `$suivi …` avant l'installation du skill pour Codex (tarmac setup) : Codex lit le skill du dépôt de Tarmac.
+  const skillHome = path.join(os.homedir(), '.agents', 'skills', 'suivi', 'SKILL.md');
+  if (prompt && /^[$/]suivi\b/.test(prompt) && !fs.existsSync(skillHome)) {
+    const skill = path.join(APP_ROOT, 'codex', 'skills', 'suivi', 'SKILL.md');
+    prompt = `The $suivi skill (Todolist) is not installed for Codex yet: read ${skill} and apply it to run "${prompt.replace(/^\//, '$')}" on this project. Answer in the user's language.`;
+  }
+  if (resume) {
+    if (!/^[0-9a-f-]{8,64}$/i.test(resume)) throw Object.assign(new Error(msg('api.badSessionId')), { statusCode: 400 });
+    const open = terminals.findByCodex(resume);
+    if (open) return terminals.list().find((t) => t.id === open)!;
+  }
+  try {
+    if (!isDemo()) await exec('/bin/sh', ['-c', 'command -v codex'], { env: process.env, timeout: 3000 });
+  } catch {
+    throw Object.assign(new Error(msg('api.noCodexCli')), { statusCode: 400 });
+  }
+  const displayName = p.group.isRoot || p.group.type === 'single' ? p.name : `${p.group.name} · ${p.name === p.group.name ? p.techName : p.name}`;
+  const title = resume ? (await listCodexSessions()).find((s) => s.id === resume)?.title : undefined;
+  // Mode démo : `codex` résolu vers le faux Codex des fixtures (jamais le vrai).
+  const d = demo();
+  const target = d ? { ...p, pathPrepend: [demoBinDir(d, 'codex'), ...p.pathPrepend] } : p;
+  return terminals.create(target, {
+    command: codexCommand(resume ? { resume } : { prompt }),
+    label: resume ? (title ?? tr({ en: 'Resumed session', fr: 'Session reprise' })) : `Codex · ${displayName}`,
+    kind: 'codex',
+    projectName: displayName,
+    codexSessionId: resume ?? null,
+    cols,
+    rows,
+  });
+}
+
+app.post<{ Params: { id: string }; Body: { resume?: string; prompt?: string; cols?: number; rows?: number } }>('/api/projects/:id/codex', async (req, reply) => {
+  const p = findProject(req.params.id);
+  if (!p) return reply.code(404).send({ error: msg('api.unknownProject') });
+  try {
+    return await openCodexConsole(p, req.body ?? {});
   } catch (e: any) {
     return reply.code(e.statusCode ?? 500).send({ error: e.message });
   }

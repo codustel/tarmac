@@ -1,4 +1,4 @@
-import { resolveLang, translate, type Lang, type LanguageSetting, type Params } from './core';
+import { neutralTodolist, resolveLang, translate, type Lang, type LanguageSetting, type Params } from './core';
 import { fr, type TKey } from './fr';
 import { en } from './en';
 
@@ -17,7 +17,13 @@ let current: Lang = resolveLang(typeof localStorage === 'undefined' ? 'auto' : r
 
 export const getLang = () => current;
 export const setCurrentLang = (l: Lang) => { current = l; };
+let neutral = false;
+/** Codex coché : nom neutre de la Todolist aussi hors de React. */
+export const setNeutralNames = (on: boolean) => { neutral = on; };
 export { readStored, browserLangs };
 
 /** Traduction hors composant (messages construits dans api.ts, toasts de modules non React…). */
-export const translateNow = (key: TKey, params?: Params) => translate(dicts[current], current, key, params);
+export const translateNow = (key: TKey, params?: Params) => {
+  const s = translate(dicts[current], current, key, params);
+  return neutral ? neutralTodolist(s) : s;
+};

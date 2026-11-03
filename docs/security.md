@@ -18,7 +18,8 @@ Mac only. This page explains how, and what each part is allowed to do. To report
 - The "write TypeScript types to a file" Supabase command only writes inside the project: a path through a
   symbolic link that leads outside is refused.
 - No telemetry. Outgoing calls are limited to `git fetch` on your repositories, the GitHub API with your token,
-  and, for the Claude usage panel, `api.anthropic.com` with Claude Code's own token (see below).
+  and, for the Claude usage panel, `api.anthropic.com` with Claude Code's own token (see below). The Codex usage
+  panel makes no call at all.
 
 Do not set `TARMAC_HOST=0.0.0.0` or put Tarmac behind a tunnel: anyone who reaches the UI can run commands as
 you. To use your projects from another device, use Claude Code's Remote Control (sessions) or your own VPN.
@@ -54,6 +55,16 @@ Projects are only searched in the folders you list in **Settings**.
   `https://api.anthropic.com/api/oauth/usage` (redirects refused). It never stores, logs or refreshes it, and never
   sends it to the browser: `/api/claude/usage` returns only the plan, percentages and reset dates. Turn it off in
   **Settings → Interface → Claude usage**; nothing is read while it is off.
+- **Codex (ChatGPT)**: Tarmac never reads Codex's sign-in (`~/.codex/auth.json`) nor any OpenAI token. Sessions,
+  turn state and the usage panel come from Codex's own session files (`~/.codex/sessions`, read only); usage is the
+  last limits Codex recorded there. Nothing is read when Codex is not ticked in **Settings → Agents**.
+- **▶ to Claude or Codex**: a task is typed only into an idle session of a Tarmac console, with control characters
+  removed; a screen showing an approval prompt (Claude's "Do you want to proceed?", Codex's "Would you like to run
+  the following command?", any "1. Yes / 2. No" list) or anything unrecognized is refused, so Enter never answers
+  a permission request. The screen is parsed word by word with bounded lines (no backtracking-prone pattern).
+- `tarmac setup --with-codex` writes only marked blocks (`~/.codex/config.toml`, `~/.codex/AGENTS.md`), one hook
+  entry and the skill folder, each with a backup copy; Codex itself asks you to trust the hook (`/hooks`) before it
+  runs. The hook only reads `Todolist/suivi.config.json` (validated) and Tarmac's local API, like Claude's.
 
 ## What needs `sudo`, and why
 

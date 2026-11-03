@@ -12,7 +12,7 @@ import { openInIde } from '../ide/store';
 import { EnvModal } from './EnvModal';
 import { STATUS_KEY, hasBrowser, type PanelTab } from './ProjectPanel';
 import { ClaudeIcon } from './ClaudeSessions';
-import { AgentLed, useAgentSummary, useRunningAgents } from './Agents';
+import { AgentIcon, AgentLed, CodexIcon, useAgentSummary, useEnabledAgents, useRunningAgents } from './Agents';
 import type { RunningAgent } from '../api';
 import { Globe, KeyRound, Plus, Smartphone, Star } from 'lucide-react';
 
@@ -416,6 +416,7 @@ function ProjectRow({ p, header, child, loose, expandable, open, onToggle, onOpe
   const runningByProject = useContext(RunningByProject);
   const running = (agentProjects ?? [p.id]).flatMap((id) => runningByProject.get(id) ?? []);
   const runningSummary = useAgentSummary(running);
+  const agentsOn = useEnabledAgents();
   const qc = useQueryClient();
   const toast = useToast();
   const t = useT();
@@ -534,16 +535,21 @@ function ProjectRow({ p, header, child, loose, expandable, open, onToggle, onOpe
             {p.openIn && (!child || p.openIn.via === 'exact') && <EditorBadge openIn={p.openIn} />}
             {(url || header || loose) && <UrlChip p={p} url={url ?? null} />}
             {/* Sessions d'agent en cours (Tarmac ou ailleurs) ; rien quand aucune. Clic → détail dans le volet. */}
-            {running.length > 0 && (
-              <button
-                onClick={() => onOpen(p.id, 'claude')}
-                title={runningSummary + t('projects.row.claudeOpenDetail')}
+            {/* Un badge par agent (icône de l'agent) : Claude seul = un seul badge, comme avant. */}
+            {(['claude', 'codex'] as const).map((k) => {
+              const mine = running.filter((a) => a.agent === k);
+              return mine.length > 0 && (
+                <button
+                  key={k}
+                  onClick={() => onOpen(p.id, k)}
+                  title={runningSummary + t('projects.row.claudeOpenDetail')}
                 className="inline-flex h-5 items-center gap-1 rounded border border-emerald-500/30 bg-emerald-500/10 px-1.5 text-[11px] font-medium text-emerald-700 hover:bg-emerald-500/15 dark:text-emerald-300"
-              >
-                <AgentLed working={running.some((a) => a.working)} size={6} />
-                <ClaudeIcon size={11} />{running.length}
-              </button>
-            )}
+                >
+                  <AgentLed working={mine.some((a) => a.working)} size={6} />
+                  <AgentIcon agent={k} size={11} />{mine.length}
+                </button>
+              );
+            })}
           </div>
           <div className="truncate font-mono text-[11px] text-faint" title={p.description ?? p.dir}>
             {(header || child) && p.appName && <span className="text-muted" title={t('projects.row.appNameHint')}>{t('projects.row.appName', { name: p.appName })}</span>}
@@ -626,9 +632,16 @@ function ProjectRow({ p, header, child, loose, expandable, open, onToggle, onOpe
               <Smartphone className="size-4" />
             </IconButton>
           )}
-          <IconButton title={t('projects.action.claude')} onClick={() => onOpen(p.id, 'claude')}>
-            <ClaudeIcon size={15} />
-          </IconButton>
+          {agentsOn.includes('claude') && (
+            <IconButton title={t('projects.action.claude')} onClick={() => onOpen(p.id, 'claude')}>
+              <ClaudeIcon size={15} />
+            </IconButton>
+          )}
+          {agentsOn.includes('codex') && (
+            <IconButton title={t('projects.action.codex')} onClick={() => onOpen(p.id, 'codex')}>
+              <CodexIcon size={15} />
+            </IconButton>
+          )}
           {p.serve && <IconButton title={t('projects.action.logs')} onClick={() => onOpen(p.id, 'logs')}><ScrollText className="size-4" /></IconButton>}
         </div>
 

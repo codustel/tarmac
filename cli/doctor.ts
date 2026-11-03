@@ -7,6 +7,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { LABEL, MIN_NODE, OLD_LABEL, c, configured, nodeOk, tilde, which, type Ctx, type Out, type Runner } from './context.js';
 import { answers, type Port80 } from './setup.js';
+import { codexPresence, settingsAgents } from './codex.js';
 
 export interface Facts {
   platform: string;
@@ -36,6 +37,10 @@ export interface Facts {
   claudeSkill: boolean;
   /** Serveur MCP sous l'ancien nom `app-manager`. */
   claudeMcpLegacy: boolean;
+  /** Agents cochés dans Réglages → Agents (absent : Claude seul). Seuls les agents cochés sont vérifiés. */
+  agents?: { claude: boolean; codex: boolean };
+  /** Codex installé et intégration de Tarmac en place (voir codex.ts). */
+  codex?: { installed: boolean; mcp: boolean; rule: boolean; skill: boolean; hook: boolean };
 }
 
 export type Level = 'ok' | 'warn' | 'fail';
@@ -82,12 +87,22 @@ export function diagnose(f: Facts): Check[] {
   else if (f.gh === 'logged-out') add('GitHub CLI', 'warn', 'gh not logged in', 'Optional (GitHub tab, Clone): gh auth login, or "Connect the gh CLI" in Settings');
   else add('GitHub CLI', 'warn', 'gh not found', 'Optional (GitHub tab, Clone): brew install gh');
   add('Docker', f.docker ? 'ok' : 'warn', f.docker ?? 'no Docker socket', f.docker ? undefined : 'Optional (local Supabase): start Docker Desktop, OrbStack or Colima');
-  if (!f.claude) add('Claude Code', 'warn', 'claude CLI not found', 'Optional (Claude sessions, Todolist): https://claude.com/claude-code');
+  const agents = f.agents ?? { claude: true, codex: false };
+  if (!agents.claude) { /* Claude Code décoché : pas vérifié */ }
+  else if (!f.claude) add('Claude Code', 'warn', 'claude CLI not found', 'Optional (Claude sessions, Todolist): https://claude.com/claude-code');
   else if (!f.claudeMcp && f.claudeMcpLegacy) add('Claude Code', 'warn', 'MCP server registered under its former name "app-manager"', 'Run: tarmac setup --with-claude (replaces it with "tarmac")');
   else if (!f.claudeMcp || !f.claudeSkill) {
     const missing = [!f.claudeMcp && 'MCP server "tarmac"', !f.claudeSkill && '/suivi skill'].filter(Boolean).join(' and ');
     add('Claude Code', 'warn', `installed; ${missing} not set up`, 'Optional: tarmac setup --with-claude');
   } else add('Claude Code', 'ok', 'installed, MCP server "tarmac" and /suivi skill set up');
+  if (agents.codex) {
+    const x = f.codex ?? { installed: false, mcp: false, rule: false, skill: false, hook: false };
+    if (!x.installed) add('Codex', 'warn', 'codex CLI not found', 'Optional (Codex sessions): npm install -g @openai/codex (or brew install codex), then codex login');
+    else if (!x.mcp || !x.skill || !x.rule) {
+      const missing = [!x.mcp && 'MCP server "tarmac"', !x.skill && '$suivi skill', !x.rule && 'AGENTS.md rule'].filter(Boolean).join(', ');
+      add('Codex', 'warn', `installed; ${missing} not set up`, 'Optional: tarmac setup --with-codex');
+    } else add('Codex', 'ok', `installed, MCP server "tarmac", \$suivi skill and AGENTS.md rule set up${x.hook ? '' : ' (no SessionStart hook)'}`);
+  }
   return checks;
 }
 
@@ -135,6 +150,8 @@ export async function gatherFacts(ctx: Ctx, runner: Runner): Promise<Facts> {
     claudeMcp: !!claudeJson?.mcpServers?.tarmac,
     claudeSkill: fs.existsSync(path.join(claudeDir, 'skills/suivi/SKILL.md')),
     claudeMcpLegacy: !!claudeJson?.mcpServers?.['app-manager'],
+    agents: settingsAgents(ctx),
+    codex: codexPresence(ctx),
   };
 }
 

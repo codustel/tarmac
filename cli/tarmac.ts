@@ -16,6 +16,7 @@ import { executePlan, printPlan } from './plan.js';
 import { logs, open, planUninstall, restart, start, status, stop, uninstallNotes } from './service.js';
 import { asideName, localTime, staleDataDir } from '../server/dataDir.js';
 import { claudePresence, finalUrl, planSetup, type SetupOptions } from './setup.js';
+import { codexPresence, settingsAgents } from './codex.js';
 
 const interactive = () => !!process.stdin.isTTY && !!process.stdout.isTTY;
 
@@ -61,6 +62,9 @@ export async function setup(ctx: Ctx, flags: Flags, runner: Runner, out: Out): P
     claudeDesktop: !flags.noClaude && presence.code && presence.desktop,
     open: !flags.noOpen,
   };
+  // Codex : proposé seulement s'il est installé ou coché dans Réglages → Agents (ou demandé par --with-codex).
+  const codexWanted = !flags.noCodex && (flags.withCodex || codexPresence(ctx).installed || settingsAgents(ctx).codex);
+  o.codex = codexWanted;
   if (!o.domain.endsWith('.localhost') && !o.sudo) {
     warn(out, `${o.domain} only resolves through /etc/hosts, which --no-sudo skips: use a *.localhost domain.`);
   }
@@ -78,6 +82,8 @@ export async function setup(ctx: Ctx, flags: Flags, runner: Runner, out: Out): P
     if (o.sudo) out.log(c.dim('[sudo] steps are explained and confirmed first; --no-sudo skips them (URL with :port).'));
     if (o.claude) out.log(c.dim('The Claude Code step is asked for confirmation (--with-claude / --no-claude to decide up front).'));
     if (!presence.code && !flags.noClaude) out.log(c.dim('Claude Code not found: its integration would be skipped.'));
+    if (o.codex) out.log(c.dim('The Codex step is asked for confirmation (--with-codex / --no-codex to decide up front).'));
+    else if (!flags.noCodex) out.log(c.dim('Codex not found (and not enabled in Settings → Agents): its integration would be skipped (--with-codex to set it up anyway).'));
     return 0;
   }
 
@@ -110,6 +116,11 @@ export async function setup(ctx: Ctx, flags: Flags, runner: Runner, out: Out): P
       : false;
   } else o.claudeDesktop = false;
   if (flags.withClaude && !presence.code) warn(out, 'Claude Code (claude CLI) not found: integration skipped.');
+  if (o.codex && !flags.withCodex && !flags.yes) {
+    o.codex = interactive()
+      ? await ask('Set up the Codex (ChatGPT) integration (MCP server "tarmac" in ~/.codex/config.toml, rule in ~/.codex/AGENTS.md, $suivi skill, SessionStart hook)?', true)
+      : false;
+  }
 
   steps = planSetup(ctx, o, runner);
   if (steps.some((s) => s.sudo)) {
@@ -131,6 +142,12 @@ export async function setup(ctx: Ctx, flags: Flags, runner: Runner, out: Out): P
       out.log('   - restart open Claude Code sessions so that their MCP server reads the new data;');
     }
     out.log('   - Claude: tarmac setup --with-claude replaces the "app-manager" MCP server with "tarmac".');
+  }
+  if (steps.some((s) => s.id === 'codex')) {
+    say(out, 'Codex integration:');
+    out.log('   - in Tarmac, tick Codex (ChatGPT) in Settings → Agents;');
+    out.log('   - in Codex, type /hooks once to trust the Tarmac SessionStart hook (Codex skips untrusted hooks);');
+    out.log('   - new Codex sessions see the "tarmac" MCP server and the $suivi skill.');
   }
   out.log(c.dim('Next: tarmac status · tarmac logs · tarmac doctor · tarmac --help'));
   return 0;

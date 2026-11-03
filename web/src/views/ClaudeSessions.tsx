@@ -1,35 +1,54 @@
 import { useMemo, useState } from 'react';
 import { useMutation, useQuery } from '@tanstack/react-query';
 import { ChevronDown, ChevronRight, ExternalLink, GitBranch, History, MessageSquare, Play, Plus, Radio, RefreshCw, Search, SquareTerminal, X } from 'lucide-react';
-import { api, type ClaudeSession, type Project, type TerminalSession } from '../api';
+import { api, type AgentKind, type ClaudeSession, type Project, type TerminalSession } from '../api';
 import { TechIcon } from '../icons';
 import { Badge, Button, Card, Empty, IconButton, cx, timeAgo, useToast } from '../ui';
 import { useT } from '../i18n';
 import { TerminalView } from './TerminalView';
-import { AgentLed, RunningAgentRow, agentsUnder, useRunningAgents } from './Agents';
+import { AgentLed, CodexIcon, RunningAgentRow, agentsUnder, useRunningAgents } from './Agents';
 
 export const ClaudeIcon = ({ size = 14, className }: { size?: number; className?: string }) => (
   <TechIcon id="claude" label="Claude" size={size} className={className} />
 );
 
+/**
+ * Ce qui change d'un agent à l'autre dans ces vues (Claude Code par défaut, Codex) : appels à l'API, icône et textes
+ * propres. Le reste (lignes, onglets, historique, agents en cours) est commun.
+ */
+const AGENT_VIEW = {
+  claude: {
+    sessions: api.claudeSessions, all: api.allClaudeSessions, open: api.openClaude, Icon: ClaudeIcon,
+    queryKey: 'claude', resumeCmd: 'claude --resume … --remote-control', dir: '~/.claude/projects',
+    k: { none: 'claude.tab.none', noneHint: 'claude.tab.noneHint', resumeActive: 'claude.row.resumeActiveTitle', closeConfirm: 'claude.view.closeConfirm', noTabs: 'claude.view.noTabs', allTitle: 'claude.view.allTitle', emptyTitle: 'claude.view.emptyTitle', emptyRemote: 'claude.view.emptyRemote' },
+  },
+  codex: {
+    sessions: api.codexSessions, all: api.allCodexSessions, open: api.openCodex, Icon: CodexIcon,
+    queryKey: 'codex', resumeCmd: 'codex resume …', dir: '~/.codex/sessions',
+    k: { none: 'codex.tab.none', noneHint: 'codex.tab.noneHint', resumeActive: 'codex.row.resumeActiveTitle', closeConfirm: 'codex.view.closeConfirm', noTabs: 'codex.view.noTabs', allTitle: 'codex.view.allTitle', emptyTitle: 'codex.view.emptyTitle', emptyRemote: 'codex.view.emptyRemote' },
+  },
+} as const;
+
 /** Ligne de session Claude (liste d'un projet ou liste globale). */
-export function SessionRow({ s, projectId, onOpenTab, showProject }: {
+export function SessionRow({ s, projectId, onOpenTab, showProject, agent = 'claude' }: {
   s: ClaudeSession;
   projectId: string;
   onOpenTab: (sid: string) => void;
   showProject?: boolean;
+  agent?: AgentKind;
 }) {
   const tr = useT();
   const toast = useToast();
+  const A = AGENT_VIEW[agent];
   const resume = useMutation({
-    mutationFn: () => api.openClaude(projectId, s.id),
+    mutationFn: () => A.open(projectId, s.id),
     onSuccess: (t) => onOpenTab(t.id),
     onError: (e: Error) => toast('err', e.message),
   });
   return (
     <div className="group flex items-center gap-3 px-4 py-2.5 hover:bg-panel-2/50">
       <div className="relative grid size-7 shrink-0 place-items-center rounded-md border border-line bg-panel">
-        <ClaudeIcon size={13} />
+        <A.Icon size={13} />
         {(s.active || s.terminalId) && <span className="absolute -right-0.5 -bottom-0.5 size-2.5 rounded-full bg-emerald-500 ring-2 ring-panel" />}
       </div>
       <div className="min-w-0 flex-1">
@@ -50,7 +69,7 @@ export function SessionRow({ s, projectId, onOpenTab, showProject }: {
       ) : (
         <Button
           size="sm"
-          title={s.active ? tr('claude.row.resumeActiveTitle') : 'claude --resume … --remote-control'}
+          title={s.active ? tr(A.k.resumeActive) : A.resumeCmd}
           icon={<History className="size-3.5" />}
           loading={resume.isPending}
           onClick={() => resume.mutate()}
@@ -63,20 +82,21 @@ export function SessionRow({ s, projectId, onOpenTab, showProject }: {
   );
 }
 
-/** Onglet « Claude » du panneau projet : sessions associées + nouvelle session. */
-export function ProjectClaudeTab({ project, onOpenTab }: { project: Project; onOpenTab: (sid: string) => void }) {
+/** Onglet « Claude » (ou « Codex ») du panneau projet : sessions associées + nouvelle session. */
+export function ProjectClaudeTab({ project, onOpenTab, agent = 'claude' }: { project: Project; onOpenTab: (sid: string) => void; agent?: AgentKind }) {
   const tr = useT();
   const toast = useToast();
+  const A = AGENT_VIEW[agent];
   const [q, setQ] = useState('');
-  const sessions = useQuery({ queryKey: ['claude', project.id], queryFn: () => api.claudeSessions(project.id), refetchInterval: 15_000 });
+  const sessions = useQuery({ queryKey: [A.queryKey, project.id], queryFn: () => A.sessions(project.id), refetchInterval: 15_000 });
   const start = useMutation({
-    mutationFn: () => api.openClaude(project.id),
+    mutationFn: () => A.open(project.id),
     onSuccess: (t) => onOpenTab(t.id),
     onError: (e: Error) => toast('err', e.message),
   });
   const list = (sessions.data ?? []).filter((s) => !q || `${s.title} ${s.firstPrompt ?? ''} ${s.gitBranch ?? ''}`.toLowerCase().includes(q.toLowerCase()));
   const agents = useRunningAgents();
-  const running = agentsUnder(agents.data, project.dir);
+  const running = agentsUnder(agents.data, project.dir).filter((a) => a.agent === agent);
 
   return (
     <div className="flex h-full flex-col">
@@ -84,14 +104,18 @@ export function ProjectClaudeTab({ project, onOpenTab }: { project: Project; onO
         <Button size="sm" variant="primary" icon={<Plus className="size-3.5" />} loading={start.isPending} onClick={() => start.mutate()}>
           {tr('claude.tab.new')}
         </Button>
-        <span className="inline-flex items-center gap-1 text-[11px] text-faint" title={tr('claude.tab.remoteTitle')}>
-          <Radio className="size-3" />Remote Control
-        </span>
+        {agent === 'claude' ? (
+          <span className="inline-flex items-center gap-1 text-[11px] text-faint" title={tr('claude.tab.remoteTitle')}>
+            <Radio className="size-3" />Remote Control
+          </span>
+        ) : (
+          <span className="font-mono text-[11px] text-faint" title={tr('codex.tab.newTitle')}>codex</span>
+        )}
         <div className="relative ml-auto">
           <Search className="pointer-events-none absolute left-2 top-1/2 size-3 -translate-y-1/2 text-faint" />
           <input value={q} onChange={(e) => setQ(e.target.value)} placeholder={tr('claude.filter')} className="h-7 w-40 rounded-md border border-line bg-panel pl-6 pr-2 text-xs outline-none focus:border-accent" />
         </div>
-        <IconButton title={tr('claude.refresh')} onClick={() => api.claudeSessions(project.id, true).then(() => sessions.refetch())}><RefreshCw className="size-3.5" /></IconButton>
+        <IconButton title={tr('claude.refresh')} onClick={() => A.sessions(project.id, true).then(() => sessions.refetch())}><RefreshCw className="size-3.5" /></IconButton>
       </div>
       <div className="min-h-0 flex-1 overflow-auto">
         {/* Agents en cours dans ce projet (Tarmac ou ailleurs) : détail ouvert par le badge de la liste des projets. */}
@@ -108,38 +132,42 @@ export function ProjectClaudeTab({ project, onOpenTab }: { project: Project; onO
         {sessions.isLoading ? (
           <div className="p-6 text-muted">{tr('claude.loading')}</div>
         ) : list.length === 0 ? (
-          <Empty icon={<ClaudeIcon size={28} />} title={q ? tr('claude.tab.noMatch') : tr('claude.tab.none')}>
-            {tr('claude.tab.noneHint')}
+          <Empty icon={<A.Icon size={28} />} title={q ? tr('claude.tab.noMatch') : tr(A.k.none)}>
+            {tr(A.k.noneHint)}
           </Empty>
         ) : (
           <div className="divide-y divide-line">
-            {list.map((s) => <SessionRow key={s.id} s={s} projectId={project.id} onOpenTab={onOpenTab} />)}
+            {list.map((s) => <SessionRow key={s.id} s={s} projectId={project.id} onOpenTab={onOpenTab} agent={agent} />)}
           </div>
         )}
       </div>
       <div className="border-t border-line px-4 py-2 text-[11px] text-faint">
-        {tr.node('claude.tab.footer', {
-          count: sessions.data?.length ?? 0,
-          dir: <span className="font-mono">~/.claude/projects</span>,
-          period: <span title={tr('claude.tab.retentionTitle')}>{tr('claude.tab.retention')}</span>,
-        })}
+        {agent === 'codex'
+          ? tr.node('codex.tab.footer', { count: sessions.data?.length ?? 0, dir: <span className="font-mono">{A.dir}</span> })
+          : tr.node('claude.tab.footer', {
+            count: sessions.data?.length ?? 0,
+            dir: <span className="font-mono">~/.claude/projects</span>,
+            period: <span title={tr('claude.tab.retentionTitle')}>{tr('claude.tab.retention')}</span>,
+          })}
       </div>
     </div>
   );
 }
 
 /** Page « Sessions Claude » : onglets des sessions ouvertes depuis Tarmac + historique global. */
-export function ClaudeSessionsView({ terminals, activeId, onActive, projects }: {
+export function ClaudeSessionsView({ terminals, activeId, onActive, projects, agent = 'claude' }: {
   terminals: TerminalSession[];
   activeId: string | null;
   onActive: (sid: string | null) => void;
   projects: Project[];
+  agent?: AgentKind;
 }) {
   const tr = useT();
   const toast = useToast();
-  const tabs = terminals.filter((t) => t.kind === 'claude');
+  const A = AGENT_VIEW[agent];
+  const tabs = terminals.filter((t) => t.kind === agent);
   const current = tabs.find((t) => t.id === activeId) ?? tabs.at(-1) ?? null;
-  const all = useQuery({ queryKey: ['claude', 'all'], queryFn: api.allClaudeSessions, refetchInterval: 15_000 });
+  const all = useQuery({ queryKey: [A.queryKey, 'all'], queryFn: A.all, refetchInterval: 15_000 });
   const [q, setQ] = useState('');
   const [showHistory, setShowHistory] = useState(false);
 
@@ -148,14 +176,15 @@ export function ClaudeSessionsView({ terminals, activeId, onActive, projects }: 
     [all.data, q],
   );
   const agents = useRunningAgents();
-  const outside = (agents.data ?? []).filter((a) => a.where === 'external');
-  const [outsideOpen, setOutsideOpen] = useState(() => { try { return localStorage.getItem('claude:outside') !== 'closed'; } catch { return true; } });
+  const outside = (agents.data ?? []).filter((a) => a.where === 'external' && a.agent === agent);
+  const outsideKey = `${agent}:outside`;
+  const [outsideOpen, setOutsideOpen] = useState(() => { try { return localStorage.getItem(outsideKey) !== 'closed'; } catch { return true; } });
   const toggleOutside = () => {
-    setOutsideOpen((v) => { try { localStorage.setItem('claude:outside', v ? 'closed' : 'open'); } catch { /* stockage indisponible */ } return !v; });
+    setOutsideOpen((v) => { try { localStorage.setItem(outsideKey, v ? 'closed' : 'open'); } catch { /* stockage indisponible */ } return !v; });
   };
 
   const close = (t: TerminalSession) => {
-    if (t.status === 'running' && !confirm(tr('claude.view.closeConfirm', { label: t.label }))) return;
+    if (t.status === 'running' && !confirm(tr(A.k.closeConfirm, { label: t.label }))) return;
     api.closeTerminal(t.id).catch((e) => toast('err', e.message));
     if (t.id === current?.id) onActive(tabs.filter((x) => x.id !== t.id).at(-1)?.id ?? null);
   };
@@ -165,7 +194,7 @@ export function ClaudeSessionsView({ terminals, activeId, onActive, projects }: 
       {/* Barre d'onglets */}
       <div className="flex items-center gap-2">
         <div className="flex min-w-0 flex-1 items-center gap-1 overflow-x-auto rounded-lg border border-line bg-panel p-1">
-          {tabs.length === 0 && <span className="px-2 text-xs text-faint">{tr('claude.view.noTabs')}</span>}
+          {tabs.length === 0 && <span className="px-2 text-xs text-faint">{tr(A.k.noTabs)}</span>}
           {tabs.map((t) => (
             <div
               key={t.id}
@@ -196,7 +225,7 @@ export function ClaudeSessionsView({ terminals, activeId, onActive, projects }: 
             <AgentLed working={outside.some((a) => a.working)} title={outside.some((a) => a.working) ? tr('agents.ledWorking') : tr('agents.ledIdle')} />
             <span className="font-medium">{tr('agents.outside.title')}</span>
             <span className="text-[11px] tabular-nums text-faint">{outside.length}</span>
-            <span className="ml-2 hidden truncate text-[11px] text-faint lg:inline">{tr('agents.outside.sub')}</span>
+            <span className="ml-2 hidden truncate text-[11px] text-faint lg:inline">{tr(agent === 'codex' ? 'codex.outside.sub' : 'agents.outside.sub')}</span>
           </button>
           {outsideOpen && (
             <div className="max-h-[42vh] divide-y divide-line overflow-auto border-t border-line">
@@ -209,7 +238,7 @@ export function ClaudeSessionsView({ terminals, activeId, onActive, projects }: 
       {showHistory ? (
         <Card className="flex min-h-0 flex-1 flex-col overflow-hidden">
           <div className="flex items-center gap-2 border-b border-line px-4 py-2">
-            <span className="font-medium">{tr('claude.view.allTitle')}</span>
+            <span className="font-medium">{tr(A.k.allTitle)}</span>
             <span className="text-[11px] text-faint">{tr('claude.view.allSub')}</span>
             <div className="relative ml-auto">
               <Search className="pointer-events-none absolute left-2 top-1/2 size-3 -translate-y-1/2 text-faint" />
@@ -218,22 +247,23 @@ export function ClaudeSessionsView({ terminals, activeId, onActive, projects }: 
           </div>
           <div className="min-h-0 flex-1 divide-y divide-line overflow-auto">
             {history.map((s) => (
-              <SessionRow key={s.id} s={s} projectId={s.project!.id} showProject onOpenTab={(sid) => { onActive(sid); setShowHistory(false); }} />
+              <SessionRow key={s.id} s={s} projectId={s.project!.id} agent={agent} showProject onOpenTab={(sid) => { onActive(sid); setShowHistory(false); }} />
             ))}
-            {history.length === 0 && <Empty icon={<ClaudeIcon size={28} />} title={tr('claude.view.noSession')} />}
+            {history.length === 0 && <Empty icon={<A.Icon size={28} />} title={tr('claude.view.noSession')} />}
           </div>
         </Card>
       ) : current ? (
         <Card className="flex min-h-0 flex-1 flex-col overflow-hidden">
           <div className="flex items-center gap-2 border-b border-line px-4 h-10 shrink-0">
-            <ClaudeIcon />
+            <A.Icon />
             <span className="truncate font-medium">{current.projectName}</span>
             <span className="truncate font-mono text-[11px] text-faint">{current.command}</span>
             <div className="ml-auto flex items-center gap-1">
               {current.status === 'exited' && (
                 <Button size="sm" icon={<Play className="size-3" />} onClick={() => {
                   const p = projects.find((x) => x.id === current.projectId);
-                  if (p && current.claudeSessionId) api.openClaude(p.id, current.claudeSessionId).then((t) => onActive(t.id)).catch((e) => toast('err', e.message));
+                  const sid = agent === 'codex' ? current.codexSessionId : current.claudeSessionId;
+                  if (p && sid) A.open(p.id, sid).then((t) => onActive(t.id)).catch((e) => toast('err', e.message));
                 }}>{tr('claude.view.relaunch')}</Button>
               )}
               <a href={`#term/${current.id}`} target="_blank" rel="noreferrer" title={tr('claude.view.openInBrowserTab')} className="inline-flex size-7 items-center justify-center rounded-md text-muted hover:bg-panel-2 hover:text-fg">
@@ -249,13 +279,14 @@ export function ClaudeSessionsView({ terminals, activeId, onActive, projects }: 
         </Card>
       ) : (
         <Card className="grid flex-1 place-items-center">
-          <Empty icon={<ClaudeIcon size={32} />} title={tr('claude.view.emptyTitle')}>
-            {tr.node('claude.view.emptyHint', {
+          <Empty icon={<A.Icon size={32} />} title={tr(A.k.emptyTitle)}>
+            {tr.node(agent === 'codex' ? 'codex.view.emptyHint' : 'claude.view.emptyHint', {
               claude: <b>Claude</b>,
+              codex: <b>Codex</b>,
               newSession: <b>{tr('claude.tab.new')}</b>,
               history: <button className="text-accent hover:underline" onClick={() => setShowHistory(true)}>{tr('claude.view.historyLink')}</button>,
             })}{' '}
-            {tr('claude.view.emptyRemote')}
+            {tr(A.k.emptyRemote)}
           </Empty>
         </Card>
       )}
@@ -271,10 +302,10 @@ export function StandaloneTerminal({ sid, terminals }: { sid: string; terminals:
   return (
     <div className="flex h-full flex-col bg-[#0a0c10]">
       <div className="flex items-center gap-2 border-b border-white/10 px-3 h-9 text-xs text-zinc-300">
-        {t?.kind === 'claude' ? <ClaudeIcon /> : <SquareTerminal className="size-3.5" />}
+        {t?.kind === 'claude' ? <ClaudeIcon /> : t?.kind === 'codex' ? <CodexIcon /> : <SquareTerminal className="size-3.5" />}
         <span className="font-medium">{t?.projectName || t?.label || sid}</span>
         <span className={cx('size-1.5 rounded-full', t?.status === 'running' ? 'bg-emerald-500' : 'bg-zinc-500')} />
-        <a href="/#claude" className="ml-auto text-zinc-500 hover:text-zinc-200">Tarmac</a>
+        <a href={t?.kind === 'codex' ? '/#codex' : '/#claude'} className="ml-auto text-zinc-500 hover:text-zinc-200">Tarmac</a>
       </div>
       <div className="min-h-0 flex-1">{t ? <TerminalView sid={sid} active /> : <div className="p-6 text-zinc-500">{tr('claude.standalone.notFound')}</div>}</div>
     </div>

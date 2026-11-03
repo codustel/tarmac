@@ -56,6 +56,7 @@ The file is loaded every time the service starts: edit it, then `tarmac restart`
 | `PATH` | your shell's `PATH` at setup time | Apps and consoles run with it (nvm, fnm, Homebrew, pnpm, bun, uv…) |
 | `DATA_DIR` | `~/.tarmac` | Data folder |
 | `CLAUDE_CONFIG_DIR` | `~/.claude` | Where Claude Code sessions are read |
+| `CODEX_HOME` | `~/.codex` | Where Codex sessions are read, and where `tarmac setup` writes the Codex integration |
 | `DOCKER_HOST` | Docker Desktop, OrbStack or Colima socket | Docker socket for local Supabase |
 | `LOG_BUFFER_LINES` | `2000` | Log lines kept per app |
 | `LOG_LEVEL` | `warn` | Server log level |
@@ -77,6 +78,9 @@ update the `PATH=` line (or run `tarmac setup` again from that terminal), then `
   (runs `gh auth login --web` in a built-in console), clone folder, optional access token (fine-grained
   recommended). Without a token, Tarmac uses `GITHUB_TOKEN`, then `gh auth token`.
 - **Execution**: editor for **Open in editor** (VS Code, Cursor, Zed, WebStorm), port range.
+- **Agents**: Claude Code, Codex (ChatGPT), or both (at least one; Claude Code alone by default). Only ticked agents
+  show up (sessions, LED, timeline, ▶, usage panels, `tarmac doctor`); with Codex ticked, "Claude Todolist" is
+  called **Todolist**, and the Codex usage panel can be turned off here (see [Codex](codex.md)).
 - **Claude Todolist**: sync channels, MCP bridge interval, name of the `Todolist/` folder, latest syncs (see
   [Claude Code](claude-code.md)).
 

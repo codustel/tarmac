@@ -5,6 +5,7 @@ import { api, type Settings, type SettingsPatch } from '../api';
 import { Badge, Button, Card, GithubIcon, copy, cx, tildify, useToast } from '../ui';
 import { GhCliLogin } from './GhCliLogin';
 import { ModuleIcon } from './ModuleView';
+import { AgentIcon } from './Agents';
 import { fmtDateTime, useLanguageSetting, useT, type LanguageSetting } from '../i18n';
 
 const input = 'h-8 w-full rounded-md border border-line bg-panel px-2.5 text-[13px] outline-none placeholder:text-faint focus:border-accent';
@@ -212,9 +213,70 @@ export function SettingsView() {
         <Button variant="primary" icon={<Save className="size-3.5" />} loading={save.isPending} onClick={() => save.mutate()}>{t('settings.save')}</Button>
       </div>
 
+      {q.data && <AgentsCard settings={q.data} />}
       {q.data && <SuiviSettingsCard settings={q.data} />}
       <ModulesCard />
     </div>
+  );
+}
+
+/**
+ * Section « Agents » : Claude Code et Codex (ChatGPT), l'un, l'autre ou les deux (enregistré tout de suite). Seuls
+ * les agents cochés apparaissent dans Tarmac ; Claude seul = comportement d'avant Codex.
+ */
+function AgentsCard({ settings }: { settings: Settings }) {
+  const t = useT();
+  const qc = useQueryClient();
+  const toast = useToast();
+  const save = useMutation({
+    mutationFn: (patch: SettingsPatch) => api.saveSettings(patch),
+    onSuccess: (s) => {
+      qc.setQueryData(['settings'], s);
+      // Listes, LED, timeline, usage : tout dépend des agents cochés.
+      qc.invalidateQueries();
+    },
+    onError: (e: Error) => toast('err', e.message),
+  });
+  const a = settings.agents ?? { claude: true, codex: false };
+  const rows = [
+    ['claude', 'settings.agents.claude', 'settings.agents.claudeHint'],
+    ['codex', 'settings.agents.codex', 'settings.agents.codexHint'],
+  ] as const;
+  return (
+    <Card className="divide-y divide-line">
+      <div className="px-5 py-3 text-[11px] font-semibold uppercase tracking-wider text-faint">{t('settings.agents.title')}</div>
+      <Field title={t('settings.agents.title')} hint={t('settings.agents.sub')}>
+        <div className="space-y-2">
+          {rows.map(([k, label, hint]) => {
+            const last = a[k] && !a[k === 'claude' ? 'codex' : 'claude'];
+            return (
+              <label key={k} className={cx('flex items-start gap-2 text-[13px]', last ? 'cursor-not-allowed' : 'cursor-pointer')} title={last ? t('settings.agents.atLeastOne') : undefined}>
+                <input type="checkbox" className="mt-0.5" checked={a[k]} disabled={save.isPending || last}
+                  onChange={(e) => save.mutate({ agents: { [k]: e.target.checked } })} />
+                <span className="inline-flex items-start gap-1.5">
+                  <span className="mt-0.5"><AgentIcon agent={k} size={13} /></span>
+                  <span><span className="font-medium">{t(label)}</span><span className="block text-[12px] text-muted">{t(hint)}</span></span>
+                </span>
+              </label>
+            );
+          })}
+          {a.codex && (
+            <p className="text-[12px] text-muted">
+              {t.node('settings.agents.setup', { cmd: <code className="rounded bg-panel-2 px-1 font-mono text-[11px]">tarmac setup --with-codex</code> })}
+            </p>
+          )}
+        </div>
+      </Field>
+      {a.codex && (
+        <Field title={t('codex.usage.title')} hint={t('settings.codexUsageHint')}>
+          <label className="inline-flex cursor-pointer items-center gap-2 text-[13px]">
+            <input type="checkbox" checked={settings.showCodexUsage !== false} disabled={save.isPending}
+              onChange={(e) => save.mutate({ showCodexUsage: e.target.checked })} className="size-4 accent-[var(--accent)]" />
+            {t('settings.codexUsage')}
+          </label>
+        </Field>
+      )}
+    </Card>
   );
 }
 

@@ -11,6 +11,8 @@ export interface Flags {
   noSudo: boolean;
   withClaude: boolean;
   noClaude: boolean;
+  withCodex: boolean;
+  noCodex: boolean;
   yes: boolean;
   noOpen: boolean;
   purge: boolean;
@@ -24,7 +26,7 @@ export interface Parsed {
 
 /** Options acceptées par commande (les autres sont refusées). */
 const ALLOWED: Partial<Record<Command, (keyof Flags)[]>> = {
-  setup: ['dryRun', 'domain', 'noSudo', 'withClaude', 'noClaude', 'yes', 'noOpen'],
+  setup: ['dryRun', 'domain', 'noSudo', 'withClaude', 'noClaude', 'withCodex', 'noCodex', 'yes', 'noOpen'],
   uninstall: ['dryRun', 'purge', 'noSudo', 'yes'],
   update: ['dryRun'],
 };
@@ -34,6 +36,8 @@ const BOOL: Record<string, keyof Flags> = {
   '--no-sudo': 'noSudo',
   '--with-claude': 'withClaude',
   '--no-claude': 'noClaude',
+  '--with-codex': 'withCodex',
+  '--no-codex': 'noCodex',
   '--yes': 'yes',
   '-y': 'yes',
   '--no-open': 'noOpen',
@@ -44,7 +48,7 @@ const BOOL: Record<string, keyof Flags> = {
 export const isValidDomain = (d: string) => /^(?=.{1,253}$)[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?(?:\.[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?)+$/i.test(d);
 
 export function parseArgs(argv: string[]): Parsed {
-  const flags: Flags = { dryRun: false, noSudo: false, withClaude: false, noClaude: false, yes: false, noOpen: false, purge: false };
+  const flags: Flags = { dryRun: false, noSudo: false, withClaude: false, noClaude: false, withCodex: false, noCodex: false, yes: false, noOpen: false, purge: false };
   const seen = new Set<keyof Flags>();
   let command: Command | undefined;
   const fail = (error: string): Parsed => ({ command: command ?? 'help', flags, error });
@@ -77,6 +81,7 @@ export function parseArgs(argv: string[]): Parsed {
   const extra = [...seen].find((f) => !allowed.includes(f));
   if (extra) return fail(`Option not supported by "${command}": ${optionName(extra)}`);
   if (flags.withClaude && flags.noClaude) return fail('--with-claude and --no-claude cannot be used together');
+  if (flags.withCodex && flags.noCodex) return fail('--with-codex and --no-codex cannot be used together');
   return { command, flags };
 }
 
@@ -85,7 +90,7 @@ function optionName(flag: keyof Flags): string {
   return Object.entries(BOOL).find(([, f]) => f === flag)?.[0] ?? flag;
 }
 
-export const HELP = `Tarmac — the local runway for your projects and your Claude Code sessions
+export const HELP = `Tarmac — the local runway for your projects and your coding agents (Claude Code, Codex)
 
 Usage: tarmac <command> [options]
 
@@ -99,7 +104,7 @@ Commands:
   status       Show whether the service is running and where
   logs         Follow the service log
   open         Open Tarmac in the browser
-  doctor       Check Node, the service, the port, the domain, gh, Docker and Claude Code
+  doctor       Check Node, the service, the port, the domain, gh, Docker, Claude Code and Codex
 
 Options for setup:
   --dry-run        Print every action without changing anything
@@ -108,6 +113,8 @@ Options for setup:
                    Tarmac stays reachable on http://tarmac.localhost:7777
   --with-claude    Set up the Claude Code integration without asking
   --no-claude      Do not set up the Claude Code integration
+  --with-codex     Set up the Codex (ChatGPT) integration without asking
+  --no-codex       Do not set up the Codex integration
   --no-open        Do not open the browser at the end
   -y, --yes        Answer yes to every question
 

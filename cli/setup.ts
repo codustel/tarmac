@@ -11,6 +11,7 @@ import {
   readEnv, tilde, which, type Ctx, type Runner,
 } from './context.js';
 import type { Action, Runtime, Step } from './plan.js';
+import { planCodexSetup } from './codex.js';
 
 export interface SetupOptions {
   domain: string;
@@ -20,6 +21,8 @@ export interface SetupOptions {
   claude: boolean;
   /** Déclaration du serveur MCP dans Claude desktop aussi (attend que l'app soit fermée). */
   claudeDesktop: boolean;
+  /** Intégration Codex (serveur MCP, règle AGENTS.md, skill, hook) : Codex installé ou coché dans les réglages. */
+  codex?: boolean;
   open: boolean;
   /**
    * `~/.tarmac` existe mais `~/.app-manager` est plus récent : le mettre de côté (`~/.tarmac.old-…`) puis copier
@@ -338,6 +341,8 @@ export function planSetup(ctx: Ctx, o: SetupOptions, runner: Runner): Step[] {
       ],
     });
   }
+  // 8. Intégration Codex (sur confirmation, comme Claude).
+  if (o.codex) steps.push(planCodexSetup(ctx));
   return steps;
 }
 

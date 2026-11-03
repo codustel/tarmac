@@ -5,6 +5,7 @@ import fs from 'node:fs';
 import { ALIAS_DOMAIN, DEFAULT_DOMAIN, LABEL, PKG_NAME, c, configured, ok, tilde, warn, which, type Ctx, type Out, type Runner } from './context.js';
 import type { Step } from './plan.js';
 import { answers, hostsHas } from './setup.js';
+import { planCodexUninstall } from './codex.js';
 
 const target = (ctx: Ctx) => `gui/${ctx.uid}/${LABEL}`;
 export const isLoaded = (ctx: Ctx, runner: Runner) => runner.capture(['launchctl', 'print', target(ctx)]) !== null;
@@ -119,6 +120,9 @@ export function planUninstall(ctx: Ctx, o: { sudo: boolean; purge: boolean }): S
       actions: [{ kind: 'exec', argv: ['claude', 'mcp', 'remove', '--scope', 'user', 'tarmac'], allowFail: true }],
     });
   }
+  // Intégration Codex : seulement ce que Tarmac a écrit (blocs balisés, hook, skill).
+  const codexStep = planCodexUninstall(ctx);
+  if (codexStep) steps.push(codexStep);
   if (o.purge) {
     steps.push({
       id: 'purge',
@@ -134,5 +138,6 @@ export function uninstallNotes(ctx: Ctx, out: Out, o: { purge: boolean; sudo: bo
   if (!o.sudo) warn(out, 'Skipped (no sudo): /etc/hosts entries and the port 80 redirect, if any.');
   out.log('  Claude Code integration, if installed: delete ~/.claude/skills/suivi, ~/.claude/hooks/suivi-check.sh,');
   out.log('  its SessionStart entry in ~/.claude/settings.json and the "Project tracking" section of ~/.claude/CLAUDE.md.');
+  out.log('  Codex integration: removed above when Tarmac had set it up (backup copies .bak-<date> next to each file).');
   out.log(ctx.isClone ? '  You can now delete this clone.' : `  To remove the command itself: npm uninstall -g ${PKG_NAME}`);
 }

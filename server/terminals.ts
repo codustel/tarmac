@@ -23,7 +23,7 @@ async function loadPty() {
 
 const MAX_BUFFER = 512 * 1024;
 
-export type TerminalKind = 'command' | 'shell' | 'claude' | 'system';
+export type TerminalKind = 'command' | 'shell' | 'claude' | 'codex' | 'system';
 
 export interface TerminalSummary {
   id: string;
@@ -32,6 +32,8 @@ export interface TerminalSummary {
   kind: TerminalKind;
   /** Session Claude Code associée (onglet lancé depuis Tarmac). */
   claudeSessionId: string | null;
+  /** Session Codex associée : connue à la reprise, ou repérée après le lancement (process rattaché à son transcript). */
+  codexSessionId: string | null;
   label: string;
   command: string | null;
   status: 'running' | 'exited';
@@ -65,18 +67,28 @@ class TerminalManager extends EventEmitter {
     return [...this.sessions.values()].find((s) => s.claudeSessionId === sessionId && s.status === 'running')?.id ?? null;
   }
 
+  findByCodex(sessionId: string) {
+    return [...this.sessions.values()].find((s) => s.kind === 'codex' && s.codexSessionId === sessionId && s.status === 'running')?.id ?? null;
+  }
+
+  /** Session Codex repérée pour une console Codex de Tarmac (une seule fois : la première trouvée reste). */
+  setCodexSession(id: string, sessionId: string) {
+    const s = this.sessions.get(id);
+    if (s?.kind === 'codex' && !s.codexSessionId) s.codexSessionId = sessionId;
+  }
+
   list(projectId?: string): TerminalSummary[] {
     return [...this.sessions.values()].filter((s) => !projectId || s.projectId === projectId).map(this.summary);
   }
 
   private summary = (s: Session): TerminalSummary => ({
     id: s.id, projectId: s.projectId, projectName: s.projectName, kind: s.kind, claudeSessionId: s.claudeSessionId,
-    label: s.label, command: s.command, status: s.status,
+    codexSessionId: s.codexSessionId, label: s.label, command: s.command, status: s.status,
     exitCode: s.exitCode, pid: s.status === 'running' ? s.pty.pid : null, startedAt: s.startedAt, lastActivityAt: s.lastActivityAt,
   });
 
   /** `command` null → shell interactif dans le dossier du projet (venv activé le cas échéant). */
-  async create(project: TerminalTarget, opts: { command: string | null; label: string; cols?: number; rows?: number; unsetEnv?: string[]; kind?: TerminalKind; projectName?: string; claudeSessionId?: string | null }) {
+  async create(project: TerminalTarget, opts: { command: string | null; label: string; cols?: number; rows?: number; unsetEnv?: string[]; kind?: TerminalKind; projectName?: string; claudeSessionId?: string | null; codexSessionId?: string | null }) {
     const pty = await loadPty();
     if (!pty) throw new Error(tr({ en: 'Console unavailable (node-pty): {error}', fr: 'Console indisponible (node-pty) : {error}' }, { error: String(ptyError) }));
 
@@ -108,6 +120,7 @@ class TerminalManager extends EventEmitter {
       projectName: opts.projectName ?? '',
       kind: opts.kind ?? (opts.command ? 'command' : 'shell'),
       claudeSessionId: opts.claudeSessionId ?? null,
+      codexSessionId: opts.codexSessionId ?? null,
       label: opts.label,
       command: opts.command,
       status: 'running',

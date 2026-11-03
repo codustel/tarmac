@@ -25,9 +25,14 @@ First public release. Tarmac was previously a private tool named App Manager.
   project, start / stop / restart, "Open Docker Desktop / OrbStack" button.
 - Claude usage in the sidebar: plan, 5-hour session, week and per-model weekly limits (such as Fable), read with
   Claude Code's own sign-in (token sent only to Anthropic); can be turned off in Settings.
+- Codex (ChatGPT) next to Claude Code: Settings → Agents (Claude Code, Codex, or both; Claude Code alone by
+  default), Codex sessions in Tarmac consoles (new, `codex resume`), Codex sessions running elsewhere with the
+  activity LED, timeline, ▶ to an idle Codex session or a new one, Codex usage panel (ChatGPT plan, 5-hour and
+  weekly windows, read from Codex's local session files without any token), `tarmac setup --with-codex`
+  (`tarmac` MCP server, `AGENTS.md` rule, `$suivi` skill, session-start hook), `tarmac doctor` and `uninstall`.
 - English and French interface.
-- Documentation: README in English and French, `docs/` (configuration, Claude Code, security, troubleshooting,
-  uninstall).
+- Documentation: README in English and French, `docs/` (configuration, Claude Code, Codex, security,
+  troubleshooting, uninstall).
 
 ### Migration from App Manager
 

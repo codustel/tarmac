@@ -17,12 +17,13 @@ const nodeDir = path.dirname(process.execPath);
 
 for (const a of list) {
   if (!a.cwd.startsWith(home + path.sep)) throw new Error(`hors du HOME de démo : ${a.cwd}`);
-  const child = spawn('claude', ['--resume', a.sessionId], {
+  // Codex : `codex resume <id>` (faux `codex` de bin-agents, jamais le vrai).
+  const child = spawn(a.agent === 'codex' ? 'codex' : 'claude', a.agent === 'codex' ? ['resume', a.sessionId] : ['--resume', a.sessionId], {
     cwd: a.cwd,
     detached: true,
     stdio: 'ignore',
     env: {
-      HOME: home, PATH: `${bin}:${nodeDir}:/usr/bin:/bin`, CLAUDE_CONFIG_DIR: path.join(home, '.claude'),
+      HOME: home, PATH: `${bin}:${nodeDir}:/usr/bin:/bin`, CLAUDE_CONFIG_DIR: path.join(home, '.claude'), CODEX_HOME: path.join(home, '.codex'),
       DEMO_AGENT_ENTRY: a.entrypoint, DEMO_AGENT_STATUS: a.status,
     },
   });

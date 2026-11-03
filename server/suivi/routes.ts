@@ -9,6 +9,7 @@ import type { TodolistWatcher } from './watch.js';
 import { renderArtifact } from './artifact.js';
 import type { SyncRunner } from './sync.js';
 import type { SuiviDispatcher } from './dispatch.js';
+import type { AgentKind } from '../agentProcs.js';
 import { buildTheme, detectPrimary } from './theme.js';
 import { detectDisplayFont } from './watch.js';
 import { countTasks, SuiviError, toOrigin, type Origin } from './types.js';
@@ -81,10 +82,11 @@ export function registerSuiviRoutes(app: FastifyInstance, service: SuiviService,
     if (!opts.dispatcher) return reply.code(501).send({ error: 'Unavailable' });
     try { return opts.dispatcher.sessions(pid(req.params.projectId)); } catch (e) { return fail(reply, e); }
   });
-  app.post<{ Params: PT; Body: { target?: string } }>('/api/suivi/projects/:projectId/tasks/:taskId/dispatch', async (req, reply) => {
+  app.post<{ Params: PT; Body: { target?: string; agent?: string } }>('/api/suivi/projects/:projectId/tasks/:taskId/dispatch', async (req, reply) => {
     if (!opts.dispatcher) return reply.code(501).send({ error: 'Unavailable' });
     try {
-      return await opts.dispatcher.dispatch(pid(req.params.projectId), req.params.taskId, String(req.body?.target ?? ''));
+      const agent = req.body?.agent == null || req.body.agent === '' ? undefined : String(req.body.agent) as AgentKind;
+      return await opts.dispatcher.dispatch(pid(req.params.projectId), req.params.taskId, String(req.body?.target ?? ''), agent);
     } catch (e: any) {
       if (e instanceof SuiviError) return fail(reply, e);
       return reply.code(e?.statusCode ?? 500).send({ error: e?.message ?? String(e) });

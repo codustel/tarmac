@@ -25,6 +25,13 @@ export interface Settings {
   showAllProjects: boolean;
   /** Utilisation Claude (session, semaine, limites par modèle) affichée dans la sidebar. */
   showClaudeUsage: boolean;
+  /** Utilisation Codex (limites du plan ChatGPT) affichée dans la sidebar, si Codex est coché. */
+  showCodexUsage: boolean;
+  /**
+   * Agents de code affichés et pris en charge (sessions, LED, timeline, ▶, usage, doctor). Au moins un.
+   * Par défaut Claude Code seul : comportement d'avant Codex, inchangé.
+   */
+  agents: { claude: boolean; codex: boolean };
   /** Dossier où sont clonés les repos GitHub (par défaut le premier dossier scanné). */
   cloneDir: string;
   /** URL de production saisie à la main, par dossier absolu. */
@@ -63,6 +70,8 @@ const defaults = (): Settings => ({
   names: {},
   showAllProjects: false,
   showClaudeUsage: true,
+  showCodexUsage: true,
+  agents: { claude: true, codex: false },
   urls: {},
   theme: 'system',
   language: 'auto',
@@ -75,7 +84,8 @@ function load(): Settings {
   const d = defaults();
   try {
     const s = JSON.parse(fs.readFileSync(FILE, 'utf8'));
-    return { ...d, ...s, github: { ...d.github, ...s.github }, portRange: { ...d.portRange, ...s.portRange }, suivi: { ...d.suivi, ...s.suivi, channels: { ...d.suivi.channels, ...s.suivi?.channels } } };
+    const agents = { ...d.agents, ...s.agents };
+    return { ...d, ...s, agents: agents.claude || agents.codex ? agents : d.agents, github: { ...d.github, ...s.github }, portRange: { ...d.portRange, ...s.portRange }, suivi: { ...d.suivi, ...s.suivi, channels: { ...d.suivi.channels, ...s.suivi?.channels } } };
   } catch {
     return d;
   }
@@ -100,6 +110,8 @@ export interface SettingsPatch {
   names?: Record<string, string>;
   showAllProjects?: boolean;
   showClaudeUsage?: boolean;
+  showCodexUsage?: boolean;
+  agents?: { claude?: boolean; codex?: boolean };
   cloneDir?: string;
   urls?: Record<string, string>;
   suivi?: { channels?: Partial<SuiviSettings['channels']>; bridgeIntervalSec?: number; folder?: string };
@@ -155,6 +167,11 @@ export function updateSettings(patch: SettingsPatch): { errors: string[] } {
   }
   if (patch.showAllProjects !== undefined) next.showAllProjects = !!patch.showAllProjects;
   if (patch.showClaudeUsage !== undefined) next.showClaudeUsage = !!patch.showClaudeUsage;
+  if (patch.showCodexUsage !== undefined) next.showCodexUsage = !!patch.showCodexUsage;
+  if (patch.agents) {
+    for (const k of ['claude', 'codex'] as const) if (typeof patch.agents[k] === 'boolean') next.agents[k] = patch.agents[k]!;
+    if (!next.agents.claude && !next.agents.codex) errors.push(msg('settings.agentRequired'));
+  }
   if (patch.suivi) {
     const { channels, bridgeIntervalSec, folder } = patch.suivi;
     if (channels) for (const k of ['A', 'B', 'C'] as const) if (typeof channels[k] === 'boolean') next.suivi.channels[k] = channels[k]!;

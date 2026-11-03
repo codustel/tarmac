@@ -10,11 +10,13 @@ import { LogsView } from './LogsView';
 import { ReadmeView } from './ReadmeView';
 import { TerminalView } from './TerminalView';
 import { ClaudeIcon, ProjectClaudeTab } from './ClaudeSessions';
+import { CodexIcon, useEnabledAgents } from './Agents';
+import type { AgentKind } from '../api';
 import { CommandMenu } from './CommandMenu';
 import { Board } from '../todolist/Board';
 import { BrowserView } from './BrowserView';
 
-export type PanelTab = 'logs' | 'browser' | 'console' | 'readme' | 'claude' | 'todolist';
+export type PanelTab = 'logs' | 'browser' | 'console' | 'readme' | 'claude' | 'codex' | 'todolist';
 
 export const defaultTab = (p: Project): PanelTab => (p.serve ? 'logs' : 'console');
 
@@ -33,12 +35,14 @@ export const STATUS_KEY: Record<ProcStatus, TKey> = {
 export function ProjectPanel({ project, webApps = [], tab: wanted, onTab, onClose, onOpenClaudeTab, todoFocus }: {
   project: Project;
   /** Applis web du même projet (racine de monorepo et ses apps) : cibles du navigateur interne. */
-  webApps?: Project[]; tab: PanelTab; onTab: (t: PanelTab) => void; onClose: () => void; onOpenClaudeTab: (sid: string) => void;
+  webApps?: Project[]; tab: PanelTab; onTab: (t: PanelTab) => void; onClose: () => void; onOpenClaudeTab: (sid: string, agent?: AgentKind) => void;
   /** Tâche à déplier dans l'onglet Todolist Claude (clic depuis la vue globale). */
   todoFocus?: string | null;
 }) {
   const rt = project.runtime;
-  const tab: PanelTab = (wanted === 'logs' && !project.serve) || (wanted === 'browser' && !webApps.length) || (wanted === 'readme' && !project.readme) ? 'console' : wanted;
+  const agents = useEnabledAgents();
+  const hiddenAgentTab = (wanted === 'claude' || wanted === 'codex') && !agents.includes(wanted);
+  const tab: PanelTab = (wanted === 'logs' && !project.serve) || (wanted === 'browser' && !webApps.length) || (wanted === 'readme' && !project.readme) || hiddenAgentTab ? 'console' : wanted;
   const toast = useToast();
   const t = useT();
 
@@ -52,7 +56,8 @@ export function ProjectPanel({ project, webApps = [], tab: wanted, onTab, onClos
     { id: 'logs', label: t('projects.panel.tabs.logs'), icon: <ScrollText className="size-3.5" />, hidden: !project.serve },
     { id: 'browser', label: t('projects.panel.tabs.browser'), icon: <Globe className="size-3.5" />, hidden: !webApps.length },
     { id: 'console', label: t('projects.panel.tabs.console'), icon: <TerminalSquare className="size-3.5" />, badge: project.terminals.filter((t) => t.status === 'running').length },
-    { id: 'claude', label: t('projects.panel.tabs.claude'), icon: <ClaudeIcon size={13} />, badge: project.claude.active || undefined },
+    { id: 'claude', label: t('projects.panel.tabs.claude'), icon: <ClaudeIcon size={13} />, badge: project.claude.active || undefined, hidden: !agents.includes('claude') },
+    { id: 'codex', label: t('codex.tab.label'), icon: <CodexIcon size={13} />, badge: project.codex?.active || undefined, hidden: !agents.includes('codex') },
     { id: 'readme', label: t('projects.panel.tabs.readme'), icon: <BookOpen className="size-3.5" />, hidden: !project.readme },
     { id: 'todolist', label: t('projects.panel.tabs.todolist'), icon: <ListChecks className="size-3.5" /> },
   ];
@@ -101,7 +106,8 @@ export function ProjectPanel({ project, webApps = [], tab: wanted, onTab, onClos
         {tab === 'browser' && webApps.length > 0 && <BrowserView project={project} apps={webApps} />}
         {tab === 'console' && <ConsoleTab project={project} />}
         {tab === 'readme' && <ReadmeView project={project} />}
-        {tab === 'claude' && <ProjectClaudeTab project={project} onOpenTab={onOpenClaudeTab} />}
+        {tab === 'claude' && <ProjectClaudeTab project={project} onOpenTab={(sid) => onOpenClaudeTab(sid, 'claude')} />}
+        {tab === 'codex' && <ProjectClaudeTab agent="codex" project={project} onOpenTab={(sid) => onOpenClaudeTab(sid, 'codex')} />}
         {tab === 'todolist' && (
           <div className="h-full overflow-auto">
             {project.suiviId
@@ -231,12 +237,14 @@ function SessionChip({ s, active, onSelect }: { s: TerminalSession; active: bool
 }
 
 /** Projet sans suivi : une session Claude avec `/suivi init` crée la Todolist (thème, artefact, import des sessions). */
-function CreateTodolist({ project, onOpenTab }: { project: Project; onOpenTab: (sid: string) => void }) {
+function CreateTodolist({ project, onOpenTab }: { project: Project; onOpenTab: (sid: string, agent?: AgentKind) => void }) {
   const toast = useToast();
   const t = useT();
+  // Claude décoché : la Todolist est créée par Codex (skill $suivi).
+  const viaCodex = !useEnabledAgents().includes('claude');
   const init = useMutation({
-    mutationFn: () => api.openClaude(project.id, undefined, '/suivi init'),
-    onSuccess: (s) => onOpenTab(s.id),
+    mutationFn: () => (viaCodex ? api.openCodex(project.id, undefined, '$suivi init') : api.openClaude(project.id, undefined, '/suivi init')),
+    onSuccess: (s) => onOpenTab(s.id, viaCodex ? 'codex' : 'claude'),
     onError: (e: Error) => toast('err', e.message),
   });
   return (

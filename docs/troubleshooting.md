@@ -1,6 +1,7 @@
 # Troubleshooting
 
-Start with `tarmac doctor`: it checks Node, the service, the port, the domain, `gh`, Docker and Claude Code, and
+Start with `tarmac doctor`: it checks Node, the service, the port, the domain, `gh`, Docker and the agents ticked
+in Settings → Agents (Claude Code, Codex), and
 says what to do for each problem. `tarmac logs` follows the service log.
 
 ## Access to ~/Documents
@@ -70,7 +71,18 @@ without `--no-sudo`. `http://localhost:7777` always works.
 
 Apps and consoles run with the `PATH` captured in `~/.tarmac/env` when you ran `tarmac setup`. If you installed a
 tool since (pnpm, bun, uv, a new Node…), run `tarmac setup` again from your terminal, or edit the `PATH=` line,
-then `tarmac restart`. The same applies when the Claude tab says `claude` is not found.
+then `tarmac restart`. The same applies when the Claude tab says `claude` is not found, or the Codex tab `codex`.
+
+## Codex
+
+- **No Codex tab or sessions**: tick Codex in **Settings → Agents**.
+- **Codex does not see the Todolist**: run `tarmac setup --with-codex`, then start a new Codex session (`codex mcp
+  list` should show `tarmac`). The session-start hook runs only once you trust it in Codex (`/hooks`).
+- **▶ says the Codex session's state is unknown**: Tarmac sends a task only to a Codex session showing an empty
+  prompt ("Ask Codex to do anything") with no approval prompt; type or clear the prompt, or pick **New Codex
+  session**.
+- **The Codex usage panel says to start a session**: Codex records your plan limits during an exchange; send a
+  message in Codex once, signed in with ChatGPT (`codex login`).
 
 ## Migration from App Manager
 

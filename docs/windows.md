@@ -56,6 +56,11 @@ If Claude Code runs inside WSL, Tarmac lists its sessions and opens new ones in 
 Todolist needs the `tarmac` MCP server: `./scripts/mcp-install.sh --code` then `./scripts/suivi-install.sh` from
 the clone (Claude Code side only; the Claude desktop app on Windows is not configured automatically).
 
+Codex works the same way when it runs inside WSL (`npm install -g @openai/codex`): tick it in Settings → Agents.
+`tarmac setup` does not run on Windows, so add the `tarmac` MCP server by hand (`codex mcp add tarmac -- node
+<clone>/dist/server/mcp.js`), and copy `codex/skills/suivi/` to `~/.agents/skills/` and `codex/AGENTS-suivi.md`
+into `~/.codex/AGENTS.md` if you want the Todolist from Codex.
+
 ## What does not work on Windows
 
 - `tarmac setup` and the other `tarmac` service commands (macOS only): start Tarmac by hand as above.

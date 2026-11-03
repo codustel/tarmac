@@ -1,7 +1,8 @@
 import { useMemo, useState, type CSSProperties } from 'react';
 import { useMutation, useQueries } from '@tanstack/react-query';
 import { ArrowLeft, ExternalLink, ListChecks, Search, Star } from 'lucide-react';
-import { api, type Project, type SuiviProjectSummary, type SuiviTask } from '../api';
+import { api, type AgentKind, type Project, type SuiviProjectSummary, type SuiviTask } from '../api';
+import { useEnabledAgents } from './Agents';
 import { Board, WHO, fmtMin, isToTest, useAppDark } from '../todolist/Board';
 import { compareText, useT } from '../i18n';
 import { Badge, Button, Card, Empty, cx, timeAgo, useToast } from '../ui';
@@ -20,7 +21,7 @@ export function TodolistView({ summaries, projects, query, onOpenTask, onOpenTer
   query: string;
   /** Ouvre l'onglet Todolist Claude du projet, tâche dépliée si `taskId`. */
   onOpenTask: (suiviId: string, taskId?: string) => boolean;
-  onOpenTerminal: (sid: string) => void;
+  onOpenTerminal: (sid: string, agent?: AgentKind) => void;
 }) {
   const tr = useT();
   const dark = useAppDark();
@@ -60,9 +61,11 @@ export function TodolistView({ summaries, projects, query, onOpenTask, onOpenTer
   // D4 : projets avec au moins une session Claude et sans Todolist.
   const withoutTodolist = projects.filter((x) => !x.suiviId && x.claude.count > 0)
     .sort((a, b) => (b.claude.lastAt ?? '').localeCompare(a.claude.lastAt ?? ''));
+  const viaCodex = !useEnabledAgents().includes('claude');
   const init = useMutation({
-    mutationFn: (id: string) => api.openClaude(id, undefined, '/suivi init'),
-    onSuccess: (s) => onOpenTerminal(s.id),
+    // Claude décoché : la Todolist est créée par Codex (skill $suivi).
+    mutationFn: (id: string) => (viaCodex ? api.openCodex(id, undefined, '$suivi init') : api.openClaude(id, undefined, '/suivi init')),
+    onSuccess: (s) => onOpenTerminal(s.id, viaCodex ? 'codex' : 'claude'),
     onError: (e: Error) => toast('err', e.message),
   });
 

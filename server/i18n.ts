@@ -31,6 +31,11 @@ const M = {
     en: 'claude CLI not found in Tarmac’s PATH (npm i -g @anthropic-ai/claude-code, then restart the service)',
     fr: 'CLI claude introuvable dans le PATH de Tarmac (npm i -g @anthropic-ai/claude-code, puis relance le service)',
   },
+  'api.noCodexCli': {
+    en: 'codex CLI not found in Tarmac’s PATH (npm i -g @openai/codex or brew install codex, then restart the service)',
+    fr: 'CLI codex introuvable dans le PATH de Tarmac (npm i -g @openai/codex ou brew install codex, puis relance le service)',
+  },
+  'api.agentDisabled': { en: 'This agent is turned off in Settings → Agents', fr: 'Cet agent est désactivé dans Réglages → Agents' },
   'api.badRepo': { en: 'Invalid repository', fr: 'Repo invalide' },
   'api.alreadyExists': { en: '{path} already exists', fr: '{path} existe déjà' },
   'api.noGhCli': { en: 'gh CLI not installed — brew install gh', fr: 'CLI gh non installée — brew install gh' },
@@ -55,6 +60,7 @@ const M = {
   'settings.cloneDirNotFound': { en: 'Clone folder not found: {path}', fr: 'Dossier de clonage introuvable : {path}' },
   'settings.badBridgeInterval': { en: 'MCP bridge interval must be between 10 and 600 s.', fr: 'Intervalle du pont MCP entre 10 et 600 s.' },
   'settings.badSuiviFolder': { en: 'Invalid Todolist folder name.', fr: 'Nom de dossier du suivi invalide.' },
+  'settings.agentRequired': { en: 'Keep at least one agent (Claude Code or Codex).', fr: 'Garde au moins un agent (Claude Code ou Codex).' },
   // ── Catalogues
   'git.unknownCommand': { en: 'Unknown git command', fr: 'Commande git inconnue' },
   'git.messageRequired': { en: 'Commit message required', fr: 'Message de commit requis' },

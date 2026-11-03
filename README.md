@@ -5,7 +5,7 @@
   </picture>
 </p>
 
-<p align="center"><strong>Tarmac — the local runway for your projects and your Claude Code sessions</strong></p>
+<p align="center"><strong>Tarmac — the local runway for your projects and your coding agents (Claude Code, Codex)</strong></p>
 
 <p align="center">
   <a href="https://www.npmjs.com/package/@codustel/tarmac"><img src="https://img.shields.io/npm/v/@codustel/tarmac" alt="npm version"></a>
@@ -17,9 +17,10 @@
 
 <p align="center"><a href="README.fr.md">Version française</a></p>
 
-**Tarmac for Claude Code** is a local dashboard for macOS. It finds every project in your code folders, starts and
-stops them with a free port, streams their logs, gives you a console and a Git menu in the browser, and opens
-Claude Code sessions you can also follow from claude.ai or your phone. It runs as a login service on
+**Tarmac** is a local dashboard for macOS. It finds every project in your code folders, starts and stops them with
+a free port, streams their logs, gives you a console and a Git menu in the browser, and runs your coding agents'
+sessions there: Claude Code (also followed from claude.ai or your phone) and Codex, OpenAI's agent included in
+ChatGPT plans. It runs as a login service on
 `http://tarmac.localhost` and installs as an app (PWA).
 
 ![Tarmac: projects view](docs/assets/projects.webp)
@@ -30,9 +31,9 @@ Claude Code sessions you can also follow from claude.ai or your phone. It runs a
 
 ## Why Tarmac
 
-You have a dozen projects, each with its own `pnpm dev`, port, `.env`, Supabase stack and Claude Code sessions.
+You have a dozen projects, each with its own `pnpm dev`, port, `.env`, Supabase stack and agent sessions.
 Tarmac puts them on one runway: one page to see what exists, what runs, what is out of sync with GitHub and what
-Claude is working on, without opening ten terminals or remembering which app took port 3000.
+your agents are working on, without opening ten terminals or remembering which app took port 3000.
 
 Everything stays on your Mac: Tarmac listens on `127.0.0.1` only and has no telemetry. Its only network calls
 are `git fetch` on your repositories and the GitHub API with your own token, to list your repositories.
@@ -52,9 +53,14 @@ are `git fetch` on your repositories and the GitHub API with your own token, to 
   Control in a built-in console, open from claude.ai/code and the mobile app too.
 - **Claude usage**: your plan and live usage in the sidebar (5-hour session, week, per-model limits such as Fable),
   read with Claude Code's own sign-in; the token stays on your Mac and is only sent to Anthropic.
-- **Claude Todolist**: a task tracker per project that Claude keeps up to date through the `tarmac` MCP server
-  and the `/suivi` skill, mirrored in a claude.ai artifact and in a `Todolist/` copy in the repo. A **▶ Claude**
-  button sends a pending task to an idle Claude session running in Tarmac, or to a new one.
+- **Codex (ChatGPT)**: tick Codex in Settings → Agents (Claude Code, Codex, or both) for the same with Codex:
+  every session of each project, new or resumed sessions in a built-in console, sessions running elsewhere with the
+  activity LED, the timeline, and your ChatGPT plan usage (5-hour and weekly windows) read from Codex's own local
+  session files, with no token and no network call.
+- **Todolist**: a task tracker per project that your agent keeps up to date through the `tarmac` MCP server and the
+  `suivi` skill (`/suivi` in Claude Code, `$suivi` in Codex), with a `Todolist/` copy in the repo and, for Claude, a
+  claude.ai artifact. A **▶** button sends a pending task to an idle Claude or Codex session running in Tarmac, or
+  to a new one. With Claude Code alone it is called the Claude Todolist.
 - **GitHub**: your repositories and organizations, which ones are cloned, "Clone" in one click (`gh` or SSH).
 - **Local Supabase**: running instances, Studio, Mailpit, API and Postgres URLs, linked project.
 - **Docker**: containers grouped by compose project with state, health, ports, CPU and memory, linked project,
@@ -68,7 +74,8 @@ are `git fetch` on your repositories and the GitHub API with your own token, to 
 - macOS (Apple silicon or Intel).
 - [Node.js](https://nodejs.org) **22.13 or later** (Tarmac uses the built-in `node:sqlite`).
 - Optional: [GitHub CLI](https://cli.github.com) (`gh`), Docker Desktop / OrbStack / Colima (Docker view, local Supabase),
-  [Claude Code](https://claude.com/claude-code) (sessions and Claude Todolist).
+  [Claude Code](https://claude.com/claude-code) and / or [Codex](https://developers.openai.com/codex) (agent
+  sessions and Todolist).
 
 ## Install
 
@@ -79,8 +86,8 @@ tarmac setup
 
 `tarmac setup` creates `~/.tarmac/env`, installs a login service (LaunchAgent), then, with your confirmation and
 your password (`sudo`), adds `tarmac.localhost` to `/etc/hosts` and redirects port 80 to Tarmac's port 7777. Last,
-it offers to set up the Claude Code integration. Run `tarmac setup --dry-run` first to see every action without
-changing anything.
+it offers to set up the Claude Code integration, and the Codex one when `codex` is installed (or with
+`--with-codex`). Run `tarmac setup --dry-run` first to see every action without changing anything.
 
 **The reference address is `http://tarmac.localhost:7777`**: it always works, with or without `sudo` (Chrome,
 Firefox and Safari resolve `*.localhost` on their own). The address without port, `http://tarmac.localhost`, is a
@@ -100,8 +107,10 @@ copied from `~/.app-manager` to `~/.tarmac` (the original is kept). If an older 
 1. Open `http://tarmac.localhost` (`tarmac open`). Click **Install the app** in the sidebar to get a Dock icon.
 2. In **Settings**, check the folders to scan (by default the usual code folders that exist: `~/Developer`,
    `~/Projects`, `~/dev`, `~/code`…), then connect the GitHub CLI in one click.
-3. Start an app with **Start**, open its console, or open a Claude session from its **Claude** tab.
-4. With the Claude Code integration, type `/suivi init` in a session to create the project's Claude Todolist.
+3. Start an app with **Start**, open its console, or open an agent session from its **Claude** or **Codex** tab
+   (tick Codex in **Settings → Agents** first; Claude Code alone is the default).
+4. With the integration, type `/suivi init` in a Claude Code session, or `$suivi init` in a Codex session, to create
+   the project's Todolist. Codex asks you once to trust Tarmac's session-start hook: type `/hooks` in Codex.
 
 `~/Documents` is protected by macOS: accept the access request for `node` on the first scan (see
 [Troubleshooting](docs/troubleshooting.md#access-to-documents)).
@@ -110,7 +119,7 @@ copied from `~/.app-manager` to `~/.tarmac` (the original is kept). If an older 
 
 ```text
 tarmac status | start | stop | restart | logs | open
-tarmac doctor          # checks Node, the service, the port, the domain, gh, Docker and Claude Code
+tarmac doctor          # checks Node, the service, the port, the domain, gh, Docker and the ticked agents
 tarmac update          # npm install -g @codustel/tarmac@latest, then restart
 tarmac uninstall       # --purge also deletes ~/.tarmac
 ```
@@ -118,9 +127,12 @@ tarmac uninstall       # --purge also deletes ~/.tarmac
 Open windows, the installed app included, notice a new version and reload themselves; running apps and consoles
 are not affected by an update.
 
-### Claude Todolist commands
+### Todolist commands
 
-Typed in a Claude Code session, inside the project's folder (needs the Claude Code integration from the install).
+Typed in a Claude Code session, inside the project's folder (needs the integration from the install). In Codex,
+skills are called with `$`: `$suivi init`, `$suivi sync`, `$suivi import` and `$suivi theme` work the same way; the
+artifact commands (`open`, `upgrade`) are Claude-only, Codex works with Tarmac's Todolist view and the `Todolist/`
+copy (see [Codex](docs/codex.md)).
 
 | Command | What it does |
 |---|---|
@@ -135,6 +147,7 @@ Typed in a Claude Code session, inside the project's folder (needs the Claude Co
 
 - [Configuration](docs/configuration.md): folders, ports, domain, environment variables, settings.
 - [Claude Code](docs/claude-code.md): sessions, Remote Control, MCP server, Claude Todolist and `/suivi`.
+- [Codex](docs/codex.md): Codex sessions, MCP server, `AGENTS.md` rule, `$suivi` skill, ▶ button and usage.
 - [Security](docs/security.md): what Tarmac listens on, what it can run, what needs `sudo` and why.
 - [Troubleshooting](docs/troubleshooting.md): `~/Documents` access, port 80, installed app, migration.
 - [Windows (WSL 2)](docs/windows.md): running Tarmac on Windows, and what does not work there.
@@ -157,6 +170,9 @@ runs inside WSL 2, started by hand, with a few features missing: see [Windows (W
 **Is a Claude subscription required?** Only for the Claude features. Remote Control needs Claude Code signed in to
 claude.ai (`/login`), not an API key.
 
+**Does it work with ChatGPT?** Yes, through Codex, OpenAI's coding agent included in ChatGPT plans: tick it in
+Settings → Agents and run `tarmac setup --with-codex`. Claude Code is not needed then. See [Codex](docs/codex.md).
+
 ## Contributing
 
 Issues and pull requests are welcome, in English or French: see [CONTRIBUTING.md](CONTRIBUTING.md). Please report
@@ -166,4 +182,5 @@ security issues privately ([SECURITY.md](SECURITY.md)).
 
 [MIT](LICENSE) — © 2026 Ismaël Belaaouad ([Codustel](https://www.linkedin.com/in/codustel/)). Follow the project on [LinkedIn](https://www.linkedin.com/in/codustel/) and [X](https://x.com/ismael_b_ai).
 
-Not affiliated with Anthropic. Claude and Claude Code are trademarks of Anthropic.
+Not affiliated with Anthropic or OpenAI. Claude and Claude Code are trademarks of Anthropic; ChatGPT and Codex are
+trademarks of OpenAI.

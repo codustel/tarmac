@@ -1,7 +1,8 @@
 # Claude Code
 
 Tarmac shows the Claude Code sessions of each project, opens new ones with Remote Control, and keeps a task tracker
-per project, the **Claude Todolist**, that Claude fills while it works.
+per project, the **Claude Todolist**, that Claude fills while it works. Using ChatGPT's Codex as well, or instead?
+See [Codex](codex.md).
 
 ## Sessions
 
