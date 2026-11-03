@@ -3,7 +3,7 @@
   "version": "1.0.0",
   "private": false,
   "type": "module",
-  "description": "The local runway for your projects and your coding agents: a macOS dashboard to run and watch your dev apps, local Supabase, GitHub repos and Claude Code and Codex sessions.",
+  "description": "Every project, every agent session, one local runway: a macOS dashboard to run and watch your dev apps, local Supabase, GitHub repos and Claude Code and Codex sessions.",
   "keywords": [
     "tarmac",
     "dashboard",

@@ -5,7 +5,7 @@
   </picture>
 </p>
 
-<p align="center"><strong>Tarmac — la piste locale de vos projets et de vos agents de code</strong></p>
+<p align="center"><strong>Tarmac — tous vos projets et vos agents, une seule piste</strong></p>
 
 <p align="center">Créé par <strong>Ismaël Belaaouad</strong> · Codustel — <a href="https://www.linkedin.com/in/codustel/">LinkedIn</a> · <a href="https://x.com/ismael_b_ai">X</a></p>
 

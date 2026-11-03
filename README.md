@@ -5,7 +5,7 @@
   </picture>
 </p>
 
-<p align="center"><strong>Tarmac — the local runway for your projects and your coding agents</strong></p>
+<p align="center"><strong>Tarmac — every project, every agent session, one local runway</strong></p>
 
 <p align="center">
   <a href="https://www.npmjs.com/package/@codustel/tarmac"><img src="https://img.shields.io/npm/v/@codustel/tarmac" alt="npm version"></a>

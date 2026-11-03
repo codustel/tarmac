@@ -90,7 +90,7 @@ function optionName(flag: keyof Flags): string {
   return Object.entries(BOOL).find(([, f]) => f === flag)?.[0] ?? flag;
 }
 
-export const HELP = `Tarmac — the local runway for your projects and your coding agents (Claude Code, Codex)
+export const HELP = `Tarmac — every project, every agent session, one local runway (Claude Code, Codex)
 
 Usage: tarmac <command> [options]
 
