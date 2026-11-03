@@ -15,6 +15,7 @@ import { SettingsView } from './views/SettingsView';
 import { TodolistView } from './views/TodolistView';
 import { ClaudeIcon, ClaudeSessionsView, StandaloneTerminal } from './views/ClaudeSessions';
 import { ClaudeUsagePanel } from './views/ClaudeUsagePanel';
+import { LicenseModal } from './views/LicenseModal';
 import { InstallButton, UpdateBanner } from './pwa';
 import { onIdeOpen } from './ide/store';
 import { useLanguageSetting, useT, type TKey } from './i18n';
@@ -102,6 +103,7 @@ function Main({ terminals }: { terminals: import('./api').TerminalSession[] }) {
   const [query, setQuery] = useState('');
   const [selected, setSelected] = useState<{ id: string; tab: PanelTab } | null>(null);
   const [todoFocus, setTodoFocus] = useState<string | null>(null);
+  const [licenseOpen, setLicenseOpen] = useState(false);
   const suivi = useQuery({ queryKey: ['suivi', 'projects'], queryFn: api.suiviProjects });
   const [theme, setTheme] = useTheme();
   const t = useT();
@@ -274,13 +276,15 @@ function Main({ terminals }: { terminals: import('./api').TerminalSession[] }) {
             </div>
           </div>
           <div className="text-center text-[10px] leading-relaxed text-faint">
-            {t('common.license')}<br />© 2026 Ismaël Belaaouad · Codustel<br />
+            <button onClick={() => setLicenseOpen(true)} title={t('common.licenseOpen')} className="hover:text-fg hover:underline">{t('common.license')}</button>
+            <br />© 2026 Ismaël Belaaouad · Codustel<br />
             <a href="https://www.linkedin.com/in/codustel/" target="_blank" rel="noreferrer" className="hover:text-fg">LinkedIn</a>
             {' · '}
             <a href="https://x.com/ismael_b_ai" target="_blank" rel="noreferrer" className="hover:text-fg">X</a>
           </div>
         </div>
       </aside>
+      {licenseOpen && <LicenseModal onClose={() => setLicenseOpen(false)} />}
 
       {/* ─── Contenu ─── */}
       <div className="flex min-w-0 flex-1">
