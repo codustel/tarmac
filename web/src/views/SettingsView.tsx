@@ -41,67 +41,41 @@ export function SettingsView() {
   const [showAll, setShowAll] = useState(false);
   const [cloneDir, setCloneDir] = useState('');
 
-  // Chaque carte de réglages s'enregistre et s'annule seule (groupe), sans toucher aux autres.
-  type Group = 'local' | 'github' | 'tools';
-  const reset = (s: Settings, groups: Group[] = ['local', 'github', 'tools']) => {
-    if (groups.includes('local')) {
-      // Dossiers affichés en `~/…` (le serveur développe `~` à l'enregistrement).
-      setRoots(s.roots.length ? s.roots.map((r) => tildify(r, home)) : ['']);
-      setDepth(s.scanMaxDepth);
-      setShowAll(s.showAllProjects);
-    }
-    if (groups.includes('github')) {
-      setOwners(s.github.owners);
-      setOwnerDraft('');
-      setCloneDir(tildify(s.cloneDir, home));
-      setToken('');
-      setClearToken(false);
-    }
-    if (groups.includes('tools')) {
-      setEditor(s.editor);
-      setRange(s.portRange);
-    }
+  const reset = (s: Settings) => {
+    // Dossiers affichés en `~/…` (le serveur développe `~` à l'enregistrement).
+    setRoots(s.roots.length ? s.roots.map((r) => tildify(r, home)) : ['']);
+    setOwners(s.github.owners);
+    setEditor(s.editor);
+    setRange(s.portRange);
+    setDepth(s.scanMaxDepth);
+    setShowAll(s.showAllProjects);
+    setCloneDir(tildify(s.cloneDir, home));
+    setToken('');
+    setClearToken(false);
   };
   useEffect(() => { if (q.data) reset(q.data); }, [q.data, home]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  /** Modifications non enregistrées d'un groupe (comparées aux réglages chargés). */
-  const dirty = (g: Group, s: Settings | undefined): boolean => {
-    if (!s) return false;
-    const same = (a: unknown, b: unknown) => JSON.stringify(a) === JSON.stringify(b);
-    if (g === 'local') return !same(roots.filter((r) => r.trim()), s.roots.map((r) => tildify(r, home))) || depth !== s.scanMaxDepth || showAll !== s.showAllProjects;
-    if (g === 'github') return !same(owners, s.github.owners) || !!ownerDraft.trim() || cloneDir !== tildify(s.cloneDir, home) || !!token || clearToken;
-    return editor !== s.editor || !same(range, s.portRange);
-  };
-
   const save = useMutation({
-    mutationFn: (g: Group) => {
-      const patch: SettingsPatch =
-        g === 'local' ? { roots: roots.filter((r) => r.trim()), scanMaxDepth: depth, showAllProjects: showAll }
-        : g === 'github' ? {
-          github: { owners: ownerDraft.trim() ? [...owners, ownerDraft.trim()] : owners, ...(token ? { token } : clearToken ? { token: null } : {}) },
-          cloneDir,
-        }
-        : { editor, portRange: range };
+    mutationFn: () => {
+      const patch: SettingsPatch = {
+        roots: roots.filter((r) => r.trim()),
+        github: { owners: ownerDraft.trim() ? [...owners, ownerDraft.trim()] : owners, ...(token ? { token } : clearToken ? { token: null } : {}) },
+        editor,
+        portRange: range,
+        scanMaxDepth: depth,
+        showAllProjects: showAll,
+        cloneDir,
+      };
       return api.saveSettings(patch);
     },
-    onSuccess: (s, g) => {
+    onSuccess: (s) => {
       qc.setQueryData(['settings'], s);
-      reset(s, [g]);
+      setOwnerDraft('');
       qc.invalidateQueries();
       toast('ok', t('settings.saved'));
     },
     onError: (e: Error) => toast('err', e.message),
   });
-  /** Pied de carte : Annuler / Enregistrer, actifs seulement s'il y a des modifications dans ce groupe. */
-  const footer = (g: Group) => {
-    const d = dirty(g, q.data);
-    return (
-      <div className="flex items-center justify-end gap-2 px-5 py-3">
-        <Button variant="ghost" disabled={!d} onClick={() => reset(q.data!, [g])}>{t('settings.cancel')}</Button>
-        <Button variant="primary" icon={<Save className="size-3.5" />} disabled={!d} loading={save.isPending && save.variables === g} onClick={() => save.mutate(g)}>{t('settings.save')}</Button>
-      </div>
-    );
-  };
 
   if (!q.data) return null;
 
@@ -129,7 +103,6 @@ export function SettingsView() {
                   placeholder="~/Developer"
                   onChange={(e) => setRoots(roots.map((x, j) => (j === i ? e.target.value : x)))}
                 />
-                <BrowseButton start={r} home={home} onPick={(v) => setRoots(roots.map((x, j) => (j === i ? v : x)))} />
                 <button
                   title={t('settings.remove')}
                   disabled={roots.length === 1}
@@ -155,7 +128,6 @@ export function SettingsView() {
         <Field title={t('settings.depth')} hint={t('settings.depthHint')}>
           <input type="number" min={1} max={12} className={cx(input, 'w-24')} value={depth} onChange={(e) => setDepth(Number(e.target.value))} />
         </Field>
-        {footer('local')}
       </Card>
 
       <Card className="divide-y divide-line">
@@ -191,10 +163,7 @@ export function SettingsView() {
           <GhCliLogin />
         </Field>
         <Field title={t('settings.cloneDir')} hint={t('settings.cloneDirHint')}>
-          <div className="flex gap-2">
-            <input className={cx(input, 'font-mono text-xs')} value={cloneDir} placeholder="~/Developer" onChange={(e) => setCloneDir(e.target.value)} />
-            <BrowseButton start={cloneDir} home={home} onPick={setCloneDir} />
-          </div>
+          <input className={cx(input, 'font-mono text-xs')} value={cloneDir} placeholder="~/Developer" onChange={(e) => setCloneDir(e.target.value)} />
         </Field>
         <Field
           title={t('settings.token')}
@@ -218,7 +187,6 @@ export function SettingsView() {
             )}
           </div>
         </Field>
-        {footer('github')}
       </Card>
 
       <Card className="divide-y divide-line">
@@ -238,8 +206,12 @@ export function SettingsView() {
             <input type="number" className={cx(input, 'w-28 font-mono')} value={range.end} onChange={(e) => setRange({ ...range, end: Number(e.target.value) })} />
           </div>
         </Field>
-        {footer('tools')}
       </Card>
+
+      <div className="flex items-center justify-end gap-2">
+        <Button variant="ghost" onClick={() => reset(q.data!)}>{t('settings.cancel')}</Button>
+        <Button variant="primary" icon={<Save className="size-3.5" />} loading={save.isPending} onClick={() => save.mutate()}>{t('settings.save')}</Button>
+      </div>
 
       {q.data && <AgentsCard settings={q.data} />}
       {q.data && <SuiviSettingsCard settings={q.data} />}
@@ -456,22 +428,5 @@ function SuiviSettingsCard({ settings }: { settings: Settings }) {
         <Button variant="primary" icon={<Save className="size-3.5" />} loading={save.isPending} onClick={() => save.mutate()}>{t('settings.save')}</Button>
       </div>
     </Card>
-  );
-}
-
-/** « … » : ouvre la fenêtre « Choisir un dossier » de macOS (via le service) et renvoie le chemin choisi. */
-function BrowseButton({ start, home, onPick }: { start: string; home?: string; onPick: (path: string) => void }) {
-  const t = useT();
-  const toast = useToast();
-  const pick = useMutation({
-    mutationFn: () => api.pickFolder(start || undefined),
-    onSuccess: (r) => { if (r.path) onPick(tildify(r.path, home)); },
-    onError: (e: Error) => toast('err', e.message),
-  });
-  return (
-    <button type="button" title={t('settings.browse')} aria-label={t('settings.browse')} disabled={pick.isPending} onClick={() => pick.mutate()}
-      className="grid h-8 w-9 shrink-0 place-items-center rounded-md border border-line font-semibold text-muted hover:border-accent hover:text-fg disabled:opacity-50">
-      {pick.isPending ? <span className="size-3.5 animate-spin rounded-full border-2 border-current border-t-transparent" /> : '…'}
-    </button>
   );
 }

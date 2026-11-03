@@ -3,7 +3,6 @@ import crypto from 'node:crypto';
 import type { IPty } from '@lydell/node-pty';
 import type { Project } from './scanner.js';
 import { tr } from './i18n.js';
-import { commandArgs, interactiveArgs, killTree, prependPath, shell as currentShell } from './platform.js';
 
 /** Cible d'une console : un projet, ou une cible « système » (ex. `gh auth login`). */
 export type TerminalTarget = Pick<Project, 'id' | 'dir' | 'env' | 'pathPrepend'>;
@@ -93,7 +92,7 @@ class TerminalManager extends EventEmitter {
     const pty = await loadPty();
     if (!pty) throw new Error(tr({ en: 'Console unavailable (node-pty): {error}', fr: 'Console indisponible (node-pty) : {error}' }, { error: String(ptyError) }));
 
-    const shell = currentShell();
+    const shell = process.env.SHELL || '/bin/zsh';
     const env: Record<string, string> = {
       ...(process.env as Record<string, string>),
       ...project.env,
@@ -102,12 +101,12 @@ class TerminalManager extends EventEmitter {
       FORCE_COLOR: '1',
       PYTHONUNBUFFERED: '1',
     };
-    prependPath(env, project.pathPrepend);
+    if (project.pathPrepend.length) env.PATH = [...project.pathPrepend, process.env.PATH].join(':');
     for (const k of opts.unsetEnv ?? []) delete env[k];
 
-    // Commande : shell non-login (`-c`, `-NoProfile`) pour garder le PATH de Tarmac (et le venv) intact.
-    const args = opts.command ? commandArgs(opts.command, shell) : interactiveArgs(shell);
-    const p = pty.spawn(shell.file, args, {
+    // Commande : shell non-login (`-c`) pour garder le PATH de Tarmac (et le venv) intact.
+    const args = opts.command ? ['-c', opts.command] : ['-i'];
+    const p = pty.spawn(shell, args, {
       name: 'xterm-256color',
       cols: opts.cols ?? 120,
       rows: opts.rows ?? 32,
@@ -182,9 +181,9 @@ class TerminalManager extends EventEmitter {
   kill(id: string) {
     const s = this.sessions.get(id);
     if (s?.status !== 'running') return;
-    if (!killTree(s.pty.pid)) s.pty.kill();
+    try { process.kill(-s.pty.pid, 'SIGTERM'); } catch { s.pty.kill(); }
     setTimeout(() => {
-      if (s.status === 'running') killTree(s.pty.pid, 'SIGKILL');
+      if (s.status === 'running') try { process.kill(-s.pty.pid, 'SIGKILL'); } catch { /* déjà mort */ }
     }, 3000);
   }
 

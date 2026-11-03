@@ -1,7 +1,6 @@
 import path from 'node:path';
 import { parse as parseToml } from 'smol-toml';
 import { tr } from '../i18n.js';
-import { PYTHON, VENV_BIN, isWindows } from '../platform.js';
 import { T, exists, readText, type Command, type Detector, type ServeSpec, type Tech } from './types.js';
 
 const ENTRY_CANDIDATES = ['main.py', 'app.py', 'run.py', 'cli.py', 'bot.py', 'server.py', '__main__.py', 'src/main.py', 'app/main.py'];
@@ -16,12 +15,12 @@ interface Runner {
 }
 
 function resolveRunner(dir: string, names: Set<string>): Runner {
-  const venv = ['.venv', 'venv', 'env'].find((v) => exists(dir, v, VENV_BIN, isWindows() ? 'python.exe' : 'python')) ?? null;
+  const venv = ['.venv', 'venv', 'env'].find((v) => exists(dir, v, 'bin', 'python')) ?? null;
   if (names.has('uv.lock')) return { pm: 'uv', python: 'uv run python', module: (m) => `uv run python -m ${m}`, venv };
   if (names.has('poetry.lock') && !venv) return { pm: 'poetry', python: 'poetry run python', module: (m) => `poetry run python -m ${m}`, venv };
   if (names.has('Pipfile') && !venv) return { pm: 'pipenv', python: 'pipenv run python', module: (m) => `pipenv run python -m ${m}`, venv };
-  if (venv) return { pm: names.has('poetry.lock') ? 'poetry' : 'pip', python: `${venv}/${VENV_BIN}/python`, module: (m) => `${venv}/${VENV_BIN}/python -m ${m}`, venv };
-  return { pm: 'pip', python: PYTHON, module: (m) => `${PYTHON} -m ${m}`, venv: null };
+  if (venv) return { pm: names.has('poetry.lock') ? 'poetry' : 'pip', python: `${venv}/bin/python`, module: (m) => `${venv}/bin/python -m ${m}`, venv };
+  return { pm: 'pip', python: 'python3', module: (m) => `python3 -m ${m}`, venv: null };
 }
 
 function readDeps(dir: string, names: Set<string>): { deps: Set<string>; pyproject: any } {
@@ -88,7 +87,7 @@ export const detectPython: Detector = ({ dir, names, isGitRoot }) => {
   const entry = ENTRY_CANDIDATES.find((f) => exists(dir, f));
   if (entry) commands.push({ id: `run:${entry}`, label: `python ${entry}`, cmd: `${r.python} ${entry}`, group: 'run' });
   for (const name of Object.keys(pyproject?.project?.scripts ?? pyproject?.tool?.poetry?.scripts ?? {})) {
-    const cmd = r.pm === 'uv' ? `uv run ${name}` : r.pm === 'poetry' && !r.venv ? `poetry run ${name}` : r.venv ? `${r.venv}/${VENV_BIN}/${name}` : name;
+    const cmd = r.pm === 'uv' ? `uv run ${name}` : r.pm === 'poetry' && !r.venv ? `poetry run ${name}` : r.venv ? `${r.venv}/bin/${name}` : name;
     commands.push({ id: `script:${name}`, label: name, cmd, group: 'run' });
   }
 
@@ -150,11 +149,11 @@ export const detectPython: Detector = ({ dir, names, isGitRoot }) => {
     r.pm === 'uv' ? 'uv sync'
       : r.pm === 'poetry' ? 'poetry install'
         : r.pm === 'pipenv' ? 'pipenv install'
-          : names.has('requirements.txt') ? `${r.venv ? `${r.venv}/${VENV_BIN}/pip` : `${PYTHON} -m pip`} install -r requirements.txt`
-            : names.has('pyproject.toml') ? `${r.venv ? `${r.venv}/${VENV_BIN}/pip` : `${PYTHON} -m pip`} install -e .`
+          : names.has('requirements.txt') ? `${r.venv ? `${r.venv}/bin/pip` : 'python3 -m pip'} install -r requirements.txt`
+            : names.has('pyproject.toml') ? `${r.venv ? `${r.venv}/bin/pip` : 'python3 -m pip'} install -e .`
               : null;
   if (install) commands.push({ id: 'deps:install', label: install, cmd: install, group: 'deps' });
-  if (!r.venv && r.pm === 'pip') commands.push({ id: 'deps:venv', label: tr({ en: 'create .venv', fr: 'créer .venv' }), cmd: `${PYTHON} -m venv .venv`, group: 'deps' });
+  if (!r.venv && r.pm === 'pip') commands.push({ id: 'deps:venv', label: tr({ en: 'create .venv', fr: 'créer .venv' }), cmd: 'python3 -m venv .venv', group: 'deps' });
 
   const venvAbs = r.venv ? path.join(dir, r.venv) : null;
   return {
@@ -173,6 +172,6 @@ export const detectPython: Detector = ({ dir, names, isGitRoot }) => {
     commands,
     defaultCommand: commands.find((c) => c.group === 'run')?.id ?? null,
     env: { PYTHONUNBUFFERED: '1', ...(venvAbs ? { VIRTUAL_ENV: venvAbs } : {}) },
-    pathPrepend: venvAbs ? [path.join(venvAbs, VENV_BIN)] : [],
+    pathPrepend: venvAbs ? [path.join(venvAbs, 'bin')] : [],
   };
 };

@@ -7,8 +7,7 @@ const home = os.homedir();
 const expand = (p: string) => (p.startsWith('~') ? path.join(home, p.slice(1)) : p);
 
 /** Dossiers de code usuels ; par défaut, ceux qui existent sont scannés (sinon ~/Documents). */
-// `~/source/repos` : dossier par défaut de Visual Studio sous Windows.
-export const COMMON_ROOTS = ['~/Developer', '~/Projects', '~/projects', '~/dev', '~/_dev', '~/code', '~/src', '~/Documents/GitHub', '~/source/repos'];
+export const COMMON_ROOTS = ['~/Developer', '~/Projects', '~/projects', '~/dev', '~/_dev', '~/code', '~/src', '~/Documents/GitHub'];
 function defaultRoots(): string {
   const found = COMMON_ROOTS.filter((r) => fs.existsSync(expandHome(r)));
   // ~/Projects et ~/projects désignent le même dossier sur un disque insensible à la casse (même inode).
@@ -52,11 +51,6 @@ fs.mkdirSync(config.dataDir, { recursive: true });
 
 /** Sockets Docker usuels sur macOS (Docker Desktop, OrbStack, Colima) puis Linux. */
 export function dockerSocketPath(): string | null {
-  if (process.platform === 'win32') {
-    // Docker Desktop sous Windows : named pipe (`npipe:////./pipe/docker_engine`).
-    const pipe = process.env.DOCKER_HOST?.startsWith('npipe://') ? process.env.DOCKER_HOST.slice(8).replace(/\//g, '\\') : '\\\\.\\pipe\\docker_engine';
-    return fs.existsSync(pipe) ? pipe : null;
-  }
   const fromEnv = process.env.DOCKER_HOST?.replace(/^unix:\/\//, '');
   const candidates = [
     fromEnv,

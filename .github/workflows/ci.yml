@@ -31,24 +31,3 @@ jobs:
           npm install -g --prefix "$RUNNER_TEMP/prefix" codustel-tarmac-*.tgz
           "$RUNNER_TEMP/prefix/bin/tarmac" --version
           "$RUNNER_TEMP/prefix/bin/tarmac" setup --dry-run --no-claude
-
-  # Portage Windows (7.6) : typecheck, tests (PowerShell 7 et Windows PowerShell 5.1 réels) et build.
-  windows:
-    runs-on: windows-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: pnpm/action-setup@v4
-        with:
-          version: 9
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 22
-          cache: pnpm
-      - run: pnpm install --frozen-lockfile
-      - run: pnpm typecheck
-      - name: Test
-        shell: pwsh
-        run: |
-          $env:DATA_DIR = Join-Path $env:RUNNER_TEMP 'tarmac-data'
-          pnpm test
-      - run: pnpm build

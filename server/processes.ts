@@ -3,7 +3,6 @@ import { EventEmitter } from 'node:events';
 import { config } from './config.js';
 import { tr } from './i18n.js';
 import { allocatePort, isPortBusy } from './ports.js';
-import { appSpawnOptions, killTree, prependPath, spawnCommand } from './platform.js';
 import { state, persist } from './store.js';
 import type { Project } from './scanner.js';
 
@@ -148,7 +147,8 @@ class ProcessManager extends EventEmitter {
       FORCE_COLOR: '1',
       PYTHONUNBUFFERED: '1',
     };
-    prependPath(env, [...app.pathPrepend, ...(spec.pathPrepend ?? [])]);
+    const extraPath = [...app.pathPrepend, ...(spec.pathPrepend ?? [])];
+    if (extraPath.length) env.PATH = [...extraPath, process.env.PATH].join(':');
 
     Object.assign(r, {
       status: 'starting', port, pid: null, exitCode: null, adopted: false, stopRequested: false,
@@ -156,10 +156,9 @@ class ProcessManager extends EventEmitter {
     } satisfies Partial<Runtime>);
     this.log(app.id, 'sys', `$ ${cmd} ${args.join(' ')}   (cwd: ${app.relPath}${port !== null ? `, port ${port}` : ''})`);
 
-    const run = spawnCommand(cmd, args); // Windows : via PowerShell (npm.cmd, pnpm.cmd…)
-    const child = spawn(run.file, run.args, {
+    const child = spawn(cmd, args, {
       cwd: app.dir,
-      ...appSpawnOptions(), // macOS : groupe de process dédié → on tue aussi les enfants (next, esbuild, uvicorn reload…)
+      detached: true, // groupe de process dédié → on tue aussi les enfants (next, esbuild, uvicorn reload…)
       env,
       stdio: ['ignore', 'pipe', 'pipe'],
     });
@@ -248,7 +247,9 @@ class ProcessManager extends EventEmitter {
     this.emitStatus(id);
     const pid = r.pid;
     const managed = !!r.child && !r.adopted; // sinon pas d'évènement `exit` à attendre
-    const killGroup = (sig: 'SIGTERM' | 'SIGKILL') => killTree(pid, sig);
+    const killGroup = (sig: NodeJS.Signals) => {
+      try { process.kill(-pid, sig); } catch { try { process.kill(pid, sig); } catch { /* déjà mort */ } }
+    };
     killGroup('SIGTERM');
 
     await new Promise<void>((resolve) => {

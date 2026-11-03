@@ -122,7 +122,8 @@ artifact db keeps its documents, history stays attached): only `phase`, `phaseTi
 
 For tasks that were coded but never switched to "to test" (status forgotten, work done in another session).
 1. Candidates: `suivi_get` with `includeDone: false`, keep the untreated tasks (not done, not `toTest`, not
-   archived). Skip tasks whose work is not code (`who: "toi"`: a purchase, an account, a publication) unless the
+   `tested`, not archived). A task that is `tested` but not done is waiting for the user to check it: list it
+   apart ("tested, to check"), never set it back to test. Skip tasks whose work is not code (`who: "toi"`: a purchase, an account, a publication) unless the
    repo shows it done.
 2. Evidence, for each candidate, in the project's clone and worktrees (`git worktree list`):
    - commits citing its number or id: `git log --all --oneline -i --grep "<num>\b"` (and `<id>`), plus the

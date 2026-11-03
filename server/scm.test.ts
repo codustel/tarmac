@@ -75,7 +75,6 @@ test('dépôt réel : statut, diff, indexation, smart commit, log', async () => 
   const g = (...a: string[]) => execFileSync('git', a, { cwd: dir, stdio: 'pipe' });
   g('init', '-q', '-b', 'main');
   g('config', 'user.email', 't@t'); g('config', 'user.name', 't');
-  g('config', 'core.autocrlf', 'false'); // Git for Windows : pas de conversion CRLF dans le dépôt de test
   fs.writeFileSync(path.join(dir, 'a.txt'), 'v1\n');
   fs.writeFileSync(path.join(dir, '[id].tsx'), 'x\n');
   await scmAction(dir, 'commit', { message: 'init' }); // smart commit : tout indexé

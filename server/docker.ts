@@ -15,7 +15,7 @@ import fs from 'node:fs';
 import http from 'node:http';
 import os from 'node:os';
 import path from 'node:path';
-import { execFile, spawn } from 'node:child_process';
+import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
 import { dockerSocketPath } from './config.js';
 import { demo, demoDockerAction, demoDockerOverview, demoDockerStats } from './demo/index.js';
@@ -154,9 +154,7 @@ export function parseContainer(c: RawContainer): DockerContainer {
 
 export interface LinkableProject { id: string; name: string; dir: string; repoDir: string | null; supabaseProjectId: string | null }
 
-// `/` ou `\` : sous Windows, le moteur peut donner des chemins Windows ou de WSL (`/mnt/c/…`, `/home/…`).
-const inside = (child: string, parent: string) =>
-  child === parent || [path.sep, '/'].some((sep) => child.startsWith(parent.endsWith(sep) ? parent : parent + sep));
+const inside = (child: string, parent: string) => child === parent || child.startsWith(parent.endsWith(path.sep) ? parent : parent + path.sep);
 
 /**
  * Projet Tarmac d'un conteneur : instance Supabase détectée, puis dossier compose, puis montages (bind).
@@ -171,8 +169,7 @@ export function linkProject(c: { supabaseProject: string | null; workingDir: str
     if (sb) return pick(sb);
   }
   for (const dir of [c.workingDir, ...mounts].filter((d): d is string => !!d && path.isAbsolute(d))) {
-    // Chemin Linux (WSL, moteur distant) vu depuis Windows : gardé tel quel, sans lecteur ajouté.
-    const d = process.platform === 'win32' && dir.startsWith('/') ? path.posix.resolve(dir) : path.resolve(dir);
+    const d = path.resolve(dir);
     const owner = projects.filter((p) => inside(d, p.dir)).sort((a, b) => shallow(b, a))[0];
     if (owner) return pick(owner);
     const child = projects.filter((p) => inside(p.dir, d) && d !== path.parse(d).root && d !== os.homedir()).sort(shallow)[0];
@@ -235,13 +232,8 @@ export function engineAppOf(socket: string | null, installed: (app: 'Docker' | '
   return installed('Docker') ? 'Docker' : installed('OrbStack') ? 'OrbStack' : null;
 }
 
-/** Docker Desktop sous Windows (OrbStack n'existe que sur macOS). */
-const WINDOWS_DOCKER = path.join(process.env.ProgramFiles ?? 'C:\\Program Files', 'Docker', 'Docker', 'Docker Desktop.exe');
-
 const appInstalled = (app: 'Docker' | 'OrbStack') =>
-  process.platform === 'win32'
-    ? app === 'Docker' && fs.existsSync(WINDOWS_DOCKER)
-    : [`/Applications/${app}.app`, path.join(os.homedir(), 'Applications', `${app}.app`)].some((p) => fs.existsSync(p));
+  [`/Applications/${app}.app`, path.join(os.homedir(), 'Applications', `${app}.app`)].some((p) => fs.existsSync(p));
 
 // ─── Accès au moteur ────────────────────────────────────────────────────────
 export class DockerError extends Error {
@@ -482,12 +474,11 @@ export async function dockerAct(action: DockerAction, target: { id: string } | {
   return docker().act(action, target);
 }
 
-/** Ouvre l'application du moteur (`open -a`, l'exe sous Windows) ; rien en mode démo. */
+/** Ouvre l'application du moteur (`open -a`) ; rien en mode démo. */
 export async function openDockerApp(): Promise<{ ok: true; app: EngineApp }> {
   if (demo()) return { ok: true, app: 'Docker' };
   const app = engineAppOf(dockerSocketPath(), appInstalled);
   if (!app) throw new DockerError('no Docker app installed', 'ENOAPP', 404);
-  if (process.platform === 'win32') spawn(WINDOWS_DOCKER, [], { detached: true, stdio: 'ignore' }).on('error', () => {}).unref();
-  else await exec('open', ['-a', app]);
+  await exec('open', ['-a', app]);
   return { ok: true, app };
 }

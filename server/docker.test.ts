@@ -148,8 +148,7 @@ test('docker : application du moteur à ouvrir', () => {
 // ─── Faux moteur sur un socket Unix ─────────────────────────────────────────
 async function fakeEngine(fn: (socket: string, calls: string[]) => Promise<void>) {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'tdk-'));
-  // Windows : named pipe, comme Docker Desktop (pas de socket Unix dans un dossier).
-  const socket = process.platform === 'win32' ? `\\\\.\\pipe\\${path.basename(dir)}` : path.join(dir, 'd.sock');
+  const socket = path.join(dir, 'd.sock');
   const calls: string[] = [];
   const state = new Map(LIST.map((c) => [c.Id, c.State]));
   const server = http.createServer((req, res) => {
@@ -274,7 +273,7 @@ test('démo docker : conteneurs factices, stacks Supabase déduites, actions en 
   const studio = o.containers.find((c) => c.name.startsWith('supabase_studio'))!;
   assert.deepEqual(studio.ports, [{ private: 3000, public: 64323, type: 'tcp', http: false }]); // `http` calculé par docker.ts
   assert.equal(studio.supabaseProject, 'mission-control');
-  assert.match(o.containers[0].workingDir ?? '', /[\\/]Developer[\\/]rocket-api$/);
+  assert.ok(o.containers[0].workingDir?.endsWith('/Developer/rocket-api'));
   assert.equal(o.containers[1].exitCode, 1);
 
   const stats = demoDockerStats(demoFx);

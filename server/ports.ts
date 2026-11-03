@@ -1,8 +1,11 @@
 import net from 'node:net';
+import { execFile } from 'node:child_process';
+import { promisify } from 'node:util';
 import { settings } from './settings.js';
 import { tr } from './i18n.js';
 import { state, persist } from './store.js';
-import { killTree, listeningPids, processName } from './platform.js';
+
+const exec = promisify(execFile);
 
 function probe(host: string, port: number, timeout = 300): Promise<boolean> {
   return new Promise((resolve) => {
@@ -21,6 +24,24 @@ function probe(host: string, port: number, timeout = 300): Promise<boolean> {
 export async function isPortBusy(port: number): Promise<boolean> {
   const [v4, v6] = await Promise.all([probe('127.0.0.1', port), probe('::1', port)]);
   return v4 || v6;
+}
+
+export async function listeningPids(port: number): Promise<number[]> {
+  try {
+    const { stdout } = await exec('lsof', ['-nP', `-iTCP:${port}`, '-sTCP:LISTEN', '-t'], { timeout: 5000 });
+    return [...new Set(stdout.split('\n').filter(Boolean).map(Number))];
+  } catch {
+    return []; // lsof sort en code 1 quand rien n'écoute
+  }
+}
+
+async function processName(pid: number): Promise<string> {
+  try {
+    const { stdout } = await exec('ps', ['-o', 'comm=', '-p', String(pid)]);
+    return stdout.trim();
+  } catch {
+    return '';
+  }
 }
 
 /**
@@ -60,8 +81,7 @@ async function allocateNow(appId: string, inUse: Set<number>): Promise<number> {
   throw new Error(tr({ en: 'No free port in the range {start}-{end}', fr: 'Aucun port libre dans la plage {start}-{end}' }, { start, end }));
 }
 
-// Windows : wslrelay relaie les ports de WSL, svchost et System sont des services du système.
-const PROTECTED = /com\.docker|docker|vpnkit|orbstack|colima|limactl|launchd|ControlCenter|rapportd|wslrelay|svchost|^System$/i;
+const PROTECTED = /com\.docker|docker|vpnkit|orbstack|colima|limactl|launchd|ControlCenter|rapportd/i;
 
 export interface FreedPort {
   port: number;
@@ -74,8 +94,9 @@ export async function killPort(port: number) {
   const killed: number[] = [];
   for (const pid of await listeningPids(port)) {
     if (pid === process.pid || PROTECTED.test(await processName(pid))) continue;
-    // Groupe ou arbre de process (next dev, turbo… et leurs enfants).
-    if (killTree(pid)) killed.push(pid);
+    // Groupe de process quand c'est possible (next dev, turbo… et leurs enfants).
+    try { process.kill(-pid, 'SIGTERM'); } catch { try { process.kill(pid, 'SIGTERM'); } catch { continue; } }
+    killed.push(pid);
   }
   await new Promise((r) => setTimeout(r, 2000));
   for (const pid of await listeningPids(port)) if (killed.includes(pid)) try { process.kill(pid, 'SIGKILL'); } catch { /* mort */ }

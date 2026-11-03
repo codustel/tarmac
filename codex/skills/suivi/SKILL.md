@@ -72,7 +72,8 @@ Task ids never change; only `phase`, `phaseTitle`, `num` and `order` move.
 
 ## $suivi audit — set already-coded tasks to "to test"
 
-1. `suivi_get` with `includeDone: false`; keep untreated tasks (not done, not `toTest`, not archived).
+1. `suivi_get` with `includeDone: false`; keep untreated tasks (not done, not `toTest`, not `tested`, not archived);
+   list tested-but-not-done tasks apart ("tested, to check").
 2. For each, look for evidence: `git log --all --oneline -i --grep "<num>\b"` (and its id), commits in its
    `sources`, otherwise the code matching its title and steps. Verdict: coded (all steps, committed), partial,
    not coded.
