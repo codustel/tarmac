@@ -16,6 +16,8 @@ export interface Flags {
   yes: boolean;
   noOpen: boolean;
   purge: boolean;
+  /** Redirection du port 80 (pf) : seulement sur demande, elle peut couper le port direct après un redémarrage (4.11a). */
+  port80: boolean;
 }
 
 export interface Parsed {
@@ -26,7 +28,7 @@ export interface Parsed {
 
 /** Options acceptées par commande (les autres sont refusées). */
 const ALLOWED: Partial<Record<Command, (keyof Flags)[]>> = {
-  setup: ['dryRun', 'domain', 'noSudo', 'withClaude', 'noClaude', 'withCodex', 'noCodex', 'yes', 'noOpen'],
+  setup: ['dryRun', 'domain', 'noSudo', 'withClaude', 'noClaude', 'withCodex', 'noCodex', 'yes', 'noOpen', 'port80'],
   uninstall: ['dryRun', 'purge', 'noSudo', 'yes'],
   update: ['dryRun'],
 };
@@ -41,6 +43,7 @@ const BOOL: Record<string, keyof Flags> = {
   '--yes': 'yes',
   '-y': 'yes',
   '--no-open': 'noOpen',
+  '--port-80': 'port80',
   '--purge': 'purge',
 };
 
@@ -48,7 +51,7 @@ const BOOL: Record<string, keyof Flags> = {
 export const isValidDomain = (d: string) => /^(?=.{1,253}$)[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?(?:\.[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?)+$/i.test(d);
 
 export function parseArgs(argv: string[]): Parsed {
-  const flags: Flags = { dryRun: false, noSudo: false, withClaude: false, noClaude: false, withCodex: false, noCodex: false, yes: false, noOpen: false, purge: false };
+  const flags: Flags = { dryRun: false, noSudo: false, withClaude: false, noClaude: false, withCodex: false, noCodex: false, yes: false, noOpen: false, purge: false, port80: false };
   const seen = new Set<keyof Flags>();
   let command: Command | undefined;
   const fail = (error: string): Parsed => ({ command: command ?? 'help', flags, error });
@@ -109,8 +112,10 @@ Commands:
 Options for setup:
   --dry-run        Print every action without changing anything
   --domain <name>  Local domain (default: tarmac.localhost)
-  --no-sudo        Skip the steps that need administrator rights (/etc/hosts, port 80 redirect);
+  --no-sudo        Skip the steps that need administrator rights (/etc/hosts entry);
                    Tarmac stays reachable on http://tarmac.localhost:7777
+  --port-80        Also redirect port 80 to Tarmac (pf, sudo), for http://tarmac.localhost without port.
+                   Off by default: on some Macs it blocks port 7777 after a restart
   --with-claude    Set up the Claude Code integration without asking
   --no-claude      Do not set up the Claude Code integration
   --with-codex     Set up the Codex (ChatGPT) integration without asking

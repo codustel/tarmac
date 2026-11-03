@@ -15,8 +15,13 @@ import { planCodexSetup } from './codex.js';
 
 export interface SetupOptions {
   domain: string;
-  /** Étapes avec sudo (/etc/hosts, pf) incluses. */
+  /** Étapes avec sudo (/etc/hosts, retrait ou pose de pf) incluses. */
   sudo: boolean;
+  /**
+   * Redirection du port 80 (pf) demandée (`--port-80`). Sans elle, une redirection déjà posée est retirée :
+   * sur certains Mac, la règle `rdr` sur lo0 coupe le port direct après un redémarrage (4.11a).
+   */
+  port80?: boolean;
   /** Intégration Claude Code (serveur MCP, skill, hook, règle). */
   claude: boolean;
   /** Déclaration du serveur MCP dans Claude desktop aussi (attend que l'app soit fermée). */
@@ -189,7 +194,8 @@ export function planSetup(ctx: Ctx, o: SetupOptions, runner: Runner): Step[] {
   const port = choosePort(ctx, migrating);
   const envExists = fs.existsSync(ctx.envFile) || (migrating && fs.existsSync(path.join(ctx.oldDataDir, 'env')));
   if (!envExists) {
-    const url = o.sudo ? `http://${o.domain}` : `http://${o.domain}:${port}`;
+    // Adresse sans port seulement avec la redirection du port 80 (--port-80) ; vérifiée à la fin du setup.
+    const url = o.sudo && o.port80 ? `http://${o.domain}` : `http://${o.domain}:${port}`;
     steps.push({
       id: 'env',
       title: `Create the configuration ${tilde(ctx, ctx.envFile)}`,
@@ -274,8 +280,10 @@ export function planSetup(ctx: Ctx, o: SetupOptions, runner: Runner): Step[] {
     }
   }
 
-  // 5. Port 80 → port de Tarmac (pf) : un utilisateur non-root ne peut pas écouter sur le port 80.
-  if (o.sudo) {
+  // 5. Port 80 → port de Tarmac (pf), seulement avec --port-80 : un utilisateur non-root ne peut pas écouter sur
+  //    le port 80, mais la règle pf peut couper le port direct après un redémarrage (4.11a). Sans l'option, une
+  //    redirection déjà posée (installation précédente) est retirée.
+  if (o.sudo && o.port80) {
     const anchorOk = read(ctx.pfAnchor) === pfRule(port) && fs.existsSync(ctx.pfDaemon);
     if (!anchorOk) {
       steps.push({
@@ -295,6 +303,17 @@ export function planSetup(ctx: Ctx, o: SetupOptions, runner: Runner): Step[] {
         ],
       });
     }
+  } else if (o.sudo && (fs.existsSync(ctx.pfAnchor) || fs.existsSync(ctx.pfDaemon))) {
+    steps.push({
+      id: 'pf',
+      title: `Remove the port 80 redirect (pf): it can block port ${port} after a restart; Tarmac stays on http://${o.domain}:${port}`,
+      sudo: true,
+      actions: [
+        { kind: 'exec', argv: ['sudo', 'launchctl', 'bootout', `system/${LABEL}.pf`], allowFail: true },
+        { kind: 'exec', argv: ['sudo', 'pfctl', '-a', `com.apple/${LABEL}`, '-F', 'all'], allowFail: true },
+        { kind: 'exec', argv: ['sudo', 'rm', '-f', ctx.pfDaemon, ctx.pfAnchor] },
+      ],
+    });
   }
 
   // 6. Vérification et URL finale.

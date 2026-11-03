@@ -76,8 +76,39 @@ export function register(ctx) {
 | `log` | Fastify logger. |
 | `core.version` | Tarmac version. |
 | `core.projects()` | Detected projects, read only: `{ id, name, dir, repoDir }`. |
+| `core.lang()` | Interface language, `'en'` or `'fr'` (for texts the server writes, such as notifications). |
+| `core.on(event, cb)` | Read-only subscription to a Tarmac event (see below). Returns an unsubscribe function. |
 
-If `register` throws, the module is marked *error* and the routes it had already declared answer `503`.
+If `register` throws, the module is marked *error*, the routes it had already declared answer `503` and its event
+subscriptions are removed.
+
+### Events
+
+`ctx.core.on(event, cb)` relays what Tarmac already tracks. Payloads are frozen objects; an exception thrown by `cb`
+is logged under the module's name and never reaches Tarmac or other listeners. Subscribing to an unknown event
+throws.
+
+```js
+export function register(ctx) {
+  const off = ctx.core.on('process:status', (e) => {
+    if (e.status === 'crashed') ctx.log.warn(`${e.projectName} exited with code ${e.exitCode}`);
+  });
+  // off() stops listening
+}
+```
+
+| Event | When | Payload |
+|---|---|---|
+| `agent:turn` | An agent session (Claude Code, Codex) changes state, or is seen for the first time (`previous: null`). Checked every 4 s while someone listens. | `agent` (`claude` \| `codex`), `key` (`<agent>:<pid>`), `sessionId`, `terminalId` (Tarmac console, or null), `projectId`, `projectName`, `title`, `state`, `previous`, `previousMs` (time spent in `previous`), `at` |
+| `process:status` | An app started by Tarmac changes status. | `projectId`, `projectName`, `status`, `previous`, `exitCode`, `at` |
+| `suivi:task` | A task of a Todolist changes status, or is created (`previous: null`). | `suiviProjectId`, `projectName`, `taskId`, `num`, `title`, `status`, `previous`, `at` |
+
+- Agent `state`: `working` (answering or running a tool), `idle` (turn finished, waiting for a message), `permission`
+  (a permission or choice box is on screen). `permission` is only detected in Tarmac consoles, whose screen Tarmac
+  reads; a session running elsewhere stays `working` while it waits for a permission.
+- App `status`: `stopped`, `starting`, `running`, `stopping`, `crashed`. `crashed` means the process exited on its
+  own with a non-zero code or a signal; a stop you asked for gives `stopped`.
+- Task `status`: `todo`, `toTest`, `done`.
 
 ## Web side
 

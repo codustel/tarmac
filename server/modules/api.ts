@@ -38,6 +38,73 @@ export interface ModuleSettings {
   set(patch: Record<string, unknown>): Record<string, unknown>;
 }
 
+// ─── Événements du cœur (lecture seule) ─────────────────────────────────────
+
+/**
+ * État d'une session d'agent : `working` (réponse ou outil en cours), `idle` (tour fini, attend un message),
+ * `permission` (boîte de permission ou de choix affichée ; repérée seulement dans les consoles de Tarmac, dont le
+ * cœur lit l'écran : ailleurs, une permission en attente reste `working`).
+ */
+export type ModuleAgentState = 'working' | 'idle' | 'permission';
+
+/** `agent:turn` : l'état d'une session d'agent en cours a changé (ou la session vient d'être vue). */
+export interface ModuleAgentTurnEvent {
+  agent: 'claude' | 'codex';
+  /** Clé stable de la session en cours : `<agent>:<pid>`. */
+  key: string;
+  sessionId: string | null;
+  /** Console de Tarmac qui héberge la session, null si elle tourne ailleurs (Terminal, éditeur…). */
+  terminalId: string | null;
+  projectId: string | null;
+  projectName: string | null;
+  /** Titre de la session (nom donné, résumé ou début du premier message), tel que le cœur l'affiche. */
+  title: string | null;
+  state: ModuleAgentState;
+  /** État précédent ; null à la première observation (session nouvelle, ou premier abonnement). */
+  previous: ModuleAgentState | null;
+  /** Durée de l'état précédent en millisecondes (null à la première observation). */
+  previousMs: number | null;
+  at: string;
+}
+
+export type ModuleProcessStatus = 'stopped' | 'starting' | 'running' | 'stopping' | 'crashed';
+
+/**
+ * `process:status` : le statut d'une app lancée par Tarmac a changé. `crashed` = le process s'est arrêté seul avec
+ * un code ≠ 0 (ou un signal) : un arrêt demandé donne `stopped`.
+ */
+export interface ModuleProcessStatusEvent {
+  projectId: string;
+  projectName: string | null;
+  status: ModuleProcessStatus;
+  previous: ModuleProcessStatus | null;
+  exitCode: number | null;
+  at: string;
+}
+
+export type ModuleTaskStatus = 'todo' | 'toTest' | 'done';
+
+/** `suivi:task` : une tâche de la Todolist a changé de statut (création comprise : `previous` null). */
+export interface ModuleTaskStatusEvent {
+  /** Projet de suivi (Todolist), pas forcément un projet scanné. */
+  suiviProjectId: string;
+  projectName: string | null;
+  taskId: string;
+  num: string;
+  title: string;
+  status: ModuleTaskStatus;
+  previous: ModuleTaskStatus | null;
+  at: string;
+}
+
+/** Événements auxquels un module peut s'abonner par `ctx.core.on(event, cb)`. */
+export interface ModuleCoreEvents {
+  'agent:turn': ModuleAgentTurnEvent;
+  'process:status': ModuleProcessStatusEvent;
+  'suivi:task': ModuleTaskStatusEvent;
+}
+export type ModuleCoreEventName = keyof ModuleCoreEvents;
+
 export interface ModuleContext {
   id: string;
   /** Instance Fastify encapsulée : ses routes vivent sous `/api/modules/<id>`, avec les protections du cœur. */
@@ -52,6 +119,13 @@ export interface ModuleContext {
   core: {
     version: string;
     projects(): ModuleProject[];
+    /** Langue de l'interface (réglage, sinon celle du système). */
+    lang(): 'en' | 'fr';
+    /**
+     * Abonnement en lecture seule à un événement du cœur ; renvoie de quoi se désabonner. Les données reçues sont
+     * figées ; une erreur levée par `cb` est journalisée et n'arrête ni le cœur ni les autres abonnés.
+     */
+    on<E extends ModuleCoreEventName>(event: E, cb: (payload: ModuleCoreEvents[E]) => void): () => void;
   };
 }
 

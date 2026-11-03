@@ -40,11 +40,12 @@ import { SuiviService } from './suivi/service.js';
 import { registerSuiviRoutes } from './suivi/routes.js';
 import { suiviToken } from './suivi/token.js';
 import { SyncRunner } from './suivi/sync.js';
-import { SuiviDispatcher } from './suivi/dispatch.js';
+import { agentConsoleState, SuiviDispatcher } from './suivi/dispatch.js';
 import { setSuiviDir, TodolistWatcher, type ProjectRoot } from './suivi/watch.js';
 import { demo, demoBinDir, demoClaudeUsage, isDemo } from './demo/index.js';
 import { crossOriginFetch, originAllowed } from './originGuard.js';
 import { loadModules, parseModuleDirs } from './modules/loader.js';
+import { AgentTurnTracker, CoreEvents, ProcessStatusTracker, TaskStatusTracker, type AgentSnapshot } from './modules/events.js';
 import { envVar } from './dataDir.js';
 import { androidStatus, applyAndroidEnv, ensureEmulator, installCommand, isAvd, startAvd, stopAvd, waitForBootCommand } from './android.js';
 
@@ -140,8 +141,29 @@ function broadcast(msg: unknown) {
   for (const ws of clients.keys()) if (ws.readyState === 1) ws.send(data);
 }
 
+// ─── Événements du cœur relayés aux modules (ctx.core.on, docs/extensions.md) ─
+const coreEvents = new CoreEvents();
+const processTracker = new ProcessStatusTracker();
+const taskTracker = new TaskStatusTracker();
+const suiviPending = new Set<string>();
+/** Tâches d'un projet de suivi relues après ses modifications (regroupées) → `suivi:task`. */
+function suiviTasksChanged(projectId: string) {
+  if (!coreEvents.count('suivi:task') || suiviPending.has(projectId)) return;
+  suiviPending.add(projectId);
+  setImmediate(() => {
+    suiviPending.delete(projectId);
+    try {
+      const events = taskTracker.update(projectId, suivi.getProject(projectId)?.name ?? null, suivi.tasks(projectId));
+      for (const e of events) coreEvents.emit('suivi:task', e);
+    } catch (e) { console.warn(`⚠ suivi:task (${projectId}): ${(e as Error).message}`); }
+  });
+}
+
 // ─── Todolist Claude (suivi de projets) ──────────────────────────────────────
-const suivi = new SuiviService(openSuiviDb(path.join(config.dataDir, 'suivi.db')), (projectId) => broadcast({ type: 'suivi:changed', projectId }));
+const suivi = new SuiviService(openSuiviDb(path.join(config.dataDir, 'suivi.db')), (projectId) => {
+  broadcast({ type: 'suivi:changed', projectId });
+  suiviTasksChanged(projectId);
+});
 const todolists = new TodolistWatcher(suivi, (m) => console.log(m), (dir) => inRoots(dir));
 /** Projet de suivi rattaché à un dossier (racine du dépôt), d'après les `paths` des projets de suivi. */
 const suiviIdOf = (dir: string) => suivi.projects().find((sp) => sp.paths.includes(dir))?.projectId ?? null;
@@ -157,7 +179,11 @@ function syncTodolists() {
   todolists.sync([...roots.values()]);
   todolists.start();
 }
-processes.on('status', (id, runtime) => broadcast({ type: 'status', id, runtime }));
+processes.on('status', (id, runtime) => {
+  broadcast({ type: 'status', id, runtime });
+  const e = processTracker.update(id, findProject(id)?.name ?? null, runtime.status, runtime.exitCode);
+  if (e) coreEvents.emit('process:status', e);
+});
 processes.on('log', (id, line) => {
   const data = JSON.stringify({ type: 'log', id, line });
   for (const [ws, c] of clients) if (c.logs.has(id) && ws.readyState === 1) ws.send(data);
@@ -1222,7 +1248,37 @@ await loadModules(app, {
   dataDir: config.dataDir,
   coreVersion: JSON.parse(fs.readFileSync(path.join(APP_ROOT, 'package.json'), 'utf8')).version,
   projects: () => lastScan.projects.map(({ id, name, dir, repoDir }) => ({ id, name, dir, repoDir })),
+  lang: uiLang,
+  events: coreEvents,
 });
+// Référence des statuts de tâches : les transitions suivantes deviennent des `suivi:task`.
+if (coreEvents.count('suivi:task')) for (const sp of suivi.projects()) taskTracker.update(sp.projectId, sp.name, suivi.tasks(sp.projectId));
+
+/**
+ * Tour de parole des sessions d'agent pour `agent:turn`, relevé toutes les 4 s tant qu'un module est abonné.
+ * Dans une console de Tarmac, l'écran dit en plus si une boîte de permission attend (`permission`).
+ */
+const agentTurns = new AgentTurnTracker();
+let agentPoll: Promise<void> | null = null;
+setInterval(() => {
+  if (!coreEvents.count('agent:turn')) return agentTurns.reset();
+  agentPoll ??= (async () => {
+    const list = await runningAgents();
+    const projectOf = projectsOf(list.flatMap((a) => (a.cwd ? [{ ...a, cwd: a.cwd }] : [])), (a) => a.key);
+    const now = Date.now();
+    const snaps: AgentSnapshot[] = list.map((a) => {
+      const screen = a.terminalId ? terminals.screen(a.terminalId) : null;
+      const quietMs = screen?.lastOutputAt ? now - Date.parse(screen.lastOutputAt) : Infinity;
+      const permission = !!screen && agentConsoleState(a.agent, screen.text, quietMs) === 'permission';
+      const project = projectOf.get(a.key) ?? null;
+      return {
+        agent: a.agent, key: a.key, sessionId: a.sessionId, terminalId: a.terminalId, projectId: project?.id ?? null,
+        projectName: project?.name ?? null, title: a.title, state: permission ? 'permission' : a.state,
+      };
+    });
+    for (const e of agentTurns.update(snaps, now)) coreEvents.emit('agent:turn', e);
+  })().catch((e) => console.warn(`⚠ agent:turn: ${(e as Error).message}`)).finally(() => { agentPoll = null; });
+}, 4000).unref();
 
 // ─── UI ─────────────────────────────────────────────────────────────────────
 if (fs.existsSync(webDir)) {

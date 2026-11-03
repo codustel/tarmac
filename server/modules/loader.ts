@@ -10,6 +10,7 @@ import type { FastifyInstance } from 'fastify';
 import fastifyStatic from '@fastify/static';
 import { openSqlite } from '../sqlite.js';
 import type { ModuleContext, ModuleManifest, ModuleProject, ModuleText, RegisterModule } from './api.js';
+import { CoreEvents } from './events.js';
 
 export const MODULE_API_VERSION = 1;
 const ID = /^[a-z][a-z0-9-]{1,39}$/;
@@ -35,6 +36,10 @@ export interface LoadOptions {
   dataDir: string;
   coreVersion: string;
   projects: () => ModuleProject[];
+  /** Langue de l'interface (anglais par défaut). */
+  lang?: () => 'en' | 'fr';
+  /** Bus des événements du cœur relayés aux modules (`ctx.core.on`) ; un bus vide par défaut. */
+  events?: CoreEvents;
 }
 
 /** `TARMAC_MODULES` → dossiers absolus (vides ignorés). */
@@ -78,6 +83,8 @@ function jsonSettings(file: string): ModuleContext['settings'] {
  */
 export async function loadModules(app: FastifyInstance, opts: LoadOptions): Promise<ModuleInfo[]> {
   const infos: ModuleInfo[] = [];
+  const events = opts.events ?? new CoreEvents();
+  const lang = opts.lang ?? (() => 'en' as const);
   for (const dir of opts.dirs) {
     const info: ModuleInfo = { id: path.basename(dir), name: path.basename(dir), version: '', dir, icon: null, webUrl: null, status: 'error', error: null };
     infos.push(info);
@@ -107,19 +114,32 @@ export async function loadModules(app: FastifyInstance, opts: LoadOptions): Prom
             if (info.status !== 'loaded') return reply.code(503).send({ error: `Module ${m.id} is not available` });
           });
           fs.mkdirSync(dataDir, { recursive: true });
+          const log = scope.log.child({ module: m.id });
+          // Abonnements du module : erreurs attribuées au module, tous retirés si `register` échoue.
+          const subs = new Set<() => void>();
+          const on: ModuleContext['core']['on'] = (event, cb) => {
+            const off = events.on(event, (payload) => {
+              if (info.status !== 'loaded') return; // module en erreur (ou pas encore chargé) : rien n'est relayé
+              try { cb(payload); } catch (e) { log.warn({ err: e, event }, `module ${m.id}: ${event} listener failed`); }
+            });
+            const unsubscribe = () => { off(); subs.delete(unsubscribe); };
+            subs.add(unsubscribe);
+            return unsubscribe;
+          };
           const ctx: ModuleContext = {
             id: m.id,
             app: scope,
             dataDir,
             openDb: (migrations) => openSqlite(path.join(dataDir, 'data.db'), migrations),
             settings: jsonSettings(path.join(dataDir, 'settings.json')),
-            log: scope.log.child({ module: m.id }),
-            core: { version: opts.coreVersion, projects: opts.projects },
+            log,
+            core: { version: opts.coreVersion, projects: opts.projects, lang, on },
           };
           try {
             await register(ctx);
           } catch (e) {
             info.error = (e as Error).message;
+            for (const off of [...subs]) off();
           }
         }, { prefix: `/api/modules/${m.id}` });
         if (info.error) throw new Error(info.error);

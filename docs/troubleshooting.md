@@ -19,14 +19,20 @@ Keeping your code outside `~/Documents` (`~/Developer`, `~/code`…) avoids the 
 
 - `tarmac status`: is the service loaded, does the server answer on its port?
 - `tarmac logs`: the error is usually at the end (a port already in use, a Node too old after a version switch…).
-- Another program uses port 7777: set `TARMAC_PORT=7790` (for example) in `~/.tarmac/env`, then `tarmac setup`
-  (it updates the port 80 redirect too).
+- Another program uses port 7777: set `TARMAC_PORT=7790` (for example) in `~/.tarmac/env`, then `tarmac setup`.
 - `tarmac doctor` says the service "runs another Tarmac installation": you reinstalled Tarmac under another Node
   version (nvm, fnm, Homebrew…), so the global package moved. Run `tarmac setup` again from the new one.
 
 ## Port 80
 
-The address without port is a bonus; `http://tarmac.localhost:7777` is the reference address and always works.
+`http://tarmac.localhost:7777` is Tarmac's address and always works. The address without port is optional:
+`tarmac setup --port-80` redirects port 80 with `pf`; it is off by default.
+
+**Port 7777 stops answering after a restart (port 80 still works).** Seen with the `pf` redirect on some Macs:
+once `pf` loads the rule at boot, direct connections to `127.0.0.1:7777` hang (MCP server, artifacts and sessions
+cut off) while `http://127.0.0.1/` answers. `tarmac doctor` reports it. Fix: run `tarmac setup` (without
+`--port-80`), which removes the redirect, or right away `sudo pfctl -a com.apple/com.codustel.tarmac -F all`
+(until the next boot).
 
 **Port 80 is already used.** If something else (Apache, nginx, another dev proxy) listens on port 80,
 `tarmac setup` does not touch it and Tarmac stays on `http://tarmac.localhost:7777`. To get the URL without port

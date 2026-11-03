@@ -63,8 +63,15 @@ export function diagnose(f: Facts): Check[] {
   else if (!f.plistMatches) add('Service', 'warn', 'loaded, but it runs another Tarmac installation', 'Run: tarmac setup (points the service to this installation)');
   else add('Service', 'ok', `${LABEL} loaded`);
 
-  add('Port', f.portAnswers ? 'ok' : 'fail', f.portAnswers ? `answers on 127.0.0.1:${f.port}` : `no answer on 127.0.0.1:${f.port}`,
-    f.portAnswers ? undefined : 'Run: tarmac logs (another app on this port? change TARMAC_PORT in ~/.tarmac/env, then tarmac restart)');
+  if (!f.portAnswers && f.pfRedirect === 'active') {
+    // Vu après un redémarrage (4.11a) : la règle pf du port 80 active, Tarmac atteint par le port 80 mais plus
+    // par son propre port (MCP, artefacts, sessions coupés).
+    add('Port', 'fail', `no answer on 127.0.0.1:${f.port}, while port 80 reaches Tarmac: the pf redirect blocks the direct port`,
+      `Run: sudo pfctl -a com.apple/${LABEL} -F all  (removes the port 80 redirect until the next boot; see "Port 80" in docs/troubleshooting.md)`);
+  } else {
+    add('Port', f.portAnswers ? 'ok' : 'fail', f.portAnswers ? `answers on 127.0.0.1:${f.port}` : `no answer on 127.0.0.1:${f.port}`,
+      f.portAnswers ? undefined : 'Run: tarmac logs (another app on this port? change TARMAC_PORT in ~/.tarmac/env, then tarmac restart)');
+  }
 
   const loopback = f.domainAddrs.length > 0 && f.domainAddrs.every((a) => a === '127.0.0.1' || a === '::1');
   if (!f.domainAddrs.length) {

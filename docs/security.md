@@ -74,7 +74,7 @@ Only `tarmac setup` and `tarmac uninstall`, only after an explanation and your c
 | Change | Why |
 |---|---|
 | `127.0.0.1 tarmac.localhost` and `127.0.0.1 tarmac.test` appended to `/etc/hosts` | Forces IPv4 for `tarmac.localhost` (which already resolves without it) and makes the `tarmac.test` alias work |
-| `/etc/pf.anchors/com.codustel.tarmac`: `rdr pass on lo0 inet proto tcp from any to 127.0.0.1 port 80 -> 127.0.0.1 port 7777` | A user process cannot listen on port 80: this loopback-only redirect gives an URL without port |
+| `/etc/pf.anchors/com.codustel.tarmac`: `rdr pass on lo0 inet proto tcp from any to 127.0.0.1 port 80 -> 127.0.0.1 port 7777` — **only with `tarmac setup --port-80`** (off by default; removed by `tarmac setup` otherwise) | A user process cannot listen on port 80: this loopback-only redirect gives an URL without port |
 | `/Library/LaunchDaemons/com.codustel.tarmac.pf.plist` | Loads that rule again at boot (`pfctl -E`, then the anchor under `com.apple/`, already referenced by the system `pf.conf`) |
 | Removal of the same items for App Manager (`manager.localhost`, `com.codustel.app-manager`) | Migration from Tarmac's former name |
 

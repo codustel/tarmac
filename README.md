@@ -21,7 +21,7 @@
 a free port, streams their logs, gives you a console and a Git menu in the browser, and runs your coding agents'
 sessions there: Claude Code (also followed from claude.ai or your phone) and Codex, OpenAI's agent included in
 ChatGPT plans. It runs as a login service on
-`http://tarmac.localhost` and installs as an app (PWA).
+`http://tarmac.localhost:7777` and installs as an app (PWA).
 
 ![Tarmac: projects view](docs/assets/projects.webp)
 
@@ -85,15 +85,15 @@ tarmac setup
 ```
 
 `tarmac setup` creates `~/.tarmac/env`, installs a login service (LaunchAgent), then, with your confirmation and
-your password (`sudo`), adds `tarmac.localhost` to `/etc/hosts` and redirects port 80 to Tarmac's port 7777. Last,
+your password (`sudo`), adds `tarmac.localhost` to `/etc/hosts`. Last,
 it offers to set up the Claude Code integration, and the Codex one when `codex` is installed (or with
 `--with-codex`). Run `tarmac setup --dry-run` first to see every action without changing anything.
 
-**The reference address is `http://tarmac.localhost:7777`**: it always works, with or without `sudo` (Chrome,
-Firefox and Safari resolve `*.localhost` on their own). The address without port, `http://tarmac.localhost`, is a
-bonus: `tarmac setup` checks that port 80 really reaches Tarmac and keeps the address with port otherwise (some
-Macs load the redirect but do not apply it; see [Troubleshooting](docs/troubleshooting.md#port-80)).
-`tarmac setup --no-sudo` skips those optional steps.
+**Tarmac's address is `http://tarmac.localhost:7777`**: it always works, with or without `sudo` (Chrome, Firefox
+and Safari resolve `*.localhost` on their own). `tarmac setup --no-sudo` skips the `/etc/hosts` step.
+An address without port (`http://tarmac.localhost`) is optional: `tarmac setup --port-80` redirects port 80 to
+Tarmac with `pf`. It is off by default because on some Macs the rule blocks port 7777 after a restart; a redirect
+installed by an earlier version is removed by `tarmac setup` (see [Troubleshooting](docs/troubleshooting.md#port-80)).
 
 To install Tarmac as an app in Chrome, give the page a few seconds: Chrome shows its install button only after a
 short use of the page. Meanwhile, use the menu **⋮ → Cast, save, and share → Install page as app**.
@@ -104,7 +104,7 @@ copied from `~/.app-manager` to `~/.tarmac` (the original is kept). If an older 
 
 ## First steps
 
-1. Open `http://tarmac.localhost` (`tarmac open`). Click **Install the app** in the sidebar to get a Dock icon.
+1. Open `http://tarmac.localhost:7777` (`tarmac open`). Click **Install the app** in the sidebar to get a Dock icon.
 2. In **Settings**, check the folders to scan (by default the usual code folders that exist: `~/Developer`,
    `~/Projects`, `~/dev`, `~/code`…), then connect the GitHub CLI in one click.
 3. Start an app with **Start**, open its console, or open an agent session from its **Claude** or **Codex** tab
@@ -164,7 +164,7 @@ copy (see [Codex](docs/codex.md)).
 **Does it work on Windows or Linux?** Tarmac is built for macOS and `tarmac setup` only runs there. On Windows it
 runs inside WSL 2, started by hand, with a few features missing: see [Windows (WSL 2)](docs/windows.md).
 
-**Port 80 is already used.** Tarmac then stays on `http://tarmac.localhost:7777`; nothing else changes.
+**Do I need port 80?** No. Tarmac uses `http://tarmac.localhost:7777`; `--port-80` is only for an address without port.
 
 **Can I use another port or domain?** Yes: `tarmac setup --domain my.localhost`, and `TARMAC_PORT` in
 `~/.tarmac/env` (see [Configuration](docs/configuration.md)).

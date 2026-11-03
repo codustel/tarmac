@@ -69,11 +69,29 @@ test('options : erreurs (inconnue, valeur manquante, domaine invalide, conflit, 
 });
 
 // ─── Plan de setup ─────────────────────────────────────────────────────────
-test('setup sur un Mac neuf : env, LaunchAgent, hosts et pf (sudo), vérification', { skip: process.platform === 'win32' && 'CLI macOS seulement (Windows : Tarmac Desktop)' }, () => {
+test('setup par défaut (4.11a) : pas de redirection du port 80, adresse avec port ; une redirection déjà posée est retirée', { skip: process.platform === 'win32' && 'CLI macOS seulement (Windows : Tarmac Desktop)' }, () => {
+  const { ctx } = sandbox();
+  const steps = planSetup(ctx, opts(), fakeRunner().runner);
+  assert.deepEqual(steps.map((s) => s.id), ['env', 'launch-agent', 'hosts', 'start']);
+  const env = steps[0].actions[0];
+  assert.ok(env.kind === 'write' && /^TARMAC_URL=http:\/\/tarmac\.localhost:7777$/m.test(env.content));
+
+  fs.mkdirSync(path.dirname(ctx.pfAnchor), { recursive: true });
+  fs.writeFileSync(ctx.pfAnchor, pfRule(7777));
+  const again = planSetup(ctx, opts(), fakeRunner().runner);
+  const pf = again.find((s) => s.id === 'pf')!;
+  assert.ok(pf.sudo && /^Remove the port 80 redirect/.test(pf.title));
+  const argv = pf.actions.map((a) => (a.kind === 'exec' ? a.argv.join(' ') : ''));
+  assert.ok(argv.some((a) => a.includes('pfctl -a com.apple/com.codustel.tarmac -F all')));
+  assert.ok(argv.some((a) => a.startsWith('sudo rm -f') && a.includes(ctx.pfAnchor)));
+  assert.ok(!planSetup(ctx, opts({ sudo: false }), fakeRunner().runner).some((s) => s.id === 'pf'), 'sans sudo : rien');
+});
+
+test('setup --port-80 sur un Mac neuf : env, LaunchAgent, hosts et pf (sudo), vérification', { skip: process.platform === 'win32' && 'CLI macOS seulement (Windows : Tarmac Desktop)' }, () => {
   const { ctx, appDir, home } = sandbox();
   fs.mkdirSync(path.join(home, 'Developer'));
   fs.mkdirSync(path.join(home, 'code'));
-  const steps = planSetup(ctx, opts(), fakeRunner().runner);
+  const steps = planSetup(ctx, opts({ port80: true }), fakeRunner().runner);
   assert.deepEqual(steps.map((s) => s.id), ['env', 'launch-agent', 'hosts', 'pf', 'start']);
   assert.deepEqual(steps.filter((s) => s.sudo).map((s) => s.id), ['hosts', 'pf']);
 
@@ -125,7 +143,7 @@ test('setup --dry-run : tout est affiché, rien n’est lancé ni écrit', { ski
   const { ctx, home } = sandbox();
   const { runner, runs, captures } = fakeRunner();
   const out = capture();
-  assert.equal(await main(['setup', '--dry-run'], ctx, runner, out), 0);
+  assert.equal(await main(['setup', '--dry-run', '--port-80'], ctx, runner, out), 0);
   assert.deepEqual(runs, [], 'aucune commande lancée');
   assert.ok(captures.every((a) => ['launchctl print', 'nc -z'].some((p) => a.join(' ').startsWith(p))), 'seulement des lectures');
   assert.deepEqual(fs.readdirSync(home), [], 'rien d’écrit dans le dossier personnel');
@@ -156,7 +174,7 @@ test('migration : service App Manager retiré, données copiées, port conservé
   fs.writeFileSync(oldPlist, '<plist/>');
 
   const { runner, runs } = fakeRunner();
-  const steps = planSetup(ctx, opts(), runner);
+  const steps = planSetup(ctx, opts({ port80: true }), runner);
   assert.deepEqual(steps.map((s) => s.id), ['legacy-service', 'migrate-data', 'env', 'launch-agent', 'legacy-network', 'hosts', 'pf', 'start']);
   assert.equal(steps[2].title, 'Keep the existing configuration ~/.tarmac/env');
   assert.ok(steps.find((s) => s.id === 'pf')!.actions.some((a) => a.kind === 'exec' && a.input === pfRule(7790)), 'port de l’ancienne installation');
@@ -199,7 +217,7 @@ test('deux dossiers : sans accord, ~/.tarmac est gardé tel quel', () => {
 test('deux dossiers : avec accord, ~/.tarmac mis de côté (jamais supprimé) puis ~/.app-manager copié', { skip: process.platform === 'win32' && 'CLI macOS seulement (Windows : Tarmac Desktop)' }, async () => {
   const { ctx, home, tarmac, old } = twoDirs();
   const { runner, runs } = fakeRunner();
-  const steps = planSetup(ctx, opts({ replaceStale: true }), runner);
+  const steps = planSetup(ctx, opts({ replaceStale: true, port80: true }), runner);
   assert.deepEqual(steps.map((st) => st.id).slice(0, 2), ['replace-stale-data', 'env']);
   assert.match(steps[0].title, /^Move the outdated ~\/\.tarmac aside to ~\/\.tarmac\.old-\d{8}-\d{6}, then copy/);
   assert.equal(steps[1].title, 'Keep the existing configuration ~/.tarmac/env');
@@ -295,6 +313,11 @@ test('doctor : tout va bien, puis chaque problème avec quoi faire', () => {
   assert.match(byName({ plist: false, legacyService: true })['Service'].fix!, /migrates/);
   assert.match(byName({ claudeMcp: false, claudeMcpLegacy: true })['Claude Code'].detail, /app-manager/);
   assert.match(byName({ pfRedirect: 'active' })['Port 80'].detail, /redirect active/);
+  // 4.11a : port 80 redirigé qui marche, port direct coupé par pf.
+  assert.equal(byName({ pfRedirect: 'active', portAnswers: false })['Port'].level, 'fail');
+  assert.match(byName({ pfRedirect: 'active', portAnswers: false })['Port'].detail, /pf redirect blocks/);
+  assert.match(byName({ pfRedirect: 'active', portAnswers: false })['Port'].fix!, /pfctl -a com\.apple\/.* -F all/);
+  assert.match(byName({ portAnswers: false, pfRedirect: 'none' })['Port'].fix!, /tarmac logs/);
   assert.equal(byName({ pfRedirect: 'not-applied' })['Port 80'].level, 'warn');
   assert.match(byName({ pfRedirect: 'not-applied' })['Port 80'].detail, /installed but not applied.*tarmac\.localhost:7777/);
   assert.match(byName({ pfRedirect: 'not-applied' })['Port 80'].fix!, /troubleshooting/);

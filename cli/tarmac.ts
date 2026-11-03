@@ -58,6 +58,7 @@ export async function setup(ctx: Ctx, flags: Flags, runner: Runner, out: Out): P
   const o: SetupOptions = {
     domain: flags.domain ?? DEFAULT_DOMAIN,
     sudo: !flags.noSudo,
+    port80: flags.port80,
     claude: !flags.noClaude && presence.code,
     claudeDesktop: !flags.noClaude && presence.code && presence.desktop,
     open: !flags.noOpen,

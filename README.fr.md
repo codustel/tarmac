@@ -15,7 +15,7 @@
 et les arrête sur un port libre, affiche leurs logs en direct, offre une console et un menu Git dans le navigateur,
 et y fait tourner les sessions de vos agents de code : Claude Code (suivi aussi depuis claude.ai ou votre téléphone)
 et Codex, l'agent d'OpenAI inclus dans les abonnements ChatGPT. Il
-tourne comme service de session sur `http://tarmac.localhost` et s'installe comme une app (PWA).
+tourne comme service de session sur `http://tarmac.localhost:7777` et s'installe comme une app (PWA).
 
 L'interface est en anglais ou en français (réglage **Langue**, ou langue du navigateur). La documentation détaillée
 de `docs/` est en anglais.
@@ -85,15 +85,16 @@ tarmac setup
 ```
 
 `tarmac setup` crée `~/.tarmac/env`, installe un service de session (LaunchAgent), puis, avec votre accord et votre
-mot de passe (`sudo`), ajoute `tarmac.localhost` à `/etc/hosts` et redirige le port 80 vers le port 7777 de Tarmac.
+mot de passe (`sudo`), ajoute `tarmac.localhost` à `/etc/hosts`.
 Enfin, il propose l'intégration Claude Code, et celle de Codex quand `codex` est installé (ou avec
 `--with-codex`). Lancez d'abord `tarmac setup --dry-run` pour voir chaque action sans rien modifier.
 
-**L'adresse de référence est `http://tarmac.localhost:7777`** : elle marche toujours, avec ou sans `sudo` (Chrome,
-Firefox et Safari résolvent `*.localhost` d'eux-mêmes). L'adresse sans port, `http://tarmac.localhost`, est un
-bonus : `tarmac setup` vérifie que le port 80 atteint vraiment Tarmac et garde sinon l'adresse avec le port
-(certains Mac chargent la redirection sans l'appliquer ; voir [Dépannage](docs/troubleshooting.md#port-80)).
-`tarmac setup --no-sudo` saute ces étapes facultatives.
+**L'adresse de Tarmac est `http://tarmac.localhost:7777`** : elle marche toujours, avec ou sans `sudo` (Chrome,
+Firefox et Safari résolvent `*.localhost` d'eux-mêmes). `tarmac setup --no-sudo` saute l'étape `/etc/hosts`.
+Une adresse sans port (`http://tarmac.localhost`) est facultative : `tarmac setup --port-80` redirige le port 80 vers
+Tarmac avec `pf`. Elle est désactivée par défaut car, sur certains Mac, la règle coupe le port 7777 après un
+redémarrage ; une redirection posée par une version précédente est retirée par `tarmac setup` (voir
+[Dépannage](docs/troubleshooting.md#port-80)).
 
 Pour installer Tarmac comme une app dans Chrome, laissez quelques secondes à la page : Chrome n'affiche son bouton
 d'installation qu'après un court usage. En attendant, passez par le menu **⋮ → Caster, enregistrer et partager →
@@ -106,7 +107,7 @@ copie.
 
 ## Premiers pas
 
-1. Ouvrez `http://tarmac.localhost` (`tarmac open`). Cliquez sur **Installer l'app** dans la barre latérale pour
+1. Ouvrez `http://tarmac.localhost:7777` (`tarmac open`). Cliquez sur **Installer l'app** dans la barre latérale pour
    avoir une icône dans le Dock.
 2. Dans **Réglages**, vérifiez les dossiers à scanner (par défaut les dossiers de code usuels qui existent :
    `~/Developer`, `~/Projects`, `~/dev`, `~/code`…), puis connectez la CLI GitHub en un clic.
@@ -169,7 +170,7 @@ fonctionne aussi et redirige vers cette adresse.
 **Windows ou Linux ?** Tarmac est fait pour macOS et `tarmac setup` ne tourne que là. Sous Windows, il tourne dans
 WSL 2, lancé à la main, avec quelques fonctions en moins : voir [Windows (WSL 2)](docs/windows.md).
 
-**Le port 80 est déjà pris.** Tarmac reste alors sur `http://tarmac.localhost:7777` ; rien d'autre ne change.
+**Faut-il le port 80 ?** Non. Tarmac utilise `http://tarmac.localhost:7777` ; `--port-80` sert seulement à avoir une adresse sans port.
 
 **Un autre port ou domaine ?** Oui : `tarmac setup --domain mon.localhost`, et `TARMAC_PORT` dans `~/.tarmac/env`
 (voir [Configuration](docs/configuration.md)).

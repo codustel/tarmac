@@ -5,6 +5,7 @@ import os from 'node:os';
 import path from 'node:path';
 import Fastify from 'fastify';
 import { loadModules, parseModuleDirs, type LoadOptions } from './loader.js';
+import { CoreEvents } from './events.js';
 
 const tmp = () => fs.mkdtempSync(path.join(os.tmpdir(), 'tarmac-modules-'));
 
@@ -30,9 +31,9 @@ export async function register(ctx) {
   });
 }`;
 
-async function setup(dirs: string[], dataDir = tmp()) {
+async function setup(dirs: string[], dataDir = tmp(), extra: Partial<LoadOptions> = {}) {
   const app = Fastify();
-  const opts: LoadOptions = { dirs, dataDir, coreVersion: '9.9.9', projects: () => [{ id: 'p', name: 'P', dir: '/x', repoDir: null }] };
+  const opts: LoadOptions = { dirs, dataDir, coreVersion: '9.9.9', projects: () => [{ id: 'p', name: 'P', dir: '/x', repoDir: null }], ...extra };
   const infos = await loadModules(app, opts);
   await app.ready();
   return { app, infos, dataDir };
@@ -114,5 +115,42 @@ test('module d’exemple (examples/hello-module) : chargé, routes et réglages'
   const g = await app.inject({ method: 'POST', url: '/api/modules/hello/greeting', payload: { greeting: 'Salut' } });
   assert.deepEqual(g.json(), { greeting: 'Salut' });
   assert.equal((await app.inject('/api/modules/hello/summary')).json().greeting, 'Salut');
+  await app.close();
+});
+
+test('core.on et core.lang : événements relayés, erreur d’un abonné attribuée au module, abonnements retirés si register échoue', async () => {
+  const root = tmp();
+  const listener = makeModule(root, 'listener', { apiVersion: 1, id: 'listener', name: 'L', server: 'server.js' }, {
+    'server.js': `
+      const seen = [];
+      export function register(ctx) {
+        const off = ctx.core.on('agent:turn', (e) => seen.push(e.state));
+        ctx.core.on('process:status', () => { throw new Error('listener boom'); });
+        ctx.app.get('/seen', async () => ({ seen, lang: ctx.core.lang() }));
+        ctx.app.post('/off', async () => { off(); return { ok: true }; });
+        let unknown = null;
+        try { ctx.core.on('nope', () => {}); } catch (e) { unknown = e.message; }
+        ctx.app.get('/unknown', async () => ({ unknown }));
+      }`,
+  });
+  const failing = makeModule(root, 'failing', { apiVersion: 1, id: 'failing', name: 'F', server: 'server.js' }, {
+    'server.js': `export function register(ctx) { ctx.core.on('agent:turn', () => { throw new Error('never'); }); throw new Error('register failed'); }`,
+  });
+  const events = new CoreEvents();
+  const { app, infos } = await setup([listener, failing], tmp(), { events, lang: () => 'fr' });
+  assert.deepEqual(infos.map((i) => i.status), ['loaded', 'error']);
+  assert.equal(events.count('agent:turn'), 1); // celui du module en erreur est retiré
+
+  const turn = { agent: 'claude', key: 'claude:1', sessionId: null, terminalId: null, projectId: null, projectName: null, title: null, previous: null, previousMs: null, at: '' } as const;
+  events.emit('agent:turn', { ...turn, state: 'working' });
+  events.emit('process:status', { projectId: 'p', projectName: null, status: 'crashed', previous: 'running', exitCode: 1, at: '' });
+  events.emit('agent:turn', { ...turn, state: 'idle' });
+  assert.deepEqual((await app.inject('/api/modules/listener/seen')).json(), { seen: ['working', 'idle'], lang: 'fr' });
+  assert.match((await app.inject('/api/modules/listener/unknown')).json().unknown, /unknown event/);
+
+  await app.inject({ method: 'POST', url: '/api/modules/listener/off' });
+  assert.equal(events.count('agent:turn'), 0);
+  events.emit('agent:turn', { ...turn, state: 'permission' });
+  assert.deepEqual((await app.inject('/api/modules/listener/seen')).json().seen, ['working', 'idle']);
   await app.close();
 });
