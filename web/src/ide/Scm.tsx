@@ -5,15 +5,14 @@ import { ContextMenu, type MenuItem } from './ContextMenu';
 import { FileIcon } from './fileIcon';
 import { fmtDateTime, useT, type TKey } from '../i18n';
 
-/** Couleurs des décorations git de VS Code (Dark Modern). */
+/** Couleurs des décorations git (jetons `--ide-git-*` de index.css, claires ou sombres selon le thème). */
 export const SCM_COLOR: Record<ScmCode, string> = {
-  M: '#e2c08d', T: '#e2c08d', A: '#81b88b', R: '#73c991', C: '#73c991', U: '#73c991', D: '#c74e39', '!': '#e4676b',
+  M: 'var(--ide-git-m)', T: 'var(--ide-git-m)', A: 'var(--ide-git-a)', R: 'var(--ide-git-u)', C: 'var(--ide-git-u)', U: 'var(--ide-git-u)', D: 'var(--ide-git-d)', '!': 'var(--ide-git-x)',
 };
 const SCM_TITLE: Record<ScmCode, TKey> = {
   M: 'ide.scm.code.M', T: 'ide.scm.code.T', A: 'ide.scm.code.A', R: 'ide.scm.code.R', C: 'ide.scm.code.C', U: 'ide.scm.code.U', D: 'ide.scm.code.D', '!': 'ide.scm.code.conflict',
 };
-const MUTED = '#9d9d9d';
-const ACCENT = '#0078d4';
+const MUTED = 'var(--muted)';
 
 /** Badge à la VS Code : 10000 → « 10K ». */
 export const fmtCount = (n: number) => (n >= 1000 ? `${Math.floor(n / 1000)}K` : String(n));
@@ -136,12 +135,12 @@ export function ScmView(props: ScmProps) {
 
   return (
     <div className="flex min-h-0 flex-1 flex-col">
-      <div className="relative flex h-[35px] shrink-0 items-center pl-5 pr-2 text-[11px] tracking-wide" style={{ color: MUTED }}>
+      <div className="relative flex h-[35px] shrink-0 items-center pl-4 pr-2 text-[11px] font-semibold tracking-wider text-faint">
         <span className="flex-1 truncate">{t('ide.scm.header')}</span>
         <button title={t('ide.scm.commit')} onClick={() => commit()} className="ide-icon-btn"><Check className="size-4" /></button>
         <button title={t('ide.scm.refresh')} onClick={props.onRefresh} className="ide-icon-btn"><RefreshCw className="size-3.5" /></button>
         <button title={t('ide.scm.moreActions')} onClick={moreMenu} className="ide-icon-btn"><Ellipsis className="size-4" /></button>
-        {busy && <div className="ide-progress absolute inset-x-0 bottom-0 h-0.5 overflow-hidden"><div style={{ background: ACCENT }} /></div>}
+        {busy && <div className="ide-progress absolute inset-x-0 bottom-0 h-0.5 overflow-hidden"><div className="bg-accent" /></div>}
       </div>
 
       {error && !s && <div className="px-5 py-2 text-[12px]" style={{ color: MUTED }}>{error}</div>}
@@ -156,20 +155,18 @@ export function ScmView(props: ScmProps) {
               onKeyDown={(e) => { if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) { e.preventDefault(); commit(); } }}
               placeholder={t('ide.scm.messagePlaceholder', { branch: s.branch ?? t('ide.scm.detachedHead') })}
               rows={Math.min(8, Math.max(1, message.split('\n').length))}
-              className="block w-full resize-none rounded-[2px] px-2 py-1 text-[13px] outline-none placeholder:text-[#8b8b8b] focus:outline-1 focus:outline-[#0078d4]"
-              style={{ background: '#313131', color: '#cccccc', border: '1px solid #3c3c3c' }}
+              className="block w-full resize-none rounded-md border border-line bg-panel px-2.5 py-1 text-[13px] text-fg outline-none placeholder:text-faint focus:border-accent"
             />
-            <div className="flex h-[26px] text-[13px] text-white">
+            <div className="flex h-7 text-[13px] font-medium text-accent-fg shadow-xs">
               <button
                 title={primary.title}
                 disabled={primary.disabled || busy}
                 onClick={primary.onClick}
-                className="flex min-w-0 flex-1 items-center justify-center gap-1.5 rounded-l-[2px] hover:brightness-110 disabled:opacity-50"
-                style={{ background: ACCENT }}
+                className="flex min-w-0 flex-1 items-center justify-center gap-1.5 rounded-l-md bg-accent transition-opacity hover:opacity-90 disabled:opacity-50"
               >
                 <span className="flex items-center gap-1.5 truncate">{primary.label}</span>
               </button>
-              <button title={t('ide.scm.commitMoreActions')} disabled={busy} onClick={commitMenu} className="grid w-[26px] place-items-center rounded-r-[2px] hover:brightness-110 disabled:opacity-50" style={{ background: ACCENT, borderLeft: '1px solid rgb(255 255 255 / 0.4)' }}>
+              <button title={t('ide.scm.commitMoreActions')} disabled={busy} onClick={commitMenu} className="grid w-7 place-items-center rounded-r-md border-l border-accent-fg/30 bg-accent transition-opacity hover:opacity-90 disabled:opacity-50">
                 <ChevronDown className="size-4" />
               </button>
             </div>
@@ -177,7 +174,7 @@ export function ScmView(props: ScmProps) {
 
           {groups.map((g) => (
             <div key={g.key}>
-              <div onClick={() => toggle(g.key)} className="ide-row group flex h-[22px] cursor-pointer select-none items-center gap-0.5 pl-1 pr-2 text-[13px]">
+              <div onClick={() => toggle(g.key)} className="ide-row group mx-1.5 flex h-[22px] cursor-pointer select-none items-center gap-0.5 pl-0.5 pr-1.5 text-[13px] font-medium">
                 {open[g.key] ? <ChevronDown className="size-4 shrink-0" /> : <ChevronRight className="size-4 shrink-0" />}
                 <span className="flex-1 truncate">{g.title}</span>
                 <span className="hidden items-center group-hover:flex" onClick={(e) => e.stopPropagation()}>
@@ -187,7 +184,7 @@ export function ScmView(props: ScmProps) {
                     <button title={t('ide.scm.stageAll')} onClick={() => onAction('stageAll')} className="ide-icon-btn"><Plus className="size-4" /></button>
                   </>}
                 </span>
-                <span className="ml-1 rounded-full px-1.5 text-[11px] leading-[18px]" style={{ background: '#616161', color: '#fff' }}>{fmtCount(g.count)}</span>
+                <span className="ml-1 rounded-full bg-panel-2 px-1.5 text-[11px] font-medium leading-[18px] text-muted tabular-nums">{fmtCount(g.count)}</span>
               </div>
               {open[g.key] && g.list.map((c) => (
                 <ChangeRow
@@ -214,8 +211,8 @@ export function ScmView(props: ScmProps) {
       )}
 
       {s && log && (
-        <div className="flex shrink-0 flex-col" style={{ borderTop: '1px solid #2b2b2b', maxHeight: open.graph ? '45%' : undefined, minHeight: open.graph ? 120 : undefined }}>
-          <div onClick={() => toggle('graph')} className="ide-row flex h-[22px] shrink-0 cursor-pointer select-none items-center gap-0.5 pl-1 text-[11px] font-bold">
+        <div className="flex shrink-0 flex-col border-t border-line" style={{ maxHeight: open.graph ? '45%' : undefined, minHeight: open.graph ? 120 : undefined }}>
+          <div onClick={() => toggle('graph')} className="ide-row mx-1.5 mt-1 flex h-[22px] shrink-0 cursor-pointer select-none items-center gap-0.5 pl-0.5 text-[11px] font-semibold uppercase tracking-wider text-muted">
             {open.graph ? <ChevronDown className="size-4" /> : <ChevronRight className="size-4" />}
             {t('ide.scm.graph')}
           </div>
@@ -242,7 +239,7 @@ function ChangeRow({ c, group, onClick, onDoubleClick, onContextMenu, onOpen, on
       onClick={onClick}
       onDoubleClick={onDoubleClick}
       onContextMenu={onContextMenu}
-      className="ide-row group flex h-[22px] cursor-pointer select-none items-center gap-1.5 pl-[22px] pr-2 text-[13px]"
+      className="ide-row group mx-1.5 flex h-[22px] cursor-pointer select-none items-center gap-1.5 pl-[16px] pr-1.5 text-[13px]"
     >
       <FileIcon name={base(c.path)} />
       <span className="shrink-0 truncate" style={{ color, textDecoration: c.code === 'D' ? 'line-through' : undefined }}>{base(c.path)}</span>
@@ -261,11 +258,14 @@ function ChangeRow({ c, group, onClick, onDoubleClick, onContextMenu, onOpen, on
 
 // ─── Graphe ──────────────────────────────────────────────────────────────────
 
-const LANE = ['#b180d7', '#3794ff', '#e2c08d', '#4ec9b0', '#f14c4c', '#d18616', '#73c991'];
+/** Couleurs des branches du graphe : teintes 500, lisibles sur les fonds clair et sombre. */
+const LANE = ['#6366f1', '#0ea5e9', '#f59e0b', '#14b8a6', '#f43f5e', '#a855f7', '#10b981'];
+const OUT = 'var(--accent)';
+const IN = '#f59e0b';
 const ROW = 22;
 const GAP = 11;
 const x = (c: number) => 9 + c * GAP;
-const nodeColor = (c: ScmCommit, row: ScmGraphRow) => (c.flow === 'out' ? '#3794ff' : c.flow === 'in' ? '#d18616' : LANE[row.col % LANE.length]);
+const nodeColor = (c: ScmCommit, row: ScmGraphRow) => (c.flow === 'out' ? OUT : c.flow === 'in' ? IN : LANE[row.col % LANE.length]);
 
 function Graph({ log, status }: { log: ScmLog; status: ScmStatus }) {
   const t = useT();
@@ -275,8 +275,8 @@ function Graph({ log, status }: { log: ScmLog; status: ScmStatus }) {
     <div className="ide-scroll min-h-0 flex-1 overflow-auto pb-2 text-[13px]">
       {status.upstream && (status.ahead > 0 || status.behind > 0) && (
         <div className="flex h-[22px] items-center gap-3 pl-6 text-[12px]" style={{ color: MUTED }}>
-          {status.ahead > 0 && <span className="flex items-center gap-1" style={{ color: '#3794ff' }}><ArrowUp className="size-3.5" />{t('ide.scm.outgoing', { count: status.ahead })}</span>}
-          {status.behind > 0 && <span className="flex items-center gap-1" style={{ color: '#d18616' }}><ArrowDown className="size-3.5" />{t('ide.scm.incoming', { count: status.behind })}</span>}
+          {status.ahead > 0 && <span className="flex items-center gap-1 text-accent"><ArrowUp className="size-3.5" />{t('ide.scm.outgoing', { count: status.ahead })}</span>}
+          {status.behind > 0 && <span className="flex items-center gap-1 text-amber-700 dark:text-amber-400"><ArrowDown className="size-3.5" />{t('ide.scm.incoming', { count: status.behind })}</span>}
           <span className="truncate">{status.upstream}</span>
         </div>
       )}
@@ -285,26 +285,26 @@ function Graph({ log, status }: { log: ScmLog; status: ScmStatus }) {
         const color = nodeColor(c, row);
         const seg = (k: string, [a, b]: [number, number], y1: number, y2: number, touches: boolean) => (
           <path key={k} d={a === b ? `M${x(a)} ${y1}V${y2}` : `M${x(a)} ${y1}C${x(a)} ${(y1 + y2) / 2} ${x(b)} ${(y1 + y2) / 2} ${x(b)} ${y2}`}
-            stroke={touches ? color : LANE[(y1 === 0 ? b : a) % LANE.length]} strokeWidth={1.5} fill="none" />
+            style={{ stroke: touches ? color : LANE[(y1 === 0 ? b : a) % LANE.length] }} strokeWidth={1.5} fill="none" />
         );
         const head = c.refs.some((r) => r.startsWith('HEAD'));
         return (
           <div
             key={c.hash}
             title={`${c.subject}\n${c.author} · ${fmtDateTime(c.date * 1000)}\n${c.hash.slice(0, 8)}${c.flow === 'out' ? ` · ${t('ide.scm.notPushed')}` : c.flow === 'in' ? ` · ${t('ide.scm.toPull')}` : ''}`}
-            className="ide-row flex items-center gap-1.5 pl-2 pr-2"
+            className="ide-row mx-1.5 flex items-center gap-1.5 pl-0.5 pr-1.5"
             style={{ height: ROW }}
           >
             <svg width={w} height={ROW} className="shrink-0">
               {row.top.map((s, k) => seg(`t${k}`, s, 0, GAP, s[1] === row.col && s[0] === s[1]))}
               {row.bottom.map((s, k) => seg(`b${k}`, s, GAP, ROW, s[0] === row.col && s[0] === s[1]))}
               {head
-                ? <><circle cx={x(row.col)} cy={GAP} r={5} fill="#181818" stroke={color} strokeWidth={2} /><circle cx={x(row.col)} cy={GAP} r={2} fill={color} /></>
+                ? <><circle cx={x(row.col)} cy={GAP} r={5} style={{ fill: 'var(--bg)', stroke: color }} strokeWidth={2} /><circle cx={x(row.col)} cy={GAP} r={2} style={{ fill: color }} /></>
                 : c.parents.length > 1
-                  ? <circle cx={x(row.col)} cy={GAP} r={4} fill="#181818" stroke={color} strokeWidth={2} />
-                  : <circle cx={x(row.col)} cy={GAP} r={4} fill={color} />}
+                  ? <circle cx={x(row.col)} cy={GAP} r={4} style={{ fill: 'var(--bg)', stroke: color }} strokeWidth={2} />
+                  : <circle cx={x(row.col)} cy={GAP} r={4} style={{ fill: color }} />}
             </svg>
-            <span className={`min-w-0 flex-1 truncate ${head ? 'font-semibold text-white' : ''}`} style={{ color: c.flow === 'in' ? MUTED : undefined }}>{c.subject}</span>
+            <span className={`min-w-0 flex-1 truncate ${head ? 'font-semibold text-fg' : ''}`} style={{ color: c.flow === 'in' ? MUTED : undefined }}>{c.subject}</span>
             {c.refs.map((r) => <RefBadge key={r} r={r} />)}
           </div>
         );
@@ -318,9 +318,10 @@ function RefBadge({ r }: { r: string }) {
   const head = r.startsWith('HEAD -> ');
   const name = tag ? r.slice(5) : head ? r.slice(8) : r;
   const remote = !tag && !head && r.includes('/');
-  const bg = head ? '#3794ff' : remote ? '#b180d7' : tag ? '#4ec9b0' : '#616161';
+  // Badges de l'app : HEAD en indigo plein, distant violet, étiquette sarcelle, branche locale neutre.
+  const tone = head ? 'bg-accent text-accent-fg' : remote ? 'bg-violet-500/15 text-violet-700 dark:text-violet-300' : tag ? 'bg-teal-500/15 text-teal-700 dark:text-teal-300' : 'bg-panel-2 text-muted';
   return (
-    <span className="max-w-[45%] shrink-0 truncate rounded-full px-1.5 text-[11px] leading-[16px] text-white" style={{ background: bg }} title={r}>
+    <span className={`max-w-[45%] shrink-0 truncate rounded-full px-1.5 text-[11px] font-medium leading-[16px] ${tone}`} title={r}>
       {remote ? '☁ ' : head ? '◎ ' : tag ? '⌂ ' : ''}{name}
     </span>
   );

@@ -3,6 +3,7 @@ import { Terminal } from '@xterm/xterm';
 import { FitAddon } from '@xterm/addon-fit';
 import '@xterm/xterm/css/xterm.css';
 import { socket } from '../socket';
+import { terminalTheme, useDarkMode } from '../ide/tokens';
 
 const THEME = {
   background: '#0a0c10',
@@ -13,9 +14,13 @@ const THEME = {
   brightBlack: '#6b7280', brightRed: '#fca5a5', brightGreen: '#86efac', brightYellow: '#fde047', brightBlue: '#93c5fd', brightMagenta: '#f0abfc', brightCyan: '#67e8f9', brightWhite: '#ffffff',
 };
 
-/** Terminal xterm.js branché sur une session PTY du serveur (relecture du tampon + flux live). */
-export function TerminalView({ sid, active, background }: { sid: string; active: boolean; background?: string }) {
+/**
+ * Terminal xterm.js branché sur une session PTY du serveur (relecture du tampon + flux live). `followTheme` :
+ * couleurs de l'app, claires ou sombres selon le thème, mises à jour en direct (terminal intégré de l'IDE).
+ */
+export function TerminalView({ sid, active, followTheme }: { sid: string; active: boolean; followTheme?: boolean }) {
   const host = useRef<HTMLDivElement>(null);
+  const dark = useDarkMode();
   const termRef = useRef<Terminal | null>(null);
   const fitRef = useRef<FitAddon | null>(null);
 
@@ -27,7 +32,7 @@ export function TerminalView({ sid, active, background }: { sid: string; active:
       cursorBlink: true,
       scrollback: 10_000,
       allowProposedApi: true,
-      theme: background ? { ...THEME, background } : THEME,
+      theme: followTheme ? terminalTheme() : THEME,
     });
     const fit = new FitAddon();
     term.loadAddon(fit);
@@ -70,6 +75,10 @@ export function TerminalView({ sid, active, background }: { sid: string; active:
   }, [sid]);
 
   useEffect(() => {
+    if (followTheme && termRef.current) termRef.current.options.theme = terminalTheme(dark);
+  }, [followTheme, dark]);
+
+  useEffect(() => {
     if (!active) return;
     requestAnimationFrame(() => {
       try { fitRef.current?.fit(); } catch { /* masqué */ }
@@ -77,5 +86,11 @@ export function TerminalView({ sid, active, background }: { sid: string; active:
     });
   }, [active]);
 
-  return <div ref={host} className="h-full w-full px-2 py-1.5" style={{ display: active ? 'block' : 'none' }} />;
+  // Marges sur un conteneur extérieur : FitAddon mesure le parent de xterm sans ses marges (sinon le terminal
+  // dépasse de quelques pixels en bas).
+  return (
+    <div className="h-full w-full px-2 py-1.5" style={{ display: active ? 'block' : 'none' }}>
+      <div ref={host} className="h-full w-full" />
+    </div>
+  );
 }

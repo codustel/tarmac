@@ -17,7 +17,7 @@ export function CommandMenu({ project, kind, onStarted, variant = 'console' }: {
   project: Project;
   kind: keyof typeof KINDS;
   onStarted: (s: TerminalSession) => void;
-  /** `ide` : bouton icône et menu sombre pour le panneau terminal de l'IDE. */
+  /** `ide` : bouton icône pour le panneau terminal de l'IDE. */
   variant?: 'console' | 'ide';
 }) {
   const K = KINDS[kind];
@@ -100,7 +100,7 @@ export function CommandMenu({ project, kind, onStarted, variant = 'console' }: {
     <div ref={box} className="relative">
       <div ref={btn} className="inline-flex">
       {variant === 'ide' ? (
-        <button title={t('projects.menu.commands', { name: K.label })} onClick={() => { place(); setOpen((o) => !o); }} className={cx('ide-icon-btn', open && 'bg-white/10')}>
+        <button title={t('projects.menu.commands', { name: K.label })} onClick={() => { place(); setOpen((o) => !o); }} className={cx('ide-icon-btn', open && 'bg-panel-2 text-fg')}>
           {logo}
         </button>
       ) : (
@@ -112,7 +112,7 @@ export function CommandMenu({ project, kind, onStarted, variant = 'console' }: {
 
       {open && (
         <div style={{ top: pos.top, bottom: pos.bottom, left: pos.left, maxHeight: pos.max }}
-          className={cx('fixed z-50 flex w-[min(440px,calc(100vw-16px))] flex-col overflow-hidden rounded-lg border border-line bg-panel text-fg shadow-2xl', variant === 'ide' && 'dark')}>
+          className="fixed z-50 flex w-[min(440px,calc(100vw-16px))] flex-col overflow-hidden rounded-lg border border-line bg-panel text-fg shadow-2xl">
           {/* État du dépôt / de la config Supabase */}
           {kind === 'git' ? (
             <div className="flex items-center gap-2 border-b border-line px-3 py-2 text-[11px]">

@@ -10,33 +10,11 @@ import { ContextMenu, type MenuItem } from './ContextMenu';
 import { FileIcon, languageOf } from './fileIcon';
 import { monaco } from './monaco';
 import { fmtBytes, translateNow, useT } from '../i18n';
+import { cx } from '../ui';
+import { applyMonacoTheme } from './theme';
 
-/** Couleurs du thème « Dark Modern » de VS Code. */
-export const VS = {
-  editor: '#1f1f1f',
-  side: '#181818',
-  border: '#2b2b2b',
-  text: '#cccccc',
-  muted: '#9d9d9d',
-  hover: '#2a2d2e',
-  selected: '#37373d',
-  accent: '#0078d4',
-};
-
-monaco.editor.defineTheme('dark-modern', {
-  base: 'vs-dark',
-  inherit: true,
-  rules: [],
-  colors: {
-    'editor.background': VS.editor,
-    'editorGutter.background': VS.editor,
-    'editor.lineHighlightBorder': '#282828',
-    'editorLineNumber.foreground': '#6e7681',
-    'editorLineNumber.activeForeground': VS.text,
-    'editorWidget.background': '#202020',
-    'editorStickyScroll.background': VS.editor,
-  },
-});
+/** Police du code (comme les consoles de l'app). */
+const CODE_FONT = '"JetBrains Mono", "SF Mono", ui-monospace, Menlo, monospace';
 
 const IMAGE_EXT = /\.(png|jpe?g|gif|webp|avif)$/i;
 /** Identifiants Monaco quand ils diffèrent de ceux de VS Code. */
@@ -406,11 +384,12 @@ export function Workspace({ project, visible, onDirty }: { project: Project; vis
   const [cursor, setCursor] = useState<{ line: number; col: number } | null>(null);
 
   useEffect(() => {
+    const theme = applyMonacoTheme();
     const ed = monaco.editor.create(host.current!, {
       model: null,
-      theme: 'dark-modern',
+      theme,
       automaticLayout: true,
-      fontFamily: 'Menlo, Monaco, "SF Mono", "Courier New", monospace',
+      fontFamily: CODE_FONT,
       fontSize: 12,
       lineHeight: 18,
       tabSize: 2,
@@ -425,11 +404,11 @@ export function Workspace({ project, visible, onDirty }: { project: Project; vis
     ed.onDidChangeCursorPosition((e) => setCursor({ line: e.position.lineNumber, col: e.position.column }));
     editor.current = ed;
     const diff = monaco.editor.createDiffEditor(diffHost.current!, {
-      theme: 'dark-modern',
+      theme,
       automaticLayout: true,
       readOnly: true,
       originalEditable: false,
-      fontFamily: 'Menlo, Monaco, "SF Mono", "Courier New", monospace',
+      fontFamily: CODE_FONT,
       fontSize: 12,
       lineHeight: 18,
       renderSideBySide: true,
@@ -453,7 +432,9 @@ export function Workspace({ project, visible, onDirty }: { project: Project; vis
     if (prev?.kind === 'text' && shown.current !== active && !prev.model.isDisposed()) prev.view = ed.saveViewState();
     if (prev?.kind === 'diff' && shown.current !== active && !prev.original.isDisposed()) prev.view = diffEditor.current!.saveViewState();
     const diff = diffEditor.current!;
-    diffHost.current!.style.visibility = activeDoc?.kind === 'diff' ? 'visible' : 'hidden';
+    // `display` et non `visibility` : Monaco rend certains éléments du diff `visible` d'office (bande verticale
+    // et clics interceptés au-dessus de l'éditeur texte quand le diff est masqué).
+    diffHost.current!.style.display = activeDoc?.kind === 'diff' ? 'block' : 'none';
     if (activeDoc?.kind === 'diff') {
       ed.setModel(null);
       if (diff.getModel()?.original !== activeDoc.original) {
@@ -652,14 +633,14 @@ export function Workspace({ project, visible, onDirty }: { project: Project; vis
   const rows: React.ReactNode[] = [];
   const walk = (path: string, depth: number) => {
     const entries = dirs[path];
-    if (!entries) return rows.push(<div key={`${path}/…`} style={{ paddingLeft: 12 + depth * 12 }} className="h-[22px] text-[12px] leading-[22px]" ><span style={{ color: VS.muted }}>{tr('ide.explorer.loading')}</span></div>);
-    if (entries instanceof Error) return rows.push(<div key={`${path}/!`} style={{ paddingLeft: 12 + depth * 12, color: '#f48771' }} className="h-[22px] text-[12px] leading-[22px]">{entries.message}</div>);
+    if (!entries) return rows.push(<div key={`${path}/…`} style={{ paddingLeft: 18 + depth * 12 }} className="h-[22px] text-[12px] leading-[22px] text-faint">{tr('ide.explorer.loading')}</div>);
+    if (entries instanceof Error) return rows.push(<div key={`${path}/!`} style={{ paddingLeft: 18 + depth * 12 }} className="h-[22px] text-[12px] leading-[22px] text-red-600 dark:text-red-400">{entries.message}</div>);
     for (const e of entries) {
       const p = path ? `${path}/${e.name}` : e.name;
       const open = expanded.has(p);
       const isActive = p === fileOf(active ?? '');
       const code = e.type === 'file' ? decor.files.get(p) : undefined;
-      const color = dirty.has(p) ? '#e2c08d' : code ? SCM_COLOR[code] : e.type === 'dir' ? decor.folders.get(p) : undefined;
+      const color = dirty.has(p) ? 'var(--ide-git-m)' : code ? SCM_COLOR[code] : e.type === 'dir' ? decor.folders.get(p) : undefined;
       rows.push(
         <div
           key={p}
@@ -667,11 +648,11 @@ export function Workspace({ project, visible, onDirty }: { project: Project; vis
           data-ide-path={`${id}:${p}`}
           onClick={() => (e.type === 'dir' ? toggleDir(p) : openFile(p, false))}
           onDoubleClick={() => e.type === 'file' && openFile(p, false)}
-          style={{ paddingLeft: 8 + depth * 12, background: isActive ? VS.selected : undefined }}
-          className="ide-row flex h-[22px] cursor-pointer select-none items-center gap-1 pr-2 text-[13px]"
+          style={{ paddingLeft: 2 + depth * 12 }}
+          className={cx('ide-row mx-1.5 flex h-[22px] cursor-pointer select-none items-center gap-1 pr-1.5 text-[13px]', isActive && 'bg-accent/10 font-medium text-fg hover:!bg-accent/15')}
         >
           {e.type === 'dir'
-            ? (open ? <ChevronDown className="size-4 shrink-0" /> : <ChevronRight className="size-4 shrink-0" />)
+            ? (open ? <ChevronDown className="size-4 shrink-0 text-faint" /> : <ChevronRight className="size-4 shrink-0 text-faint" />)
             : <FileIcon name={e.name} />}
           <span className="flex-1 truncate" style={{ color }}>{e.name}</span>
           {code && <span className="w-3 shrink-0 text-center text-[12px]" style={{ color: SCM_COLOR[code] }}>{code}</span>}
@@ -688,18 +669,17 @@ export function Workspace({ project, visible, onDirty }: { project: Project; vis
   const branch = scm?.branch ?? project.repo?.git?.branch ?? null;
 
   return (
-    <div className="flex h-full flex-col" style={{ background: VS.editor, color: VS.text, display: visible ? 'flex' : 'none' }}>
+    <div className="flex h-full flex-col bg-panel text-fg" style={{ display: visible ? 'flex' : 'none' }}>
       <div className="flex min-h-0 flex-1">
         {/* Barre d'activité */}
-        <nav className="flex w-12 shrink-0 flex-col items-center" style={{ background: VS.side, borderRight: `1px solid ${VS.border}` }}>
+        <nav className="flex w-12 shrink-0 flex-col items-center gap-1 border-r border-line bg-bg pt-1.5">
           {([['explorer', Files, tr('ide.activity.explorer')], ['scm', GitBranch, tr('ide.activity.scm')]] as const).map(([v, Icon, title]) => {
             const on = view === v && sideOpen;
             return (
-              <button key={v} title={title} onClick={() => showView(v)} className="relative grid h-12 w-12 place-items-center" style={{ color: on ? '#fff' : '#868686' }}>
-                {on && <span className="absolute inset-y-0 left-0 w-0.5" style={{ background: '#fff' }} />}
-                <Icon className="size-6" strokeWidth={1.5} />
+              <button key={v} title={title} onClick={() => showView(v)} className={cx('relative grid size-9 place-items-center rounded-md transition-colors', on ? 'bg-accent/10 text-accent' : 'text-muted hover:bg-panel-2 hover:text-fg')}>
+                <Icon className="size-5" strokeWidth={1.75} />
                 {v === 'scm' && scmCount > 0 && (
-                  <span className="absolute bottom-1.5 right-1 min-w-4 rounded-full px-1 text-center text-[9px] font-semibold leading-4 text-white" style={{ background: VS.accent }}>{fmtCount(scmCount)}</span>
+                  <span className="absolute -bottom-0.5 -right-0.5 min-w-4 rounded-full bg-accent px-1 text-center text-[9px] font-semibold leading-4 text-accent-fg tabular-nums ring-2 ring-bg">{fmtCount(scmCount)}</span>
                 )}
               </button>
             );
@@ -707,7 +687,7 @@ export function Workspace({ project, visible, onDirty }: { project: Project; vis
         </nav>
 
         {/* Barre latérale : explorateur ou Source Control */}
-        <aside className="flex shrink-0 flex-col" style={{ width: sideW, background: VS.side, borderRight: `1px solid ${VS.border}`, display: sideOpen ? 'flex' : 'none' }}>
+        <aside className="flex shrink-0 flex-col border-r border-line bg-bg" style={{ width: sideW, display: sideOpen ? 'flex' : 'none' }}>
           {view === 'scm' && (
             project.repo
               ? <ScmView
@@ -723,12 +703,12 @@ export function Workspace({ project, visible, onDirty }: { project: Project; vis
                   onReveal={(p) => { setView('explorer'); reveal(p); }}
                   onCopy={(p) => copy(p, toast, tr('ide.tabs.relPathCopied'))}
                 />
-              : <div className="px-5 py-3 text-[12px]" style={{ color: VS.muted }}>{tr('ide.scm.notRepo')}</div>
+              : <div className="px-4 py-3 text-[12px] text-muted">{tr('ide.scm.notRepo')}</div>
           )}
           <div className="flex min-h-0 flex-1 flex-col" style={{ display: view === 'explorer' ? 'flex' : 'none' }}>
-          <div className="flex h-[35px] items-center px-5 text-[11px] tracking-wide" style={{ color: VS.muted }}>{tr('ide.explorer.header')}</div>
-          <div className="group flex h-[22px] items-center gap-1 px-1 text-[11px] font-bold">
-            <ChevronDown className="size-4" />
+          <div className="flex h-[35px] items-center px-4 text-[11px] font-semibold tracking-wider text-faint">{tr('ide.explorer.header')}</div>
+          <div className="group mx-1.5 flex h-[22px] items-center gap-1 pl-0.5 text-[11px] font-semibold tracking-wide text-muted">
+            <ChevronDown className="size-4 text-faint" />
             <span className="flex-1 truncate uppercase">{project.name}</span>
             <button title={tr('ide.explorer.refresh')} onClick={refreshTree} className="ide-icon-btn opacity-0 group-hover:opacity-100"><RefreshCw className="size-3.5" /></button>
             <button title={tr('ide.explorer.collapseAll')} onClick={() => setExpanded(new Set())} className="ide-icon-btn opacity-0 group-hover:opacity-100"><ChevronsDownUp className="size-3.5" /></button>
@@ -736,11 +716,11 @@ export function Workspace({ project, visible, onDirty }: { project: Project; vis
           <div className="ide-scroll min-h-0 flex-1 overflow-auto pb-4">{rows}</div>
           </div>
         </aside>
-        <div onPointerDown={drag('x')} hidden={!sideOpen} className="w-1 shrink-0 cursor-col-resize hover:bg-[#0078d4]" style={{ marginLeft: -2, marginRight: -2, zIndex: 1 }} />
+        <div onPointerDown={drag('x')} hidden={!sideOpen} className="w-1 shrink-0 cursor-col-resize transition-colors hover:bg-accent" style={{ marginLeft: -2, marginRight: -2, zIndex: 1 }} />
 
         {/* Éditeur + terminal */}
         <div className="flex min-w-0 flex-1 flex-col">
-          <div className="ide-scroll flex h-[35px] shrink-0 overflow-x-auto overflow-y-hidden" style={{ background: VS.side }}>
+          <div className="ide-scroll flex h-[35px] shrink-0 overflow-x-auto overflow-y-hidden bg-bg">
             {tabs.map((t) => {
               const on = t.path === active;
               const isDirty = dirty.has(t.path);
@@ -764,23 +744,20 @@ export function Workspace({ project, visible, onDirty }: { project: Project; vis
                   onDoubleClick={() => openFile(t.path, false)}
                   onAuxClick={(e) => e.button === 1 && closeTab(t.path)}
                   onContextMenu={(e) => { e.preventDefault(); setActive(t.path); setMenu({ path: t.path, x: e.clientX, y: e.clientY }); }}
-                  className="group relative flex h-full shrink-0 cursor-pointer select-none items-center gap-1.5 pl-3 pr-1.5 text-[13px]"
-                  style={{
-                    background: on ? VS.editor : VS.side,
-                    color: on ? '#ffffff' : VS.muted,
-                    borderRight: `1px solid ${VS.border}`,
-                    boxShadow: on ? `inset 0 1px 0 ${VS.accent}` : `inset 0 -1px 0 ${VS.border}`,
-                    opacity: dragTab === t.path ? 0.5 : 1,
-                  }}
+                  className={cx(
+                    'group relative flex h-full shrink-0 cursor-pointer select-none items-center gap-1.5 border-r border-line pl-3 pr-1.5 text-[13px] transition-colors',
+                    on ? 'bg-panel font-medium text-fg shadow-[inset_0_2px_0_var(--accent)]' : 'text-muted shadow-[inset_0_-1px_0_var(--line)] hover:bg-panel-2/60 hover:text-fg',
+                  )}
+                  style={{ opacity: dragTab === t.path ? 0.5 : 1 }}
                 >
-                  {marker && <span className="pointer-events-none absolute inset-y-0 w-0.5" style={{ background: VS.accent, [marker]: -1 }} />}
+                  {marker && <span className="pointer-events-none absolute inset-y-0 w-0.5 bg-accent" style={{ [marker]: -1 }} />}
                   <FileIcon name={baseName(fileOf(t.path))} />
                   <span className={t.preview ? 'italic' : ''}>{tabName(t.path)}</span>
                   {t.pinned ? (
                     <button
                       title={isDirty ? tr('ide.tabs.unpinDirty') : tr('ide.tabs.unpin')}
                       onClick={(e) => { e.stopPropagation(); setPinned(t.path, false); }}
-                      className="grid size-5 place-items-center rounded hover:bg-white/10"
+                      className="grid size-5 place-items-center rounded text-muted hover:bg-panel-2 hover:text-fg"
                     >
                       {isDirty ? <span className="size-2 rounded-full bg-current" /> : <Pin className="size-3.5 rotate-45" />}
                     </button>
@@ -788,7 +765,7 @@ export function Workspace({ project, visible, onDirty }: { project: Project; vis
                   <button
                     title={isDirty ? tr('ide.tabs.closeDirty') : tr('ide.tabs.close')}
                     onClick={(e) => { e.stopPropagation(); closeTab(t.path); }}
-                    className="grid size-5 place-items-center rounded hover:bg-white/10"
+                    className="grid size-5 place-items-center rounded text-muted hover:bg-panel-2 hover:text-fg"
                   >
                     {isDirty
                       ? <><span className="size-2 rounded-full bg-current group-hover:hidden" /><X className="hidden size-3.5 group-hover:block" /></>
@@ -803,36 +780,36 @@ export function Workspace({ project, visible, onDirty }: { project: Project; vis
               className="min-w-8 flex-1"
               onDragOver={(e) => { if (dragTab) { e.preventDefault(); if (dropAt?.path !== null) setDropAt({ path: null, after: true }); } }}
               onDrop={(e) => { e.preventDefault(); onTabDrop(); }}
-              style={{ boxShadow: dropAt?.path === null ? `inset 2px 0 0 ${VS.accent}, inset 0 -1px 0 ${VS.border}` : `inset 0 -1px 0 ${VS.border}` }}
+              style={{ boxShadow: dropAt?.path === null ? 'inset 2px 0 0 var(--accent), inset 0 -1px 0 var(--line)' : 'inset 0 -1px 0 var(--line)' }}
             />
           </div>
 
           {active && (
-            <div className="flex h-[22px] shrink-0 items-center gap-0.5 px-3 text-[12px]" style={{ color: VS.muted }}>
+            <div className="flex h-[26px] shrink-0 items-center gap-0.5 px-3 text-[12px] text-muted">
               {crumbs.map((c, i) => (
                 <span key={i} className="flex items-center gap-0.5">
-                  {i > 0 && <ChevronRight className="size-3.5" />}
+                  {i > 0 && <ChevronRight className="size-3.5 text-faint" />}
                   {i === crumbs.length - 1 && <FileIcon name={c} />}
-                  <span className={i === crumbs.length - 1 ? 'text-[#cccccc]' : ''}>{c}</span>
+                  <span className={i === crumbs.length - 1 ? 'text-fg' : ''}>{c}</span>
                 </span>
               ))}
             </div>
           )}
 
-          <div className="relative min-h-0 flex-1">
+          <div className="ide-editor relative min-h-0 flex-1">
             <div ref={host} className="absolute inset-0" />
-            <div ref={diffHost} className="absolute inset-0" style={{ visibility: 'hidden' }} />
+            <div ref={diffHost} className="absolute inset-0" style={{ display: 'none' }} />
             {activeDoc && activeDoc.kind !== 'text' && activeDoc.kind !== 'diff' && (
-              <div className="absolute inset-0 grid place-items-center p-6 text-[13px]" style={{ background: VS.editor, color: VS.muted }}>
+              <div className="absolute inset-0 grid place-items-center bg-panel p-6 text-[13px] text-muted">
                 {activeDoc.kind === 'loading' && tr('ide.editor.opening')}
-                {activeDoc.kind === 'image' && <img src={api.fsRawUrl(id, active!)} alt={active!} className="max-h-full max-w-full object-contain" style={{ backgroundImage: 'repeating-conic-gradient(#2a2a2a 0 25%, #222 0 50%)', backgroundSize: '16px 16px' }} />}
+                {activeDoc.kind === 'image' && <img src={api.fsRawUrl(id, active!)} alt={active!} className="max-h-full max-w-full object-contain" style={{ backgroundImage: 'repeating-conic-gradient(var(--panel-2) 0 25%, var(--panel) 0 50%)', backgroundSize: '16px 16px' }} />}
                 {activeDoc.kind === 'binary' && tr('ide.editor.binary', { size: fmtBytes(activeDoc.size) })}
                 {activeDoc.kind === 'too-large' && tr('ide.editor.tooLarge', { size: fmtBytes(activeDoc.size) })}
-                {activeDoc.kind === 'error' && <span style={{ color: '#f48771' }}>{activeDoc.message}</span>}
+                {activeDoc.kind === 'error' && <span className="text-red-600 dark:text-red-400">{activeDoc.message}</span>}
               </div>
             )}
             {!active && (
-              <div className="absolute inset-0 grid place-items-center text-[13px]" style={{ color: '#6e7681' }}>
+              <div className="absolute inset-0 grid place-items-center text-[13px] text-faint">
                 <div className="space-y-1.5 text-center">
                   <div>{tr('ide.editor.emptyTitle')}</div>
                   <div>{tr('ide.editor.emptyHint')}</div>
@@ -844,10 +821,10 @@ export function Workspace({ project, visible, onDirty }: { project: Project; vis
           {/* Terminal */}
           {panel && (
             <>
-              <div onPointerDown={drag('y')} className="h-1 shrink-0 cursor-row-resize hover:bg-[#0078d4]" style={{ marginTop: -2, marginBottom: -2, zIndex: 1 }} />
-              <div className="flex shrink-0 flex-col" style={{ height: panelH, borderTop: `1px solid ${VS.border}`, background: VS.side }}>
+              <div onPointerDown={drag('y')} className="h-1 shrink-0 cursor-row-resize transition-colors hover:bg-accent" style={{ marginTop: -2, marginBottom: -2, zIndex: 1 }} />
+              <div className="flex shrink-0 flex-col border-t border-line bg-panel" style={{ height: panelH }}>
                 <div className="flex h-[35px] shrink-0 items-center gap-1 px-3 text-[11px]">
-                  <span className="border-b pb-1 pt-1.5 tracking-wide text-white" style={{ borderColor: VS.accent }}>TERMINAL</span>
+                  <span className="border-b-2 border-accent pb-1 pt-1.5 font-semibold tracking-wider text-fg">TERMINAL</span>
                   <div className="flex-1" />
                   <CommandMenu project={project} kind="git" variant="ide" onStarted={addTerminal} />
                   <CommandMenu project={project} kind="supabase" variant="ide" onStarted={addTerminal} />
@@ -859,14 +836,14 @@ export function Workspace({ project, visible, onDirty }: { project: Project; vis
                   <div className="min-w-0 flex-1 pl-2">
                     {terms.map((t) => (
                       <div key={t.id} className="h-full" style={{ display: t.id === activeTerm ? 'block' : 'none' }}>
-                        <TerminalView sid={t.id} active={visible && panel && t.id === activeTerm} background={VS.side} />
+                        <TerminalView sid={t.id} active={visible && panel && t.id === activeTerm} followTheme />
                       </div>
                     ))}
                   </div>
                   {terms.length > 1 && (
-                    <div className="ide-scroll w-40 shrink-0 overflow-auto py-1 text-[12px]" style={{ borderLeft: `1px solid ${VS.border}` }}>
+                    <div className="ide-scroll w-40 shrink-0 overflow-auto border-l border-line py-1 text-[12px]">
                       {terms.map((t, i) => (
-                        <div key={t.id} onClick={() => setActiveTerm(t.id)} className="ide-row flex h-[22px] cursor-pointer items-center gap-1.5 px-2" style={{ background: t.id === activeTerm ? VS.selected : undefined }}>
+                        <div key={t.id} onClick={() => setActiveTerm(t.id)} className={cx('ide-row mx-1 flex h-[22px] cursor-pointer items-center gap-1.5 px-2', t.id === activeTerm ? 'bg-accent/10 text-fg hover:!bg-accent/15' : 'text-muted')}>
                           <TerminalSquare className="size-3.5" />
                           <span className="truncate" title={t.label}>{t.kind === 'command' ? t.label : `zsh ${i + 1}`}</span>
                         </div>
@@ -881,21 +858,21 @@ export function Workspace({ project, visible, onDirty }: { project: Project; vis
       </div>
 
       {/* Barre d'état */}
-      <div className="flex h-[22px] shrink-0 items-center gap-3 px-2 text-[12px]" style={{ background: VS.side, borderTop: `1px solid ${VS.border}`, color: VS.muted }}>
-        {branch && <button title={tr('ide.status.scm')} onClick={() => showView('scm')} className="flex items-center gap-1 hover:text-white"><GitBranch className="size-3.5" />{branch}{scmCount > 0 ? '*' : ''}</button>}
+      <div className="flex h-6 shrink-0 items-center gap-3 border-t border-line bg-bg px-3 text-[12px] text-muted">
+        {branch && <button title={tr('ide.status.scm')} onClick={() => showView('scm')} className="flex items-center gap-1 font-medium text-fg hover:text-accent"><GitBranch className="size-3.5 text-accent" />{branch}{scmCount > 0 ? '*' : ''}</button>}
         {scm?.upstream && (
-          <button title={tr('ide.status.sync', { upstream: scm.upstream })} disabled={scmBusy > 0} onClick={() => runScm('sync')} className="flex items-center gap-1 hover:text-white">
+          <button title={tr('ide.status.sync', { upstream: scm.upstream })} disabled={scmBusy > 0} onClick={() => runScm('sync')} className="flex items-center gap-1 hover:text-fg">
             <RefreshCw className={`size-3.5 ${scmBusy > 0 ? 'animate-spin' : ''}`} />{scm.behind}↓ {scm.ahead}↑
           </button>
         )}
         {scm && !scm.upstream && scm.branch && (
-          <button title={tr('ide.status.publish')} disabled={scmBusy > 0} onClick={() => runScm('push')} className="flex items-center gap-1 hover:text-white"><CloudUpload className="size-3.5" /></button>
+          <button title={tr('ide.status.publish')} disabled={scmBusy > 0} onClick={() => runScm('push')} className="flex items-center gap-1 hover:text-fg"><CloudUpload className="size-3.5" /></button>
         )}
-        {!panel && <button onClick={() => setPanel(true)} className="flex items-center gap-1 hover:text-white"><TerminalSquare className="size-3.5" />{tr('ide.status.terminal')}</button>}
+        {!panel && <button onClick={() => setPanel(true)} className="flex items-center gap-1 hover:text-fg"><TerminalSquare className="size-3.5" />{tr('ide.status.terminal')}</button>}
         <div className="flex-1" />
         {activeDoc?.kind === 'text' && cursor && <span>{tr('ide.status.cursor', { line: cursor.line, col: cursor.col })}</span>}
         {activeDoc?.kind === 'text' && <span>{activeDoc.model.getLanguageId()}</span>}
-        {dirty.size > 0 && <span style={{ color: '#e2c08d' }}>{tr('ide.status.unsaved', { count: dirty.size })}</span>}
+        {dirty.size > 0 && <span style={{ color: 'var(--ide-git-m)' }}>{tr('ide.status.unsaved', { count: dirty.size })}</span>}
       </div>
       {menu && tabs.some((t) => t.path === menu.path) && <ContextMenu x={menu.x} y={menu.y} items={menuItems(menu.path)} onClose={closeMenu} />}
     </div>

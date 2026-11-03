@@ -1,5 +1,6 @@
 import setiFont from './seti.woff?url';
 import { SETI } from './setiTheme';
+import { ensureContrast } from './palette';
 
 // Police d'icônes Seti, chargée une seule fois.
 if (typeof document !== 'undefined' && !document.getElementById('seti-font')) {
@@ -116,13 +117,25 @@ function resolve(name: string): string {
   return (lang && SETI.lang[lang]) || SETI.file;
 }
 
+/**
+ * Couleurs Seti (pensées pour un fond sombre) ajustées pour rester lisibles sur les fonds de l'app : variante
+ * claire et sombre posées en variables, la classe `.seti-icon` (index.css) choisit selon le thème.
+ */
+const tinted = new Map<string, { light: string; dark: string }>();
+const tint = (color: string) => {
+  let t = tinted.get(color);
+  if (!t) tinted.set(color, (t = { light: ensureContrast(color, '#f6f7f9', 3.5), dark: ensureContrast(color, '#0b0d12', 3.5) }));
+  return t;
+};
+
 export function FileIcon({ name, className }: { name: string; className?: string }) {
   const [code, color] = resolve(name).split('|');
+  const t = tint(color);
   return (
     <span
       aria-hidden
-      className={className}
-      style={{ fontFamily: 'seti', color, fontSize: 22, lineHeight: 1, width: 16, display: 'inline-flex', justifyContent: 'center', flexShrink: 0 }}
+      className={className ? `seti-icon ${className}` : 'seti-icon'}
+      style={{ '--seti-light': t.light, '--seti-dark': t.dark, fontFamily: 'seti', fontSize: 22, lineHeight: 1, width: 16, display: 'inline-flex', justifyContent: 'center', flexShrink: 0 } as React.CSSProperties}
     >
       {String.fromCodePoint(parseInt(code, 16))}
     </span>

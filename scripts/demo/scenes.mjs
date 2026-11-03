@@ -244,23 +244,33 @@ export async function scenario(x) {
       await shot(page, 'utilisation', v(lang, theme, 2), 'Sidebar entière : navigation, utilisation Claude au-dessus du logo, pied de page', { clip: { x: 0, y: 0, width: 224, height: VH_ } });
     }
 
+    // ─── IDE intégré (5.5) : aux couleurs de Tarmac, clair et sombre, FR et EN ────────────────────────
+    if (want('ide')) {
+      await go(page, 'projects');
+      await row(page, 'nebula-store').getByRole('button', { name: en ? 'Open in the built-in IDE' : 'Ouvrir dans l\'IDE intégré' }).click();
+      await sleep(2500);
+      await page.getByText('src', { exact: true }).first().click().catch(() => null);
+      await sleep(500);
+      await page.getByText('App.jsx', { exact: true }).first().click().catch(() => null);
+      await sleep(2500);
+      await shot(page, 'ide', v(lang, theme, 1), 'IDE intégré : arborescence, éditeur, fichiers modifiés, terminal');
+      // Source Control (2e bouton de la barre d'activité) et diff du fichier modifié, défilé jusqu'au changement.
+      await page.locator('nav.w-12 button').nth(1).click();
+      await sleep(1500);
+      await page.locator('aside .ide-row', { hasText: 'styles.css' }).first().click();
+      await sleep(2500);
+      await page.mouse.move(1500, 600);
+      for (let i = 0; i < 22; i++) { await page.mouse.wheel(0, 200); await sleep(80); }
+      await sleep(800);
+      await shot(page, 'ide', v(lang, theme, 2), 'IDE : contrôle de source (changements, graphe) et diff du fichier modifié');
+      await page.locator('[draggable="true"]', { hasText: 'App.jsx' }).first().click({ button: 'right' });
+      await sleep(400);
+      await shot(page, 'ide', v(lang, theme, 3), 'IDE : menu contextuel d’un onglet de fichier');
+      await page.keyboard.press('Escape');
+    }
+
     // ─── Vues en anglais (sombre et clair) ────────────────────────────────────────────────────────────
     if (en) {
-      if (want('ide')) {
-        await go(page, 'projects');
-        await row(page, 'nebula-store').getByRole('button', { name: 'Open in the built-in IDE' }).click();
-        await sleep(2500);
-        await page.getByText('src', { exact: true }).first().click().catch(() => null);
-        await sleep(500);
-        await page.getByText('App.jsx', { exact: true }).first().click().catch(() => null);
-        await sleep(2500);
-        await shot(page, 'ide', v(lang, theme, 1), 'IDE intégré : arborescence, éditeur, fichiers modifiés, terminal');
-        if (dark) {
-          await page.locator('[title*="Source"], [title*="source"]').first().click().catch(() => null);
-          await sleep(1500);
-          await shot(page, 'ide', v(lang, theme, 2), 'IDE : vue de contrôle de source (changements, branche, historique)');
-        }
-      }
       for (const [scene, hash, desc] of [
         ['github', 'github', 'GitHub : dépôts clonés et état, dépôts distants avec bouton Clone'],
         ['supabase', 'supabase', 'Supabase local : instance démarrée (services), instance arrêtée, apps liées'],

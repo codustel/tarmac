@@ -1,10 +1,12 @@
-import { useCallback, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Code2, Pin, X } from 'lucide-react';
 import { api, type Project } from '../api';
-import { copy, useToast } from '../ui';
+import { copy, cx, useToast } from '../ui';
 import { useT } from '../i18n';
 import { ContextMenu, type MenuItem } from './ContextMenu';
-import { Workspace, VS } from './Workspace';
+import { Workspace } from './Workspace';
+import { applyMonacoTheme } from './theme';
+import { useDarkMode } from './tokens';
 
 /** Onglets épinglés d'abord, ordre relatif conservé. */
 const normalize = (tabs: string[], pinned: string[]) => [...tabs.filter((t) => pinned.includes(t)), ...tabs.filter((t) => !pinned.includes(t))];
@@ -22,6 +24,9 @@ export default function IdeView({ projects, tabs, pinned, active, onActive, onCl
 }) {
   const toast = useToast();
   const t = useT();
+  // Thème Monaco (global à tous les éditeurs) redéfini à chaque bascule clair / sombre, jetons relus.
+  const dark = useDarkMode();
+  useEffect(() => { applyMonacoTheme(dark); }, [dark]);
   const [dirty, setDirty] = useState<Record<string, number>>({});
   const setDirtyFor = useCallback((id: string, n: number) => setDirty((d) => (d[id] === n ? d : { ...d, [id]: n })), []);
   const byId = useMemo(() => new Map(projects.map((p) => [p.id, p])), [projects]);
@@ -86,7 +91,7 @@ export default function IdeView({ projects, tabs, pinned, active, onActive, onCl
 
   if (order.length === 0) {
     return (
-      <div className="grid h-full place-items-center text-[13px]" style={{ background: VS.editor, color: VS.muted }}>
+      <div className="grid h-full place-items-center bg-bg text-[13px] text-muted">
         <div className="max-w-sm space-y-2 text-center">
           <Code2 className="mx-auto size-10 opacity-50" />
           <div>{t('ide.projects.emptyTitle')}</div>
@@ -97,8 +102,8 @@ export default function IdeView({ projects, tabs, pinned, active, onActive, onCl
   }
 
   return (
-    <div className="flex h-full flex-col" style={{ background: VS.side }}>
-      <div className="ide-scroll flex h-[35px] shrink-0 overflow-x-auto" style={{ boxShadow: `inset 0 -1px 0 ${VS.border}` }}>
+    <div className="flex h-full flex-col bg-panel">
+      <div className="ide-scroll flex h-[39px] shrink-0 items-end gap-1 overflow-x-auto px-2 pt-1 shadow-[inset_0_-1px_0_var(--line)]">
         {order.map((id) => {
           const p = byId.get(id)!;
           const on = id === current;
@@ -122,25 +127,22 @@ export default function IdeView({ projects, tabs, pinned, active, onActive, onCl
               onAuxClick={(e) => e.button === 1 && close([id])}
               onContextMenu={(e) => { e.preventDefault(); onActive(id); setMenu({ id, x: e.clientX, y: e.clientY }); }}
               title={p.dir}
-              className="group relative flex shrink-0 cursor-pointer select-none items-center gap-2 pl-3 pr-1.5 text-[13px]"
-              style={{
-                background: on ? VS.editor : VS.side,
-                color: on ? '#fff' : VS.muted,
-                borderRight: `1px solid ${VS.border}`,
-                boxShadow: on ? `inset 0 2px 0 ${VS.accent}` : undefined,
-                opacity: dragId === id ? 0.5 : 1,
-              }}
+              className={cx(
+                'group relative flex h-8 shrink-0 cursor-pointer select-none items-center gap-2 rounded-t-md border border-b-0 pl-3 pr-1.5 text-[13px] transition-colors',
+                on ? 'border-line bg-bg font-medium text-fg' : 'border-transparent text-muted hover:bg-panel-2 hover:text-fg',
+              )}
+              style={{ opacity: dragId === id ? 0.5 : 1, marginBottom: on ? -1 : 0, height: on ? 33 : undefined }}
             >
-              {marker && <span className="pointer-events-none absolute inset-y-0 w-0.5" style={{ background: VS.accent, [marker]: -1 }} />}
-              <Code2 className="size-3.5" style={{ color: on ? VS.accent : undefined }} />
+              {marker && <span className="pointer-events-none absolute inset-y-0 w-0.5 bg-accent" style={{ [marker]: -1 }} />}
+              <Code2 className={cx('size-3.5', on && 'text-accent')} />
               <span>{p.name}</span>
-              {dirty[id] ? <span className="text-[11px]" style={{ color: '#e2c08d' }}>●</span> : null}
+              {dirty[id] ? <span className="text-[11px]" style={{ color: 'var(--ide-git-m)' }}>●</span> : null}
               {isPinned ? (
-                <button title={t('ide.tabs.unpin')} onClick={(e) => { e.stopPropagation(); setPin(id, false); }} className="grid size-5 place-items-center rounded hover:bg-white/10">
+                <button title={t('ide.tabs.unpin')} onClick={(e) => { e.stopPropagation(); setPin(id, false); }} className="grid size-5 place-items-center rounded text-muted hover:bg-panel-2 hover:text-fg">
                   <Pin className="size-3.5 rotate-45" />
                 </button>
               ) : (
-                <button title={t('ide.projects.close')} onClick={(e) => { e.stopPropagation(); close([id]); }} className="grid size-5 place-items-center rounded hover:bg-white/10">
+                <button title={t('ide.projects.close')} onClick={(e) => { e.stopPropagation(); close([id]); }} className="grid size-5 place-items-center rounded text-muted hover:bg-panel-2 hover:text-fg">
                   <X className={on ? 'size-3.5' : 'size-3.5 opacity-0 group-hover:opacity-100'} />
                 </button>
               )}
@@ -152,7 +154,7 @@ export default function IdeView({ projects, tabs, pinned, active, onActive, onCl
           className="min-w-8 flex-1"
           onDragOver={(e) => { if (dragId) { e.preventDefault(); if (drop?.id !== null) setDrop({ id: null, after: true }); } }}
           onDrop={(e) => { e.preventDefault(); onDrop(); }}
-          style={{ boxShadow: drop?.id === null ? `inset 2px 0 0 ${VS.accent}` : undefined }}
+          style={{ boxShadow: drop?.id === null ? 'inset 2px 0 0 var(--accent)' : undefined }}
         />
       </div>
       <div className="min-h-0 flex-1">

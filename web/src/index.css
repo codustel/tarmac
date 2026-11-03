@@ -65,11 +65,24 @@ body {
 .log-line .ansi-white-fg, .log-line .ansi-bright-white-fg { color: #e5e7eb; }
 .log-line .ansi-bright-black-fg { color: #9ca3af; }
 
-/* ─── IDE (style VS Code) ─── */
-.ide-row:hover { background: #2a2d2e; }
-.ide-icon-btn { display: inline-grid; place-items: center; width: 22px; height: 22px; border-radius: 5px; color: #cccccc; }
-.ide-icon-btn:hover { background: rgb(255 255 255 / 0.1); }
-.ide-scroll { scrollbar-width: thin; scrollbar-color: #424242 transparent; }
+/* ─── IDE : jetons de Tarmac (thèmes Monaco et xterm dans ide/theme.ts) ───
+   Décorations git (M, A, U, D, conflit) accordées aux badges de l'app : teintes 700 en clair, 300-400 en sombre. */
+:root {
+  --ide-git-m: #b45309; --ide-git-a: #15803d; --ide-git-u: #047857; --ide-git-d: #b91c1c; --ide-git-x: #be123c;
+}
+.dark {
+  --ide-git-m: #fbbf24; --ide-git-a: #4ade80; --ide-git-u: #34d399; --ide-git-d: #f87171; --ide-git-x: #fb7185;
+}
+.ide-row { border-radius: 6px; }
+.ide-row:hover { background: var(--panel-2); }
+.ide-icon-btn { display: inline-grid; place-items: center; width: 22px; height: 22px; border-radius: 6px; color: var(--muted); transition: color .15s, background-color .15s; }
+.ide-icon-btn:hover { background: var(--panel-2); color: var(--fg); }
+.ide-scroll { scrollbar-width: thin; scrollbar-color: var(--line) transparent; }
+.seti-icon { color: var(--seti-light); }
+.dark .seti-icon { color: var(--seti-dark); }
+/* Monaco : coins arrondis comme les menus de l'app, police de l'interface (Inter) dans la recherche. */
+.ide-editor .monaco-editor :is(.suggest-widget, .monaco-hover, .find-widget) { border-radius: 8px; }
+.ide-editor .monaco-editor .find-widget { font-family: var(--font-sans); }
 
 /* ─── Todolist Claude : présentation de l'artefact de suivi, aux couleurs du projet ───
    Les jetons --tl-* sont posés sur .tl par le composant (variante claire ou sombre du thème du projet).
