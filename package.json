@@ -3,7 +3,7 @@
   "version": "1.0.0",
   "private": false,
   "type": "module",
-  "description": "The local runway for your projects and your Claude Code sessions: a macOS dashboard to run and watch your dev apps, local Supabase, GitHub repos and Claude Code sessions.",
+  "description": "The local runway for your projects and your coding agents: a macOS dashboard to run and watch your dev apps, local Supabase, GitHub repos and Claude Code and Codex sessions.",
   "keywords": [
     "tarmac",
     "dashboard",
@@ -15,6 +15,9 @@
     "monorepo",
     "claude",
     "claude-code",
+    "codex",
+    "openai-codex",
+    "ai-agents",
     "mcp",
     "supabase",
     "github",
