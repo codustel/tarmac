@@ -1,6 +1,6 @@
-import { useMemo } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { ArrowDown, ArrowUp, Container, Database, ExternalLink, FolderGit2, Layers, Loader2, Play, PlugZap, RotateCw, Square } from 'lucide-react';
+import { ArrowDown, ArrowUp, ChevronRight, ChevronsDownUp, ChevronsUpDown, Container, Cpu, Database, ExternalLink, FolderGit2, HardDrive, Layers, Loader2, MemoryStick, Network, Play, PlugZap, RotateCw, Square } from 'lucide-react';
 import { api, type DockerAction, type DockerContainer, type DockerOverview, type DockerStats } from '../api';
 import { Badge, Button, Card, Empty, IconButton, cx, timeAgo, useToast } from '../ui';
 import { fmtBytes, fmtDateTime, fmtNumber } from '../i18n/format';
@@ -14,10 +14,33 @@ const pct = (n: number) => `${fmtNumber(n, { maximumFractionDigits: n < 10 ? 1 :
 
 type Target = { id: string; name: string } | { group: string; name: string };
 
+// ─── Repli des groupes (persistant, replié par défaut : l'en-tête porte le récapitulatif) ────────────────
+const COLLAPSE_KEY = 'docker:collapsed';
+const groupKey = (group: string | null) => group ?? '__standalone__';
+function useCollapsed() {
+  const [state, setState] = useState<Record<string, boolean>>(() => {
+    try { return JSON.parse(localStorage.getItem(COLLAPSE_KEY) ?? '{}'); } catch { return {}; }
+  });
+  useEffect(() => { try { localStorage.setItem(COLLAPSE_KEY, JSON.stringify(state)); } catch { /* stockage indisponible */ } }, [state]);
+  return {
+    isCollapsed: (key: string) => state[key] ?? true,
+    toggle: (key: string) => setState((s) => ({ ...s, [key]: !(s[key] ?? true) })),
+    setAll: (keys: string[], v: boolean) => setState((s) => ({ ...s, ...Object.fromEntries(keys.map((k) => [k, v])) })),
+  };
+}
+
+/** Somme des stats des conteneurs en cours d'un groupe (null tant qu'aucune stat n'est arrivée). */
+function sumStats(list: DockerStats[]) {
+  if (!list.length) return null;
+  const add = (f: (s: DockerStats) => number | null | undefined) => list.reduce((a, s) => a + (f(s) ?? 0), 0);
+  return { cpu: add((s) => s.cpu), mem: add((s) => s.memUsed), netRx: add((s) => s.netRx), netTx: add((s) => s.netTx), blkRead: add((s) => s.blkRead), blkWrite: add((s) => s.blkWrite) };
+}
+
 export function DockerView({ query, onOpenProject }: { query: string; onOpenProject: (id: string) => void }) {
   const t = useT();
   const toast = useToast();
   const qc = useQueryClient();
+  const collapse = useCollapsed();
   const overview = useQuery({ queryKey: ['docker'], queryFn: api.docker, refetchInterval: POLL_MS });
   const ok = overview.data?.engine.status === 'ok';
   const running = overview.data?.containers.some((c) => c.state === 'running') ?? false;
@@ -104,6 +127,12 @@ export function DockerView({ query, onOpenProject }: { query: string; onOpenProj
         {data.images && <Total label={t('docker.totals.images')} value={String(data.images.count)} sub={fmtBytes(data.images.size)} />}
         {data.volumes && <Total label={t('docker.totals.volumes')} value={String(data.volumes.count)} sub={data.volumes.size != null ? fmtBytes(data.volumes.size) : undefined} />}
         <div className="flex-1" />
+        {data.containers.length > 0 && (
+          <div className="flex items-center gap-0.5">
+            <IconButton title={t('docker.expandAll')} onClick={() => collapse.setAll(ordered.map(([g]) => groupKey(g)), false)}><ChevronsUpDown className="size-4" /></IconButton>
+            <IconButton title={t('docker.collapseAll')} onClick={() => collapse.setAll(ordered.map(([g]) => groupKey(g)), true)}><ChevronsDownUp className="size-4" /></IconButton>
+          </div>
+        )}
         {openButton}
       </Card>
 
@@ -121,15 +150,24 @@ export function DockerView({ query, onOpenProject }: { query: string; onOpenProj
           const target: Target = group ? { group, name: group } : { group: '', name: '' };
           const project = group ? list.find((c) => c.project)?.project ?? null : null;
           const supabase = list.some((c) => c.supabaseProject);
+          const key = groupKey(group);
+          // Une recherche en cours déplie tout : les conteneurs trouvés restent visibles.
+          const open = !!q || !collapse.isCollapsed(key);
+          const sum = sumStats(list.filter((c) => c.state === 'running').map((c) => stats.get(c.id)).filter((x): x is DockerStats => !!x));
           return (
-            <Card key={group ?? '—'} className="overflow-hidden">
-              <div className="flex items-center gap-2.5 border-b border-line px-4 py-2.5">
-                {supabase ? <Database className="size-4 text-emerald-500" /> : <Layers className="size-4 text-faint" />}
-                <span className="font-semibold truncate">{group ?? t('docker.group.standalone')}</span>
+            <Card key={key} className="overflow-hidden">
+              <div className={cx('flex flex-wrap items-center gap-x-2.5 gap-y-1.5 px-4 py-2.5', open && 'border-b border-line')}>
+                <button onClick={() => collapse.toggle(key)} aria-expanded={open} title={t(open ? 'docker.group.collapse' : 'docker.group.expand')}
+                  className="-ml-1 flex min-w-0 items-center gap-2 rounded px-1 py-0.5 hover:bg-panel-2">
+                  <ChevronRight className={cx('size-4 shrink-0 text-faint transition-transform', open && 'rotate-90')} />
+                  {supabase ? <Database className="size-4 shrink-0 text-emerald-500" /> : <Layers className="size-4 shrink-0 text-faint" />}
+                  <span className="font-semibold truncate">{group ?? t('docker.group.standalone')}</span>
+                </button>
                 {supabase && <Badge tone="green">{t('docker.group.supabase')}</Badge>}
                 {project && <ProjectLink project={project} onOpen={onOpenProject} />}
                 <span className="text-[11px] text-faint tabular-nums">{t('docker.group.running', { running: up, total: list.length })}</span>
                 <div className="flex-1" />
+                {up > 0 && <GroupSummary sum={sum} />}
                 {group && (
                   <div className="flex items-center gap-0.5">
                     {pendingFor(target) && <Loader2 className="mr-1 size-3.5 animate-spin text-faint" />}
@@ -139,7 +177,7 @@ export function DockerView({ query, onOpenProject }: { query: string; onOpenProj
                   </div>
                 )}
               </div>
-              <div className="overflow-x-auto">
+              {open && <div className="overflow-x-auto">
                 <table className="w-full min-w-[1020px] table-fixed text-[12px]">
                   <colgroup>
                     <col />
@@ -173,11 +211,29 @@ export function DockerView({ query, onOpenProject }: { query: string; onOpenProj
                     ))}
                   </tbody>
                 </table>
-              </div>
+              </div>}
             </Card>
           );
         })
       )}
+    </div>
+  );
+}
+
+/** Récapitulatif d'un groupe : CPU, mémoire, réseau (↓ reçu ↑ envoyé) et disque (↓ lu ↑ écrit) cumulés. */
+function GroupSummary({ sum }: { sum: ReturnType<typeof sumStats> }) {
+  const t = useT();
+  const item = (icon: React.ReactNode, title: string, value: React.ReactNode) => (
+    <span title={title} className="inline-flex items-center gap-1 whitespace-nowrap">{icon}{value}</span>
+  );
+  if (!sum) return <span className="text-[11px] text-faint">…</span>;
+  const io = (a: number, b: number) => <><ArrowDown className="size-3 text-faint" />{fmtBytes(a)}<ArrowUp className="ml-0.5 size-3 text-faint" />{fmtBytes(b)}</>;
+  return (
+    <div className="flex flex-wrap items-center gap-x-3.5 gap-y-1 text-[11px] tabular-nums text-muted">
+      {item(<Cpu className="size-3.5 text-faint" />, t('docker.col.cpu'), pct(sum.cpu))}
+      {item(<MemoryStick className="size-3.5 text-faint" />, t('docker.col.memory'), fmtBytes(sum.mem))}
+      {item(<Network className="size-3.5 text-faint" />, t('docker.net.title', { rx: fmtBytes(sum.netRx), tx: fmtBytes(sum.netTx) }), io(sum.netRx, sum.netTx))}
+      {item(<HardDrive className="size-3.5 text-faint" />, t('docker.disk.title', { read: fmtBytes(sum.blkRead), write: fmtBytes(sum.blkWrite) }), io(sum.blkRead, sum.blkWrite))}
     </div>
   );
 }
