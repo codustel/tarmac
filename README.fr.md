@@ -121,6 +121,20 @@ tarmac uninstall       # --purge supprime aussi ~/.tarmac
 Les fenêtres ouvertes, app installée comprise, détectent une nouvelle version et se rechargent ; les apps et
 consoles en cours ne sont pas touchées par une mise à jour.
 
+### Commandes de la Todolist Claude
+
+À taper dans une session Claude Code, dans le dossier du projet (nécessite l'intégration Claude Code proposée à
+l'installation).
+
+| Commande | Ce qu'elle fait |
+|---|---|
+| `/suivi init` | Crée la Todolist Claude du projet : enregistre le projet dans Tarmac, relève ses couleurs et polices, publie l'artefact claude.ai et ajoute la copie `Todolist/` au dépôt. Une fois par projet. |
+| `/suivi open` | Affiche l'artefact du projet dans la session (Claude desktop), pour lire ou cocher les tâches sans quitter la conversation. |
+| `/suivi import` | Remplit le suivi à partir des anciennes sessions Claude du projet : Claude liste les demandes trouvées, vous validez la liste, puis il écrit les tâches. |
+| `/suivi sync [--all]` | Rattrape l'écart entre l'artefact et Tarmac quand l'un a changé sans l'autre (téléphone, autre ordinateur) ; la modification la plus récente l'emporte. `--all` traite tous les projets. |
+| `/suivi upgrade [--all]` | Republie la page de l'artefact avec le dernier gabarit (nouveaux boutons comme **▶ Claude**, corrections), même URL, données conservées. À lancer après une mise à jour de Tarmac. `--all` traite tous les projets. |
+| `/suivi theme` | Affiche les couleurs et polices de l'artefact et permet de les corriger si la détection s'est trompée. |
+
 ## Documentation (en anglais)
 
 - [Configuration](docs/configuration.md) : dossiers, ports, domaine, variables d'environnement, réglages.

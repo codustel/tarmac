@@ -118,6 +118,19 @@ tarmac uninstall       # --purge also deletes ~/.tarmac
 Open windows, the installed app included, notice a new version and reload themselves; running apps and consoles
 are not affected by an update.
 
+### Claude Todolist commands
+
+Typed in a Claude Code session, inside the project's folder (needs the Claude Code integration from the install).
+
+| Command | What it does |
+|---|---|
+| `/suivi init` | Creates the project's Claude Todolist: registers the project in Tarmac, picks up its brand colors and fonts, publishes the claude.ai artifact and adds the `Todolist/` copy to the repo. Run it once per project. |
+| `/suivi open` | Shows the project's artifact in the session (Claude desktop), to read or tick tasks without leaving the chat. |
+| `/suivi import` | Fills the tracker from the project's past Claude sessions: Claude lists the requests it finds, you review the list, then it writes the tasks. |
+| `/suivi sync [--all]` | Catches up between the artifact and Tarmac when one changed without the other (phone, another computer); the most recent change wins. `--all` does every project. |
+| `/suivi upgrade [--all]` | Republishes the artifact page with the latest template (new buttons such as **▶ Claude**, fixes) at the same URL, data kept. Run it after updating Tarmac. `--all` does every project. |
+| `/suivi theme` | Shows the artifact's colors and fonts and lets you fix them if the detection got them wrong. |
+
 ## Documentation
 
 - [Configuration](docs/configuration.md): folders, ports, domain, environment variables, settings.
