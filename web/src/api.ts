@@ -258,13 +258,22 @@ export interface SuiviTask {
   minutes: number; why: string; steps: string[]; check: string; done: boolean; doneAt: string | null; note: string;
   toTest: boolean; tested: boolean; testedAt: string | null; testNote: string; rev: number; updatedAt: string | null; updatedBy: 'artifact' | 'tarmac' | 'claude' | null;
   createdAt: string | null; parent: string | null; sources: SuiviSource[]; archived: boolean;
+  /** « Demandée à Claude » : date et destinataire (nom de session, `new`, `copy`) ; vidés une fois traitée. */
+  requestedAt?: string | null; requestedTo?: string;
 }
+/** Session Claude en cours dans une console de Tarmac, pour un projet de suivi (« Envoyer à Claude »). */
+export interface SuiviClaudeSession {
+  terminalId: string; name: string; title: string | null; claudeSessionId: string | null; appProjectId: string; startedAt: string; lastActivityAt: string | null;
+  /** Lu sur l'écran de la console (et le transcript) : seule une session `idle` (invite vide) peut recevoir une tâche. */
+  state: 'idle' | 'busy' | 'permission' | 'unknown'; available: boolean;
+}
+export interface SuiviDispatchResult { ok: true; target: 'new' | 'session'; terminalId: string; session: string; prompt: string; task: SuiviTask }
 export interface SuiviThemeVariant {
   bg: string; surface: string; surface2: string; line: string; fg: string; muted: string; primary: string; primarySoft: string; primaryText: string;
 }
 export interface SuiviTheme { brand: string; primary: string; fonts: { display: string; body: string; mono: string }; dark: SuiviThemeVariant; light: SuiviThemeVariant }
 export interface SuiviCounts {
-  total: number; done: number; remaining: number; toTest: number; pct: number; minutesLeft: number;
+  total: number; done: number; remaining: number; toTest: number; requested?: number; pct: number; minutesLeft: number;
   next: { id: string; num: string; title: string; who: SuiviWho } | null; lastActivity: string | null;
 }
 export interface SuiviSync { channel: 'A' | 'B' | 'C' | 'file'; at: string; result: string; marker: string | null }
@@ -451,6 +460,9 @@ export const api = {
   suivi: (projectId: string) => request<SuiviDetail>(`/api/suivi/projects/${encodeURIComponent(projectId)}`),
   suiviPatch: (projectId: string, taskId: string, baseRev: number, changes: Partial<Pick<SuiviTask, 'done' | 'doneAt' | 'note' | 'toTest' | 'tested' | 'testedAt'>>) =>
     request<SuiviTask>(`/api/suivi/projects/${encodeURIComponent(projectId)}/tasks/${encodeURIComponent(taskId)}`, json({ baseRev, changes }, 'PATCH')),
+  suiviSessions: (projectId: string) => request<SuiviClaudeSession[]>(`/api/suivi/projects/${encodeURIComponent(projectId)}/sessions`),
+  suiviDispatch: (projectId: string, taskId: string, target: string) =>
+    request<SuiviDispatchResult>(`/api/suivi/projects/${encodeURIComponent(projectId)}/tasks/${encodeURIComponent(taskId)}/dispatch`, json({ target })),
   suiviHistory: (projectId: string, taskId: string) => request<SuiviJournalEntry[]>(`/api/suivi/projects/${encodeURIComponent(projectId)}/history/${encodeURIComponent(taskId)}`),
   suiviExportUrl: (projectId: string) => `/api/suivi/projects/${encodeURIComponent(projectId)}/export`,
   terminals: () => request<TerminalSession[]>('/api/terminals'),

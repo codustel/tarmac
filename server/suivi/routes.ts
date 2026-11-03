@@ -8,6 +8,7 @@ import type { SuiviService, SuiviFile } from './service.js';
 import type { TodolistWatcher } from './watch.js';
 import { renderArtifact } from './artifact.js';
 import type { SyncRunner } from './sync.js';
+import type { SuiviDispatcher } from './dispatch.js';
 import { buildTheme, detectPrimary } from './theme.js';
 import { detectDisplayFont } from './watch.js';
 import { countTasks, SuiviError, toOrigin, type Origin } from './types.js';
@@ -26,6 +27,8 @@ export function registerSuiviRoutes(app: FastifyInstance, service: SuiviService,
   allowDir: (dir: string) => boolean;
   bridgeIntervalSec: () => number;
   sync: SyncRunner;
+  /** « Envoyer à Claude » (sessions des consoles de Tarmac). */
+  dispatcher?: SuiviDispatcher;
 }) {
   const fail = (reply: FastifyReply, e: unknown) => {
     if (e instanceof SuiviError) return reply.code(e.statusCode).send({ error: e.message, ...(e.data ? { current: e.data } : {}) });
@@ -69,6 +72,23 @@ export function registerSuiviRoutes(app: FastifyInstance, service: SuiviService,
       service.recordSync(projectId, 'B', `${t.num} ${t.title.slice(0, 60)}`);
       return t;
     } catch (e) { return fail(reply, e); }
+  });
+
+  // ─── « Envoyer à Claude » : sessions Claude en cours dans les consoles de Tarmac, envoi d'une tâche ───
+  // Même accès que l'ouverture d'une session Claude depuis l'UI (garde d'origine) ; le serveur MCP passe aussi
+  // par ici (outils `suivi_sessions` et `suivi_dispatch`, mode artefact compris).
+  app.get<{ Params: P }>('/api/suivi/projects/:projectId/sessions', async (req, reply) => {
+    if (!opts.dispatcher) return reply.code(501).send({ error: 'Unavailable' });
+    try { return opts.dispatcher.sessions(pid(req.params.projectId)); } catch (e) { return fail(reply, e); }
+  });
+  app.post<{ Params: PT; Body: { target?: string } }>('/api/suivi/projects/:projectId/tasks/:taskId/dispatch', async (req, reply) => {
+    if (!opts.dispatcher) return reply.code(501).send({ error: 'Unavailable' });
+    try {
+      return await opts.dispatcher.dispatch(pid(req.params.projectId), req.params.taskId, String(req.body?.target ?? ''));
+    } catch (e: any) {
+      if (e instanceof SuiviError) return fail(reply, e);
+      return reply.code(e?.statusCode ?? 500).send({ error: e?.message ?? String(e) });
+    }
   });
 
   app.post<{ Params: P; Body: SuiviFile }>('/api/suivi/projects/:projectId/import', { bodyLimit: 20 * 1024 * 1024 }, async (req, reply) => {

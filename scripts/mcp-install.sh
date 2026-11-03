@@ -46,7 +46,8 @@ if [[ $DESKTOP == 1 ]]; then
 import json, os, sys
 path, cmd = sys.argv[1], sys.argv[2]
 cfg = json.load(open(path)) if os.path.exists(path) else {}
-# --artifact : les pages d'artefact n'ont accès qu'à suivi_pull / suivi_push (coche et note).
+# --artifact : les pages d'artefact n'ont accès qu'à suivi_ping / suivi_pull / suivi_push (coche et note)
+# et suivi_sessions / suivi_dispatch (bouton ▶ Claude).
 servers = cfg.setdefault('mcpServers', {})
 entry = {'command': '/bin/zsh', 'args': ['-lc', cmd + ' --artifact']}
 servers['tarmac'] = entry

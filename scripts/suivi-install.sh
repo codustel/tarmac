@@ -55,3 +55,28 @@ PY
 else
   ok "\"Project tracking\" rule already present in $CL/CLAUDE.md"
 fi
+
+# Règle ajoutée en 5.6 (bouton ▶ Claude) : une ligne insérée dans la section existante, dans sa langue, une fois.
+if grep -qE "$EN_TITLE|$FR_TITLE" "$CL/CLAUDE.md" 2>/dev/null && ! grep -q 'requestedAt' "$CL/CLAUDE.md"; then
+  bak "$CL/CLAUDE.md"
+  python3 - "$CL/CLAUDE.md" <<'PY'
+import re, sys
+path = sys.argv[1]
+text = open(path).read()
+lines = {
+    r'^## Project tracking \(Claude Todolist\)\n': '- Tasks marked for Claude (▶ Claude button, `requestedAt`) listed at session start: offer them in one line, start only once the user confirms; then mark them to test.\n',
+    r'^## Suivi de projet \(Todolist Claude\)\n': '- Tâches marquées pour Claude (bouton ▶ Claude, `requestedAt`) signalées au début de session : les proposer en une ligne, ne commencer qu’après confirmation ; puis les passer « à tester ».\n',
+}
+for title, line in lines.items():
+    m = re.search(title + r'.*?(?=^## |\Z)', text, flags=re.S | re.M)
+    if not m: continue
+    section = m.group(0)
+    # Après la ligne « à tester » de la section, sinon à sa fin.
+    hit = re.search(r'^- .*(to test|à tester).*\n', section, flags=re.M)
+    at = m.start() + (hit.end() if hit else len(section.rstrip('\n')) + 1)
+    text = text[:at] + line + text[at:]
+    break
+open(path, 'w').write(text)
+PY
+  ok "\"Project tracking\" rule: ▶ Claude line added in $CL/CLAUDE.md"
+fi

@@ -9,7 +9,7 @@ import { msg, tr, uiLang } from '../i18n.js';
 import { compareVersions, mergeTask, same, type FieldChange } from './merge.js';
 import { buildTheme, sanitizeTheme } from './theme.js';
 import {
-  countTasks, sanitizeField, sanitizeTask, SuiviError, TASK_FIELDS, TASK_ID_RE, UI_FIELDS,
+  clearRequestIfHandled, countTasks, sanitizeField, sanitizeTask, SuiviError, TASK_FIELDS, TASK_ID_RE, UI_FIELDS,
   type Channel, type Origin, type SuiviProject, type Task, type TaskField,
 } from './types.js';
 
@@ -148,7 +148,9 @@ export class SuiviService {
     const current = typeof raw.id === 'string' ? this.task(projectId, raw.id) : null;
     const base = current ?? this.newTaskDefaults(projectId, raw);
     // rev + 1 : l'écriture de Claude l'emporte même à la milliseconde près.
-    const incoming = sanitizeTask({ ...base, ...raw, id: base.id, rev: (current?.rev ?? 0) + 1, updatedAt: new Date().toISOString(), updatedBy: origin });
+    const incoming = sanitizeTask({ ...base, ...raw, id: base.id, rev: (current?.rev ?? 0) + 1, updatedAt: new Date().toISOString(), updatedBy: origin,
+      // « Demandée à Claude » ne vient que d'un clic (▶ Claude de Tarmac ou de l'artefact), jamais d'une écriture de Claude.
+      requestedAt: current?.requestedAt ?? null, requestedTo: current?.requestedTo ?? '' });
     const r = this.tx(() => this.mergeOne(projectId, incoming, origin, origin));
     if (r.created || r.changes.length) this.onChange(projectId);
     return r.task;
@@ -200,10 +202,11 @@ export class SuiviService {
     const refused = Object.keys(changes).filter((k) => !allowed.includes(k as TaskField));
     if (refused.length) throw new SuiviError(tr({ en: 'Fields not editable here: {fields} (adding and removing go through Claude)', fr: 'Champs non modifiables ici : {fields} (ajouts et suppressions passent par Claude)' }, { fields: refused.join(', ') }), 403);
 
-    const next: Task = { ...current };
+    let next: Task = { ...current };
     for (const [k, v] of Object.entries(changes)) (next as any)[k] = sanitizeField(k as TaskField, v);
     if ('done' in changes && !('doneAt' in changes)) next.doneAt = next.done ? current.doneAt ?? new Date().toISOString() : null;
-    const diff = (Object.keys(changes) as TaskField[]).concat('doneAt').filter((f, i, a) => a.indexOf(f) === i && !same(current[f], next[f]))
+    next = clearRequestIfHandled(next);
+    const diff = (Object.keys(changes) as TaskField[]).concat('doneAt', 'requestedAt', 'requestedTo').filter((f, i, a) => a.indexOf(f) === i && !same(current[f], next[f]))
       .map((field) => ({ field, before: current[field], after: next[field] }));
     if (!diff.length) return current;
     next.rev = current.rev + 1;
@@ -229,7 +232,10 @@ export class SuiviService {
     const exportedAt = file.exportedAt && !Number.isNaN(Date.parse(file.exportedAt)) ? new Date(file.exportedAt).toISOString() : null;
     const incoming = file.tasks.map((raw) => {
       const t = sanitizeTask(raw);
-      return { ...t, updatedAt: t.updatedAt ?? exportedAt, updatedBy: t.updatedBy ?? origin };
+      // Copie de dépôt (fichier, import) : donnée qu'un dépôt cloné peut fabriquer ; « Demandée à Claude » n'en
+      // vient jamais (seulement d'un clic sur ▶ Claude), la valeur de Tarmac est gardée.
+      const local = this.task(projectId, t.id);
+      return { ...t, updatedAt: t.updatedAt ?? exportedAt, updatedBy: t.updatedBy ?? origin, requestedAt: local?.requestedAt ?? null, requestedTo: local?.requestedTo ?? '' };
     });
     const res: ImportResult = { created: 0, updated: 0, unchanged: 0, lost: 0, total: incoming.length };
     this.tx(() => {

@@ -9,6 +9,8 @@ artifact in the project's colors, and a copy `Todolist/<file>.json` in the repo.
   artifact db, then `suivi_write_copy`).
 - A remark on a tested task creates a lettered subtask right below it (`parent` → 7.32a, 7.32b).
 - A handled task becomes "to test" (`toTest: true`); it is checked only after the user validates it.
+- Tasks marked for Claude (▶ Claude button, `requestedAt`) listed at session start: offer them in one line, start
+  only once the user confirms; then mark them to test.
 - Never delete: a removed task is archived (`archived: true`).
 - Never put a secret or a `.env` value in a task.
 - Project without tracking: offer `/suivi init` (the session-start hook flags it).

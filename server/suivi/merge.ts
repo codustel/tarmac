@@ -6,7 +6,7 @@
  *   gardés, séparés par « ⟂ (autre appareil, date) » ;
  * - une tâche absente d'un côté est créée, jamais supprimée de l'autre (`archived` est un champ comme un autre).
  */
-import { TASK_FIELDS, type Origin, type Task, type TaskField } from './types.js';
+import { clearRequestIfHandled, TASK_FIELDS, type Origin, type Task, type TaskField } from './types.js';
 import { tr, uiLang, type Lang } from '../i18n.js';
 
 export interface FieldChange {
@@ -55,13 +55,13 @@ export function mergeNotes(winner: string, loser: string, loserAt: string | null
  */
 export function mergeTask(local: Task | undefined, incoming: Task, origin: Origin, now = new Date().toISOString(), opts: { incomingWinsTie?: boolean } = {}): MergeResult {
   if (!local) {
-    const task: Task = {
+    const task: Task = clearRequestIfHandled({
       ...incoming,
       rev: Math.max(1, incoming.rev),
       createdAt: incoming.createdAt ?? incoming.updatedAt ?? now,
       updatedAt: incoming.updatedAt ?? now,
       updatedBy: incoming.updatedBy ?? origin,
-    };
+    });
     return { task, created: true, changes: TASK_FIELDS.map((field) => ({ field, before: null, after: task[field] })), lost: [] };
   }
 
@@ -74,13 +74,16 @@ export function mergeTask(local: Task | undefined, incoming: Task, origin: Origi
   const incomingWins = (opts.incomingWinsTie && sameTime) || compareVersions(incoming, local) > 0;
   const winner = incomingWins ? incoming : local;
   const loser = incomingWins ? local : incoming;
-  const merged: Task = { ...local };
+  let merged: Task = { ...local };
   for (const f of differing) (merged as any)[f] = winner[f];
   if (differing.includes('note')) merged.note = mergeNotes(winner.note, loser.note, loser.updatedAt);
+  // Tâche traitée (à tester ou faite) : la demande à Claude est close, quel que soit le côté qui l'a portée.
+  merged = clearRequestIfHandled(merged);
+  const cleared = (f: TaskField) => (f === 'requestedAt' || f === 'requestedTo') && (merged.done || merged.toTest);
 
   const changes = TASK_FIELDS.filter((f) => !same(local[f], merged[f])).map((field) => ({ field, before: local[field], after: merged[field] }));
   const lost = differing
-    .filter((f) => !same(incoming[f], merged[f]) && !(f === 'note' && merged.note.includes(incoming.note.trim())))
+    .filter((f) => !same(incoming[f], merged[f]) && !cleared(f) && !(f === 'note' && merged.note.includes(incoming.note.trim())))
     .map((field) => ({ field, before: incoming[field], after: merged[field] }));
   if (changes.length === 0) return { task: local, created: false, changes, lost };
 

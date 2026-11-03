@@ -18,10 +18,10 @@ import { processes } from './processes.js';
 import { SYSTEM_ID, terminals } from './terminals.js';
 import { EDITOR_APPS, matchOpen, openEditorFolders } from './editors.js';
 import crypto from 'node:crypto';
-import { assignSessions, claudeCommand, claudeDir, listClaudeSessions } from './claude.js';
+import { assignSessions, claudeCommand, claudeDir, claudeTurnState, listClaudeSessions } from './claude.js';
 import { ClaudeUsageService, readCredentials } from './claudeUsage.js';
 import { GIT_COMMANDS, buildGitCommand } from './gitCommands.js';
-import { msg, runWithRequestLang, tr } from './i18n.js';
+import { msg, runWithRequestLang, tr, uiLang } from './i18n.js';
 import { SUPABASE_COMMANDS, buildSupabaseCommand, findSupabaseDir } from './supabaseCommands.js';
 import { freeHistoryPorts, isPortBusy, killPort } from './ports.js';
 import { state, flushSync } from './store.js';
@@ -35,6 +35,7 @@ import { SuiviService } from './suivi/service.js';
 import { registerSuiviRoutes } from './suivi/routes.js';
 import { suiviToken } from './suivi/token.js';
 import { SyncRunner } from './suivi/sync.js';
+import { SuiviDispatcher } from './suivi/dispatch.js';
 import { setSuiviDir, TodolistWatcher, type ProjectRoot } from './suivi/watch.js';
 import { demo, demoBinDir, demoClaudeUsage, isDemo } from './demo/index.js';
 import { crossOriginFetch, originAllowed } from './originGuard.js';
@@ -528,8 +529,29 @@ app.post<{ Params: { id: string }; Body: { commandId?: string; shell?: boolean; 
 );
 app.get('/api/terminals', async () => terminals.list());
 
+// « Envoyer à Claude » : sessions Claude des consoles de Tarmac rattachées aux dossiers d'un projet de suivi.
+let claudeTitles = new Map<string, string>();
+const suiviDispatcher = new SuiviDispatcher({
+  service: suivi,
+  appProjects: () => lastScan.projects.map((p) => ({ id: p.id, dir: p.dir })),
+  consoles: () => {
+    // Titres des sessions (/rename, résumé) rafraîchis en arrière-plan (cache de 8 s de listClaudeSessions).
+    listClaudeSessions().then((all) => { claudeTitles = new Map(all.filter((x) => x.titleSource === 'custom' || x.titleSource === 'summary').map((x) => [x.id, x.title])); }).catch(() => {});
+    return terminals.list();
+  },
+  sessionTitle: (id) => claudeTitles.get(id) ?? null,
+  write: (id, data) => terminals.write(id, data),
+  screen: (id) => terminals.screen(id),
+  turn: claudeTurnState,
+  openSession: async (appProjectId, prompt) => {
+    const p = findProject(appProjectId);
+    if (!p) throw Object.assign(new Error(msg('api.unknownProject')), { statusCode: 404 });
+    return openClaudeConsole(p, { prompt });
+  },
+  lang: uiLang,
+});
 registerSuiviRoutes(app, suivi, { token: (kind) => suiviToken(kind, config.dataDir), watcher: todolists, allowDir: inRoots, bridgeIntervalSec: () => settings.suivi.bridgeIntervalSec,
-  sync: new SyncRunner(suivi, (job) => broadcast({ type: 'suivi:sync', projectId: job.projectId, job })) });
+  sync: new SyncRunner(suivi, (job) => broadcast({ type: 'suivi:sync', projectId: job.projectId, job })), dispatcher: suiviDispatcher });
 
 // ─── Menu git de la console ─────────────────────────────────────────────────
 app.get('/api/git/commands', async () => GIT_COMMANDS.map(({ cmd: _c, ...rest }) => ({ ...rest, preview: _c })));
@@ -638,48 +660,55 @@ app.get('/api/claude/sessions', async () => {
   return all.map((s) => ({ ...withTerminal(s), project: projectOf.get(s.id) ?? null }));
 });
 
-/** Ouvre une session Claude Code (Remote Control) dans une console de Tarmac : nouvelle ou reprise. */
-app.post<{ Params: { id: string }; Body: { resume?: string; prompt?: string; cols?: number; rows?: number } }>('/api/projects/:id/claude', async (req, reply) => {
-  const p = findProject(req.params.id);
-  if (!p) return reply.code(404).send({ error: msg('api.unknownProject') });
-  const { resume, cols, rows } = req.body ?? {};
-  let prompt = typeof req.body?.prompt === 'string' ? req.body.prompt.trim().slice(0, 4000) : undefined;
+/**
+ * Ouvre une session Claude Code (Remote Control) dans une console de Tarmac : nouvelle ou reprise.
+ * Erreur avec `statusCode` (400 : identifiant invalide ou CLI absente).
+ */
+async function openClaudeConsole(p: Project, opts: { resume?: string; prompt?: string; cols?: number; rows?: number }) {
+  const { resume, cols, rows } = opts;
+  let prompt = typeof opts.prompt === 'string' ? opts.prompt.trim().slice(0, 4000) : undefined;
   // `/suivi …` avant l'installation du skill (scripts/suivi-install.sh) : Claude lit le skill du dépôt de Tarmac.
   if (prompt?.startsWith('/suivi') && !fs.existsSync(path.join(claudeDir(), 'skills', 'suivi', 'SKILL.md'))) {
     const skill = path.join(APP_ROOT, 'claude', 'skills', 'suivi', 'SKILL.md');
     prompt = `The /suivi skill (Claude Todolist) is not installed in ~/.claude yet: read ${skill} and apply it to run "${prompt}" on this project. Answer in the user's language.`;
   }
   if (resume) {
-    if (!/^[0-9a-f-]{8,64}$/i.test(resume)) return reply.code(400).send({ error: msg('api.badSessionId') });
+    if (!/^[0-9a-f-]{8,64}$/i.test(resume)) throw Object.assign(new Error(msg('api.badSessionId')), { statusCode: 400 });
     const open = terminals.findByClaude(resume);
-    if (open) return terminals.list().find((t) => t.id === open);
+    if (open) return terminals.list().find((t) => t.id === open)!;
   }
   try {
     if (!isDemo()) await exec('/bin/sh', ['-c', 'command -v claude'], { env: process.env, timeout: 3000 });
   } catch {
-    return reply.code(400).send({ error: msg('api.noClaudeCli') });
+    throw Object.assign(new Error(msg('api.noClaudeCli')), { statusCode: 400 });
   }
   const displayName = p.group.isRoot || p.group.type === 'single' ? p.name : `${p.group.name} · ${p.name === p.group.name ? p.techName : p.name}`;
   const sessionId = resume ?? crypto.randomUUID();
   const sessions = resume ? await listClaudeSessions() : [];
   const title = sessions.find((s) => s.id === resume)?.title;
+  // Mode démo : `claude` résolu vers le faux Claude Code des fixtures (jamais le vrai).
+  const d = demo();
+  const target = d ? { ...p, pathPrepend: [demoBinDir(d, 'claude'), ...p.pathPrepend] } : p;
+  return terminals.create(target, {
+    command: claudeCommand(resume ? { resume } : { sessionId, name: displayName, prompt }),
+    label: resume ? (title ?? tr({ en: 'Resumed session', fr: 'Session reprise' })) : `Claude · ${displayName}`,
+    kind: 'claude',
+    projectName: displayName,
+    claudeSessionId: sessionId,
+    cols,
+    rows,
+    // Remote Control est désactivé si l'une de ces variables est présente.
+    unsetEnv: ['CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC', 'DISABLE_GROWTHBOOK', 'DISABLE_TELEMETRY', 'DO_NOT_TRACK'],
+  });
+}
+
+app.post<{ Params: { id: string }; Body: { resume?: string; prompt?: string; cols?: number; rows?: number } }>('/api/projects/:id/claude', async (req, reply) => {
+  const p = findProject(req.params.id);
+  if (!p) return reply.code(404).send({ error: msg('api.unknownProject') });
   try {
-    // Mode démo : `claude` résolu vers le faux Claude Code des fixtures (jamais le vrai).
-    const d = demo();
-    const target = d ? { ...p, pathPrepend: [demoBinDir(d, 'claude'), ...p.pathPrepend] } : p;
-    return await terminals.create(target, {
-      command: claudeCommand(resume ? { resume } : { sessionId, name: displayName, prompt }),
-      label: resume ? (title ?? tr({ en: 'Resumed session', fr: 'Session reprise' })) : `Claude · ${displayName}`,
-      kind: 'claude',
-      projectName: displayName,
-      claudeSessionId: sessionId,
-      cols,
-      rows,
-      // Remote Control est désactivé si l'une de ces variables est présente.
-      unsetEnv: ['CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC', 'DISABLE_GROWTHBOOK', 'DISABLE_TELEMETRY', 'DO_NOT_TRACK'],
-    });
+    return await openClaudeConsole(p, req.body ?? {});
   } catch (e: any) {
-    return reply.code(500).send({ error: e.message });
+    return reply.code(e.statusCode ?? 500).send({ error: e.message });
   }
 });
 

@@ -53,7 +53,8 @@ sont `git fetch` sur vos dépôts et l'API GitHub avec votre propre token, pour 
   limites par modèle comme Fable), lus avec la connexion de Claude Code ; le jeton reste sur votre Mac et n'est
   envoyé qu'à Anthropic.
 - **Todolist Claude** : un suivi des tâches par projet que Claude tient à jour via le serveur MCP `tarmac` et le
-  skill `/suivi`, reflété dans un artefact claude.ai et dans une copie `Todolist/` du dépôt.
+  skill `/suivi`, reflété dans un artefact claude.ai et dans une copie `Todolist/` du dépôt. Un bouton **▶ Claude**
+  envoie une tâche en attente à une session Claude au repos dans Tarmac, ou à une nouvelle session.
 - **GitHub** : vos dépôts et organisations, ceux qui sont clonés, « Cloner » en un clic (`gh` ou SSH).
 - **Supabase local** : instances lancées, Studio, Mailpit, URL de l'API et de Postgres, projet rattaché.
 - **Docker** : conteneurs groupés par projet compose avec état, santé, ports, CPU et mémoire, projet rattaché,

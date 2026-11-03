@@ -51,9 +51,9 @@ How it works, and what Tarmac does with the token:
 | Piece | Where | Role |
 |---|---|---|
 | MCP server `tarmac` | Claude Code, user scope (`~/.claude.json`) | Claude reads and writes the Claude Todolist during sessions (all `suivi_*` tools) |
-| MCP server `tarmac` (optional) | Claude desktop (`claude_desktop_config.json`) | The Todolist artifact syncs live with Tarmac (only `suivi_ping`, `suivi_pull`, `suivi_push`) |
+| MCP server `tarmac` (optional) | Claude desktop (`claude_desktop_config.json`) | The Todolist artifact syncs live with Tarmac and sends tasks to Claude (only `suivi_ping`, `suivi_pull`, `suivi_push`, `suivi_sessions`, `suivi_dispatch`) |
 | `/suivi` skill | `~/.claude/skills/suivi/` | The `/suivi` commands below |
-| SessionStart hook | `~/.claude/hooks/suivi-check.sh` + `~/.claude/settings.json` | At session start in a Git repo: gives Claude the project's tracker, or suggests `/suivi init` |
+| SessionStart hook | `~/.claude/hooks/suivi-check.sh` + `~/.claude/settings.json` | At session start in a Git repo: gives Claude the project's tracker and the tasks asked of Claude, or suggests `/suivi init` |
 | "Project tracking" rule | a section appended to `~/.claude/CLAUDE.md` (once) | Every request becomes a task; a handled task goes to "to test" |
 
 A backup copy is made next to each file it changes (`.bak-<date>`). Claude desktop rewrites its config while it
@@ -81,6 +81,33 @@ Adding and removing tasks is Claude's job (through the MCP server); you check, t
 deleted, only archived. A task Claude has handled goes to **to test**, and is checked once you have validated it.
 A remark on a tested task creates a lettered subtask right below it (7.32 → 7.32a).
 
+### Send a task to Claude (▶ Claude)
+
+Every task not handled yet (not done, not to test, not archived) has a **▶ Claude** button, in Tarmac and in the
+artifact. It hands the task to a Claude Code session with a short instruction, in the app's language:
+
+> Handle task 4.12 “title” (id t-4-12) from the acme/shop tracker: read it with suivi_get, do it, then mark it to
+> test (tracker rules).
+
+- **In Tarmac** (Todolist page or project panel), the button lists the Claude sessions running in Tarmac's consoles
+  for the project, with their state, plus **New session** (opened in a console with the instruction as its first
+  message). The instruction is pasted into the chosen session (bracketed paste, then Enter).
+- **In the artifact opened in Claude desktop**, the same menu goes through the MCP bridge (`suivi_sessions`,
+  `suivi_dispatch`): one click is enough, nothing to copy. Claude desktop may ask you to allow the call.
+- **In the artifact on the web or your phone** (no bridge), the button copies the instruction and marks the task;
+  Tarmac picks the mark up at the next sync.
+
+The task is then marked **Asked Claude** (cleared once it goes to test or is checked). The mark only comes from a
+click: a `Todolist/` copy (import, file watch) or a write by Claude never sets it. The session-start hook reads the
+marked tasks from Tarmac's local API only (never from the repo copy, which a cloned repo could forge) and passes
+their numbers alone; Claude offers them in one line and only starts once you confirm.
+
+Safeguards: only tasks of the project and only the task's own data (title cleaned of control characters) go out;
+only to a Claude session running in a Tarmac console of that project; and only when that session is **idle with an
+empty prompt**. A session that is working, waiting for a permission answer or whose state is unknown (text being
+typed, screen not recognized) is shown as unavailable and nothing is written to it, so Enter can never approve a
+permission or submit half-typed text. Sessions started outside Tarmac (Terminal, Claude desktop) can't be reached.
+
 ### `/suivi` commands
 
 | Command | What it does |
@@ -89,7 +116,7 @@ A remark on a tested task creates a lettered subtask right below it (7.32 → 7.
 | `/suivi open` | Shows the project's artifact in the session (Claude desktop) |
 | `/suivi import` | Fills the tracker from the project's past sessions, after you review the list |
 | `/suivi sync [--all]` | Catch-up between the artifact and Tarmac (the most recent change wins) |
-| `/suivi upgrade [--all]` | Republishes the artifact page with the latest template, same URL, data kept |
+| `/suivi upgrade [--all]` | Republishes the artifact page with the latest template and its capabilities, same URL, data kept |
 | `/suivi theme` | Shows or fixes the artifact's colors and fonts |
 
 ### Sync channels

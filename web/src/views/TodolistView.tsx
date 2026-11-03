@@ -170,6 +170,7 @@ export function TodolistView({ summaries, projects, query, onOpenTask, onOpenTer
                   <div className="h-2 overflow-hidden rounded-full bg-panel-2"><div className="h-full rounded-full" style={{ width: `${p.counts.pct}%`, background: c.primary }} /></div>
                   <div className="flex flex-wrap gap-2 text-[11px]">
                     {p.counts.toTest > 0 && <Badge tone="amber">{tr('todolist.toTestCount', { n: p.counts.toTest })}</Badge>}
+                    {!!p.counts.requested && <Badge tone="blue">{tr('todolist.requestedCount', { n: p.counts.requested })}</Badge>}
                     <Badge>{tr('todolist.view.left', { time: fmtMin(p.counts.minutesLeft) || tr('todolist.time.min', { n: 0 }) })}</Badge>
                   </div>
                   {p.counts.next && (

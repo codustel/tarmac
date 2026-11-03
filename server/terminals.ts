@@ -38,11 +38,15 @@ export interface TerminalSummary {
   exitCode: number | null;
   pid: number | null;
   startedAt: string;
+  /** Dernière sortie ou saisie dans la console. */
+  lastActivityAt: string | null;
 }
 
 interface Session extends TerminalSummary {
   pty: IPty;
   buffer: string;
+  /** Dernière sortie (et non saisie) : sert à savoir si une session Claude est au repos. */
+  lastOutputAt: string | null;
 }
 
 class TerminalManager extends EventEmitter {
@@ -68,7 +72,7 @@ class TerminalManager extends EventEmitter {
   private summary = (s: Session): TerminalSummary => ({
     id: s.id, projectId: s.projectId, projectName: s.projectName, kind: s.kind, claudeSessionId: s.claudeSessionId,
     label: s.label, command: s.command, status: s.status,
-    exitCode: s.exitCode, pid: s.status === 'running' ? s.pty.pid : null, startedAt: s.startedAt,
+    exitCode: s.exitCode, pid: s.status === 'running' ? s.pty.pid : null, startedAt: s.startedAt, lastActivityAt: s.lastActivityAt,
   });
 
   /** `command` null → shell interactif dans le dossier du projet (venv activé le cas échéant). */
@@ -110,12 +114,15 @@ class TerminalManager extends EventEmitter {
       exitCode: null,
       pid: p.pid,
       startedAt: new Date().toISOString(),
+      lastActivityAt: null,
+      lastOutputAt: null,
       pty: p,
       buffer: opts.command ? `\x1b[38;5;111m$ ${opts.command}\x1b[0m\r\n` : '',
     };
     this.sessions.set(s.id, s);
 
     p.onData((data) => {
+      s.lastActivityAt = s.lastOutputAt = new Date().toISOString();
       s.buffer += data;
       if (s.buffer.length > MAX_BUFFER) s.buffer = s.buffer.slice(-MAX_BUFFER);
       this.emit('data', s.id, data);
@@ -134,13 +141,21 @@ class TerminalManager extends EventEmitter {
     return this.summary(s);
   }
 
+  /** Fin de la sortie d'une console en cours (état d'une session Claude), avec la date de la dernière sortie. */
+  screen(id: string, chars = 16_000) {
+    const s = this.sessions.get(id);
+    return s?.status === 'running' ? { text: s.buffer.slice(-chars), lastOutputAt: s.lastOutputAt } : null;
+  }
+
   replay(id: string) {
     return this.sessions.get(id)?.buffer ?? null;
   }
 
   write(id: string, data: string) {
     const s = this.sessions.get(id);
-    if (s?.status === 'running') s.pty.write(data);
+    if (s?.status !== 'running') return;
+    s.lastActivityAt = new Date().toISOString();
+    s.pty.write(data);
   }
 
   resize(id: string, cols: number, rows: number) {

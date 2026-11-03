@@ -237,3 +237,39 @@ export function claudeCommand(opts: { name?: string; resume?: string; sessionId?
   if (opts.resume) return `claude --resume ${q(opts.resume)} --remote-control`;
   return `claude${opts.sessionId ? ` --session-id ${opts.sessionId}` : ''} --remote-control ${q(opts.name ?? 'Claude')}${opts.prompt ? ' ' + q(opts.prompt) : ''}`;
 }
+
+/**
+ * Tour de parole d'une session d'après la fin de son transcript (`<sessionId>.jsonl`) :
+ * - `idle` : le dernier message est une réponse de Claude sans outil en attente (tour terminé), ou une interruption ;
+ * - `working` : dernier message de l'utilisateur (Claude répond) ou appel d'outil sans résultat (outil en cours ou
+ *   permission demandée) ;
+ * - `none` : pas de transcript ou aucun échange (session neuve, ou transcript ailleurs : reprise).
+ */
+export type TurnState = 'idle' | 'working' | 'none';
+const transcriptPath = new Map<string, string>();
+
+export function claudeTurnState(sessionId: string): TurnState {
+  if (!/^[0-9a-f-]{8,64}$/i.test(sessionId)) return 'none';
+  let file = transcriptPath.get(sessionId);
+  if (!file || !fs.existsSync(file)) {
+    file = undefined;
+    const base = path.join(claudeDir(), 'projects');
+    try {
+      for (const d of fs.readdirSync(base)) {
+        const f = path.join(base, d, `${sessionId}.jsonl`);
+        if (fs.existsSync(f)) { file = f; transcriptPath.set(sessionId, f); break; }
+      }
+    } catch { /* pas de dossier projects */ }
+  }
+  if (!file) return 'none';
+  let st: fs.Stats;
+  try { st = fs.statSync(file); } catch { return 'none'; }
+  const lines = parseLines(readSlice(file, Math.max(0, st.size - TAIL), Math.min(TAIL, st.size)))
+    .filter((l) => (l.type === 'user' || l.type === 'assistant') && !l.isSidechain && !l.isMeta);
+  const last = lines.at(-1);
+  if (!last) return 'none';
+  const content = Array.isArray(last.message?.content) ? last.message.content : [];
+  if (last.type === 'assistant') return content.some((c: any) => c?.type === 'tool_use') ? 'working' : 'idle';
+  const text = textOf(last.message?.content) ?? '';
+  return /^\[Request interrupted by user/.test(text.trim()) ? 'idle' : 'working';
+}

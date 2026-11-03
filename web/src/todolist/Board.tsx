@@ -3,11 +3,12 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { api, type SuiviDetail, type SuiviJournalEntry, type SuiviTask, type SuiviTheme } from '../api';
 import { copy, useToast } from '../ui';
 import { fmtDate, fmtDateTime, translateNow, useT, type TKey } from '../i18n';
+import { RequestedBadge, SendToClaude } from './SendToClaude';
 
 /** Libellés « qui » (clés traduites au rendu). */
 export const WHO: Record<string, TKey> = { toi: 'todolist.who.toi', ensemble: 'todolist.who.ensemble', claude: 'todolist.who.claude' };
 const FIELDS = ['created', 'done', 'tested', 'testedAt', 'testNote', 'doneAt', 'note', 'toTest', 'title', 'archived',
-  'order', 'phase', 'who', 'minutes', 'why', 'steps', 'check', 'sources'] as const;
+  'order', 'phase', 'who', 'minutes', 'why', 'steps', 'check', 'sources', 'requestedAt', 'requestedTo'] as const;
 const FIELD = Object.fromEntries(FIELDS.map((f) => [f, `todolist.field.${f}`])) as Record<string, TKey>;
 const ORIGIN: Record<string, TKey> = { tarmac: 'todolist.origin.tarmac', 'app-manager': 'todolist.origin.tarmac', artifact: 'todolist.origin.artifact', claude: 'todolist.origin.claude' };
 
@@ -266,12 +267,15 @@ export function Board({ suiviId, appProjectId, focusTaskId, onOpenTerminal }: {
                               <button type="button" className="tl-badge-tested" disabled={patch.isPending} title={t.testedAt ? tr('todolist.board.testedOnTitle', { date: fmtDate(t.testedAt, {}) }) : tr('todolist.board.testedTitle')}
                                 onClick={() => patch.mutate({ t, changes: { toTest: true, tested: false, testedAt: null } })}>{tr('todolist.board.tested')}</button>
                             ) : null}
+                            <RequestedBadge task={t} />
+                            <SendToClaude suiviId={suiviId} task={t} onOpenTerminal={onOpenTerminal} />
                             <span className={`tl-pill tl-who-${t.who}`}>{WHO[t.who] ? tr(WHO[t.who]) : t.who}</span>
                             <span className="tl-time">{fmtMin(t.minutes)}</span>
                           </span>
                         </div>
                         {o && (
                           <div className="tl-detail">
+                            <div><SendToClaude suiviId={suiviId} task={t} large onOpenTerminal={onOpenTerminal} /></div>
                             {t.why && <p className="tl-why">{tr.node('todolist.board.why', { text: <Rich text={t.why} /> })}</p>}
                             {t.steps.length > 0 && <ol>{t.steps.map((s, i) => <li key={i}><Rich text={s} /></li>)}</ol>}
                             {t.check && <div className="tl-check"><b>{tr('todolist.board.check')}</b><span><Rich text={t.check} /></span></div>}

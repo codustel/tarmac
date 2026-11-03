@@ -17,6 +17,8 @@ First public release. Tarmac was previously a private tool named App Manager.
 - Claude Code sessions per project, new or resumed with Remote Control.
 - Claude Todolist: per-project tracker kept by Claude through the `tarmac` MCP server and the `/suivi` skill,
   mirrored in a claude.ai artifact and a `Todolist/` copy.
+- ▶ Claude button on every pending task (Tarmac and the artifact): sends it to an idle Claude session running in
+  a Tarmac console, or to a new session; the task is marked "Asked Claude" until it goes to test.
 - GitHub (repositories, clone in one click) and local Supabase views; built-in editor and source control view;
   Android emulators.
 - Docker view: containers grouped by compose project (state, health, ports, CPU, memory, network, disk), linked

@@ -53,7 +53,8 @@ are `git fetch` on your repositories and the GitHub API with your own token, to 
 - **Claude usage**: your plan and live usage in the sidebar (5-hour session, week, per-model limits such as Fable),
   read with Claude Code's own sign-in; the token stays on your Mac and is only sent to Anthropic.
 - **Claude Todolist**: a task tracker per project that Claude keeps up to date through the `tarmac` MCP server
-  and the `/suivi` skill, mirrored in a claude.ai artifact and in a `Todolist/` copy in the repo.
+  and the `/suivi` skill, mirrored in a claude.ai artifact and in a `Todolist/` copy in the repo. A **▶ Claude**
+  button sends a pending task to an idle Claude session running in Tarmac, or to a new one.
 - **GitHub**: your repositories and organizations, which ones are cloned, "Clone" in one click (`gh` or SSH).
 - **Local Supabase**: running instances, Studio, Mailpit, API and Postgres URLs, linked project.
 - **Docker**: containers grouped by compose project with state, health, ports, CPU and memory, linked project,

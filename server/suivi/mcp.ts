@@ -2,7 +2,8 @@
 /**
  * Serveur MCP `tarmac` (stdio) : relaie vers l'API locale de Tarmac avec le jeton
  * `SUIVI_TOKEN` de `~/.tarmac/env`. Déclaré dans Claude Code (canal B) et dans Claude desktop
- * (canal A : la page de l'artefact n'a droit qu'à `suivi_pull` et `suivi_push`).
+ * (canal A : la page de l'artefact n'a droit qu'à `suivi_ping`, `suivi_pull`, `suivi_push`, `suivi_sessions`
+ * et `suivi_dispatch`).
  */
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
@@ -14,8 +15,8 @@ const env = readEnvFile();
 // TARMAC_API_URL (ancien nom : APP_MANAGER_URL) ; sinon le port du fichier env (TARMAC_PORT, ancien MANAGER_PORT).
 const BASE = process.env.TARMAC_API_URL ?? process.env.APP_MANAGER_URL ?? `http://127.0.0.1:${envVar('PORT') ?? envVar('PORT', env) ?? 7777}`;
 /**
- * `--artifact` (déclaration Claude desktop, pour les pages d'artefact) : seulement `suivi_ping`,
- * `suivi_pull` et `suivi_push`, avec le jeton artefact (canal A, coche et note des tâches existantes).
+ * `--artifact` (déclaration Claude desktop, pour les pages d'artefact) : seulement `ARTIFACT_TOOLS`, avec le
+ * jeton artefact (canal A : coche et note des tâches existantes ; « Envoyer à Claude » d'une tâche non traitée).
  */
 const ARTIFACT = process.argv.includes('--artifact');
 const TOKEN = suiviToken(ARTIFACT ? 'artifact' : 'claude');
@@ -61,7 +62,8 @@ const TASK_FIELDS = {
 };
 
 const server = new McpServer({ name: 'tarmac', version: '1.0.0' });
-const ARTIFACT_TOOLS = new Set(['suivi_ping', 'suivi_pull', 'suivi_push']);
+/** Outils exposés aux pages d'artefact (`--artifact`). */
+const ARTIFACT_TOOLS = new Set(['suivi_ping', 'suivi_pull', 'suivi_push', 'suivi_sessions', 'suivi_dispatch']);
 const register: typeof server.registerTool = ((name: string, ...rest: any[]) =>
   ARTIFACT && !ARTIFACT_TOOLS.has(name) ? undefined : (server.registerTool as any)(name, ...rest)) as any;
 
@@ -100,6 +102,22 @@ register('suivi_push', {
   description: 'Sends Tarmac tasks changed in the artifact (full documents with updatedAt and rev). Merged task by task: the most recent wins, the discarded version goes to the log. channel: "A" (live bridge) or "C" (catch-up /suivi sync).',
   inputSchema: { projectId: PROJECT, tasks: z.array(z.record(z.string(), z.unknown())).max(5000), channel: z.enum(['A', 'C']).default('A') },
 }, ({ projectId, tasks, channel }) => run(() => api('POST', `/api/suivi/projects/${enc(projectId)}/push`, { tasks, channel })));
+
+register('suivi_sessions', {
+  description: 'Lists the Claude Code sessions currently running in Tarmac consoles for this project (terminalId, name, title, start, last activity), most recently active first. Sessions started outside Tarmac are not listed: Tarmac cannot reach them. Used to pick the session that receives a task (suivi_dispatch).',
+  inputSchema: { projectId: PROJECT },
+  annotations: { readOnlyHint: true },
+}, ({ projectId }) => run(async () => ({ sessions: await api<unknown[]>('GET', `/api/suivi/projects/${enc(projectId)}/sessions`) })));
+
+register('suivi_dispatch', {
+  description: 'Sends an untreated task (not done, not to test, not archived) to Claude: types a short instruction ("handle task <num> … read it with suivi_get, do it, then mark it to test") into a running Claude session of this project (`target` = its terminalId from suivi_sessions), or opens a new Claude session in the project with it as the first message (`target: "new"`). Marks the task as requested from Claude (requestedAt, requestedTo). Call it once per user click; never retry automatically.',
+  inputSchema: {
+    projectId: PROJECT,
+    taskId: z.string().describe('Task id (e.g. t-4-12), not its number'),
+    target: z.string().describe('terminalId of a running session (from suivi_sessions), or "new" for a new session'),
+  },
+  annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: false },
+}, ({ projectId, taskId, target }) => run(() => api('POST', `/api/suivi/projects/${enc(projectId)}/tasks/${enc(taskId)}/dispatch`, { target })));
 
 register('suivi_upsert_task', {
   description: 'Creates or updates a task (channel B). Without `id`: new task (id, number and order computed: end of `phase`, or lettered subtask under `parent`). With `id`: only the given fields change. Never delete: `archived: true` removes the task from the view. Also write the same task to the artifact db (ArtifactData), then call suivi_write_copy. Write task content in the user’s language.',

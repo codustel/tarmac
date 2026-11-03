@@ -24,7 +24,9 @@ readable from the phone) and the versioned `Todolist/` copy in the repo.
 - Artifact page ready to publish:
   `curl -s "http://127.0.0.1:7777/api/suivi/projects/<encoded projectId>/artifact.html" > <scratchpad>/todolist.html`
   (`acme%2Fshop`). Capabilities to **always** declare:
-  `{"db": {}, "downloads": true, "mcp": {"servers": [{"server": "host:tarmac", "tools": ["suivi_pull", "suivi_push"]}]}}`.
+  `{"db": {}, "downloads": true, "mcp": {"servers": [{"server": "host:tarmac", "tools": ["suivi_ping", "suivi_pull", "suivi_push", "suivi_sessions", "suivi_dispatch"]}]}}`
+  (`suivi_sessions` and `suivi_dispatch` drive the page's ▶ Claude button; an artifact published before them keeps
+  working, its button copies the instruction until the next `/suivi upgrade`).
   If publishing rejects `host:tarmac` (server not connected to this session), retry with
   `host:app-manager` (old name, still declared in Claude desktop after a migration); if that is rejected
   too, republish without `mcp` and say so: the bridge will be added on the next `/suivi upgrade` from a session
@@ -36,6 +38,13 @@ readable from the phone) and the versioned `Todolist/` copy in the repo.
 2. Same task in the artifact db: `ArtifactData` `get` of the document then a pinned `update` (`if_version`),
    or `set` without `if_version` if the document does not exist. Data = the returned task, without the `id` field.
 3. `suivi_write_copy`.
+
+Tasks **marked for Claude** (▶ Claude button in Tarmac or in the artifact: `requestedAt` set, `requestedTo` = the
+session, `new` or `copy`): when the session-start hook lists their numbers, offer them to the user in one line and
+start only if they confirm. A message typed or sent by the ▶ Claude button ("Handle task <num> … from the
+<projectId> tracker") is the user's request: read the task with `suivi_get`, do it, then `suivi_set_done` with
+`toTest: true` (Tarmac clears the mark). You never set `requestedAt` yourself (Tarmac ignores it from Claude and
+from repo copies).
 
 Rules: every user request becomes a task; a remark on a tested task creates a lettered subtask
 (`parent` = the task's id → 7.32a right below it); a handled task becomes `toTest: true`, and is only

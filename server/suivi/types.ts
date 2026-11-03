@@ -45,6 +45,12 @@ export interface Task {
   parent: string | null;
   sources: Source[];
   archived: boolean;
+  /**
+   * « Demandée à Claude » (bouton ▶ Claude) : date de la demande et destinataire (nom de la session, `new` pour
+   * une nouvelle session, `copy` pour une consigne copiée sans pont). Effacé quand la tâche passe à tester ou faite.
+   */
+  requestedAt: string | null;
+  requestedTo: string;
 }
 
 /** Couleurs d'une variante (claire ou sombre) du thème d'un projet. */
@@ -79,11 +85,20 @@ export interface SuiviProject {
 export const TASK_FIELDS = [
   'order', 'phase', 'phaseTitle', 'num', 'title', 'who', 'minutes', 'why', 'steps', 'check',
   'done', 'doneAt', 'note', 'toTest', 'tested', 'testedAt', 'testNote', 'parent', 'sources', 'archived',
+  'requestedAt', 'requestedTo',
 ] as const;
 export type TaskField = (typeof TASK_FIELDS)[number];
 
 /** Champs modifiables depuis l'onglet Todolist de Tarmac et l'artefact (D7 : on y coche et on y annote). */
-export const UI_FIELDS: readonly TaskField[] = ['done', 'doneAt', 'note', 'toTest', 'tested', 'testedAt'];
+export const UI_FIELDS: readonly TaskField[] = ['done', 'doneAt', 'note', 'toTest', 'tested', 'testedAt', 'requestedAt', 'requestedTo'];
+
+/** Tâche « non traitée » : ni faite, ni à tester, ni archivée (seules celles-ci peuvent être envoyées à Claude). */
+export const isUntreated = (t: Pick<Task, 'done' | 'toTest' | 'archived'>) => !t.done && !t.toTest && !t.archived;
+
+/** Une tâche traitée (à tester ou faite) n'est plus « demandée à Claude » : champs effacés. */
+export function clearRequestIfHandled<T extends Task>(t: T): T {
+  return (t.done || t.toTest) && (t.requestedAt || t.requestedTo) ? { ...t, requestedAt: null, requestedTo: '' } : t;
+}
 
 const WHO: readonly Who[] = ['toi', 'ensemble', 'claude'];
 export const TASK_ID_RE = /^[A-Za-z0-9][\w.-]{0,79}$/;
@@ -125,7 +140,9 @@ export function sanitizeField(field: TaskField, v: unknown): unknown {
     case 'who': return WHO.includes(v as Who) ? v : 'claude';
     case 'steps': return Array.isArray(v) ? v.slice(0, 60).map((s) => str(s, 2000)) : [];
     case 'done': case 'toTest': case 'tested': case 'archived': return v === true;
-    case 'doneAt': case 'testedAt': return date(v);
+    case 'doneAt': case 'testedAt': case 'requestedAt': return date(v);
+    // Texte affiché tel quel : caractères de contrôle retirés.
+    case 'requestedTo': return str(v, 120).replace(/[\u0000-\u001f\u007f-\u009f]/g, ' ').trim();
     case 'parent': return typeof v === 'string' && TASK_ID_RE.test(v) ? v : null;
     case 'sources': return sanitizeSources(v);
   }
@@ -158,6 +175,8 @@ export function countTasks(all: Task[]) {
     remaining: tasks.length - done,
     // « À tester » : traitée mais pas encore validée ; une tâche cochée n'est plus à tester.
     toTest: tasks.filter((t) => t.toTest && !t.done).length,
+    // « Demandées à Claude » et pas encore traitées.
+    requested: tasks.filter((t) => isUntreated(t) && !!t.requestedAt).length,
     pct: tasks.length ? Math.round((done * 100) / tasks.length) : 0,
     minutesLeft: tasks.filter((t) => !t.done).reduce((a, t) => a + (t.minutes || 0), 0),
     next: next && { id: next.id, num: next.num, title: next.title, who: next.who },

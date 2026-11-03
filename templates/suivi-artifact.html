@@ -73,7 +73,38 @@ __FONTS__
   "save.noteFailed":"La note n’a pas pu être enregistrée. Réessaie.",
   "load.slow":"Le suivi met du temps à se charger…",
   "load.unavailable":"Avancement non disponible dans cette vue (aperçu ou accès en lecture seule).",
-  "load.lost":"Connexion à l’avancement perdue ({code}). Recharge la page."
+  "load.lost":"Connexion à l’avancement perdue ({code}). Recharge la page.",
+  "send.button":"▶ Claude",
+  "send.title":"Envoyer à Claude",
+  "send.detail":"▶ Envoyer à Claude",
+  "send.menu":"Envoyer {num} à…",
+  "send.loading":"Recherche des sessions dans Tarmac…",
+  "send.none":"Aucune session Claude ouverte dans Tarmac pour ce projet.",
+  "send.new":"+ Nouvelle session",
+  "send.newHint":"Ouverte dans une console de Tarmac, avec la tâche comme premier message",
+  "send.outside":"Les sessions lancées hors de Tarmac (Terminal, Claude desktop) ne sont pas joignables.",
+  "send.active":"active {ago}",
+  "send.sending":"Envoi…",
+  "send.sent":"Envoyée à {session}",
+  "send.sentNew":"Envoyée à une nouvelle session Claude (console de Tarmac)",
+  "send.copied":"Consigne copiée : colle-la dans une session Claude. La tâche est marquée « Demandée à Claude ».",
+  "send.copyFailed":"Copie impossible dans cette vue : sélectionne la consigne ci-dessous. La tâche est marquée « Demandée à Claude ».",
+  "send.cancelled":"Envoi annulé dans Claude desktop : rien n’est parti.",
+  "send.approval":"Envoi en attente d’autorisation : accepte la demande de Claude desktop, puis reclique.",
+  "send.unreachable":"Tarmac n’est pas joignable depuis cette page ({code}) : reclique pour copier la consigne à la place.",
+  "send.toolError":"Tarmac a refusé l’envoi : {message}",
+  "send.failed":"L’envoi n’a pas abouti ({code}). Reclique pour réessayer.",
+  "send.sessionsFailed":"Sessions illisibles ({code}).",
+  "send.prompt":"Traite la tâche {num} « {title} » (id {id}) du suivi {project} : lis-la avec suivi_get, fais-la, puis passe-la à tester (règles du suivi).",
+  "requested.badge":"Demandée à Claude",
+  "requested.title":"Demandée le {date} à {to}",
+  "requested.new":"une nouvelle session",
+  "requested.copy":"Claude (consigne copiée)",
+  "send.state.idle":"au repos",
+  "send.state.busy":"au travail",
+  "send.state.permission":"attend une permission",
+  "send.state.unknown":"état inconnu",
+  "send.unavailable":"Session occupée ou état inconnu : rien ne lui sera envoyé. Choisis-en une autre ou Nouvelle session."
 },
 "en":{
   "theme.label":"Theme",
@@ -141,7 +172,38 @@ __FONTS__
   "save.noteFailed":"The note couldn’t be saved. Try again.",
   "load.slow":"The tracker is taking a while to load…",
   "load.unavailable":"Progress isn’t available in this view (preview or read-only access).",
-  "load.lost":"Lost the connection to progress ({code}). Reload the page."
+  "load.lost":"Lost the connection to progress ({code}). Reload the page.",
+  "send.button":"▶ Claude",
+  "send.title":"Send to Claude",
+  "send.detail":"▶ Send to Claude",
+  "send.menu":"Send {num} to…",
+  "send.loading":"Looking for sessions in Tarmac…",
+  "send.none":"No Claude session open in Tarmac for this project.",
+  "send.new":"+ New session",
+  "send.newHint":"Opened in a Tarmac console, with the task as its first message",
+  "send.outside":"Sessions started outside Tarmac (Terminal, Claude desktop) can’t be reached.",
+  "send.active":"active {ago}",
+  "send.sending":"Sending…",
+  "send.sent":"Sent to {session}",
+  "send.sentNew":"Sent to a new Claude session (Tarmac console)",
+  "send.copied":"Instruction copied: paste it into a Claude session. The task is marked “Asked Claude”.",
+  "send.copyFailed":"Can’t copy in this view: select the instruction below. The task is marked “Asked Claude”.",
+  "send.cancelled":"Sending was cancelled in Claude desktop: nothing went out.",
+  "send.approval":"Sending needs your approval: accept Claude desktop’s request, then click again.",
+  "send.unreachable":"Can’t reach Tarmac from this page ({code}): click again to copy the instruction instead.",
+  "send.toolError":"Tarmac refused to send it: {message}",
+  "send.failed":"Sending didn’t go through ({code}). Click again to retry.",
+  "send.sessionsFailed":"Couldn’t read the sessions ({code}).",
+  "send.prompt":"Handle task {num} “{title}” (id {id}) from the {project} tracker: read it with suivi_get, do it, then mark it to test (tracker rules).",
+  "requested.badge":"Asked Claude",
+  "requested.title":"Asked on {date}, to {to}",
+  "requested.new":"a new session",
+  "requested.copy":"Claude (instruction copied)",
+  "send.state.idle":"idle",
+  "send.state.busy":"working",
+  "send.state.permission":"waiting for permission",
+  "send.state.unknown":"state unknown",
+  "send.unavailable":"Busy or unknown state: nothing will be sent to it. Pick another one or New session."
 }
 }
 </script>
@@ -223,6 +285,29 @@ button.btn[disabled]{opacity:.55;cursor:default}
 .backup .hint{color:var(--muted);font-size:13px;max-width:52ch}
 .empty,.status{background:var(--surface);border:1px dashed var(--line);border-radius:14px;padding:20px;color:var(--muted)}
 .status{border-style:solid;font-size:13px;padding:10px 14px}
+/* « ▶ Claude » : envoie une tâche non traitée à une session Claude de Tarmac (menu des sessions) ou copie la consigne. */
+.badge-requested{font:700 11px var(--body);letter-spacing:.06em;text-transform:uppercase;color:var(--cyan);border:1px dashed var(--cyan);border-radius:6px;padding:2px 7px;white-space:nowrap}
+.send-btn{font:600 12px var(--body);color:var(--cyan);background:var(--cyan-soft);border:1px solid transparent;border-radius:99px;padding:3px 9px;cursor:pointer;white-space:nowrap}
+.send-btn:hover{border-color:var(--cyan)}
+.send-btn[disabled],button.btn.small[disabled]{opacity:.6;cursor:default}
+button.btn.small{font-size:13px;padding:6px 12px;align-self:flex-start}
+.menu{position:fixed;z-index:30;width:min(340px,calc(100vw - 24px));background:var(--surface);color:var(--fg);border:1px solid var(--line);border-radius:12px;padding:6px;box-shadow:0 12px 32px rgb(0 0 0/.22);display:flex;flex-direction:column;gap:2px}
+.menu[hidden]{display:none}
+.menu .mh{font-size:11.5px;font-weight:600;letter-spacing:.04em;color:var(--muted);padding:6px 8px 4px}
+.menu>button{display:flex;flex-direction:column;gap:1px;align-items:flex-start;background:none;border:0;border-radius:8px;padding:7px 8px;color:var(--fg);cursor:pointer;font:500 13.5px var(--body);text-align:left}
+.menu>button:hover:not([disabled]){background:var(--primary-soft)}
+.menu>button[disabled]{opacity:.55;cursor:default}
+.menu>button.mnew{border-top:1px solid var(--line);border-radius:0 0 8px 8px;margin-top:2px}
+.menu .mn{font-weight:600}
+.menu .ms,.menu .mnote{font-size:12px;color:var(--muted)}
+.menu .mnote{padding:6px 8px}
+.menu .mfoot{border-top:1px solid var(--line);font-size:11.5px}
+.st{font-size:11px;font-weight:600;border-radius:99px;padding:1px 7px;margin-left:4px;white-space:nowrap}
+.st-idle{color:var(--ok);background:var(--ok-soft)}.st-busy,.st-permission{color:var(--amber);background:var(--amber-soft)}.st-unknown{color:var(--muted);background:var(--surface-2)}
+.toast{position:fixed;left:50%;bottom:max(16px,env(safe-area-inset-bottom,0px));transform:translateX(-50%);z-index:40;max-width:min(560px,calc(100vw - 32px));background:var(--fg);color:var(--bg);border-radius:10px;padding:10px 14px;font-size:13.5px;box-shadow:0 8px 24px rgb(0 0 0/.25)}
+.toast.err{background:var(--amber-soft);color:var(--fg);border:1px solid var(--amber)}
+.toast[hidden]{display:none}
+.prompt{display:block;margin-top:8px;user-select:all;white-space:normal}
 @media (max-width:560px){
   .row{grid-template-columns:auto auto 1fr;grid-template-areas:"cb num ttl" ". . tags"}
   .row input{grid-area:cb}.num{grid-area:num}.ttl{grid-area:ttl}.tags{grid-area:tags;justify-content:flex-start}
@@ -275,6 +360,8 @@ button.btn[disabled]{opacity:.55;cursor:default}
   <div class="status" id="status" hidden></div>
   <div id="phases"><div class="empty" data-i18n="phases.placeholder"></div></div>
 </div>
+<div class="menu" id="sendMenu" role="menu" hidden></div>
+<div class="toast" id="toast" role="status" aria-live="polite" hidden></div>
 
 <script>
 (function(){
@@ -310,6 +397,9 @@ button.btn[disabled]{opacity:.55;cursor:default}
   // « À tester » : traitée mais pas encore validée. Une tâche cochée (done) n'est plus à tester.
   const isToTest=t=>!!t.toTest&&!t.done;
   const visible=()=>tasks.filter(t=>!t.archived);
+  // « Non traitée » : ni faite, ni à tester, ni archivée (seules celles-ci partent à Claude). « Demandée » : envoyée, pas encore traitée.
+  const isUntreated=t=>!t.done&&!t.toTest&&!t.archived;
+  const isRequested=t=>isUntreated(t)&&!!t.requestedAt;
 
   $('brand').textContent=CFG.brand;
   $('title').textContent=CFG.title;
@@ -452,8 +542,9 @@ button.btn[disabled]{opacity:.55;cursor:default}
 <input type="checkbox" id="cb-${id}" data-id="${id}" ${task.done?'checked':''} aria-label="${esc(t('task.markDone',{num:task.num}))}">
 <span class="num">${esc(task.num)}</span>
 <button class="ttl" type="button" data-toggle="${id}" aria-expanded="${o}">${esc(task.title)}</button>
-<span class="tags">${isToTest(task)?`<button type="button" class="badge-totest" data-tested="${id}" title="${esc(t('task.toTestTitle'))}">${esc(t('task.toTest'))}</button>`:task.tested?`<button type="button" class="badge-tested" data-untest="${id}" title="${esc(testedTitle)}">${esc(t('task.tested'))}</button>`:''}<span class="pill who-${esc(task.who)}">${esc(WHO[task.who]||task.who)}</span><span class="time">${fmtMin(task.minutes)}</span></span></div>
+<span class="tags">${isToTest(task)?`<button type="button" class="badge-totest" data-tested="${id}" title="${esc(t('task.toTestTitle'))}">${esc(t('task.toTest'))}</button>`:task.tested?`<button type="button" class="badge-tested" data-untest="${id}" title="${esc(testedTitle)}">${esc(t('task.tested'))}</button>`:''}${isRequested(task)?`<span class="badge-requested" title="${esc(t('requested.title',{date:new Date(task.requestedAt).toLocaleString(LOCALE,{dateStyle:'medium',timeStyle:'short'}),to:task.requestedTo==='new'?t('requested.new'):task.requestedTo&&task.requestedTo!=='copy'?task.requestedTo:t('requested.copy')}))}">${esc(t('requested.badge'))}</span>`:''}${isUntreated(task)?`<button type="button" class="send-btn" data-send="${id}" aria-haspopup="menu" title="${esc(t('send.title'))}"${sending.has(task.id)?' disabled':''}>${esc(sending.has(task.id)?t('send.sending'):t('send.button'))}</button>`:''}<span class="pill who-${esc(task.who)}">${esc(WHO[task.who]||task.who)}</span><span class="time">${fmtMin(task.minutes)}</span></span></div>
 <div class="detail" ${o?'':'hidden'}>
+${isUntreated(task)?`<button type="button" class="btn small" data-send="${id}" aria-haspopup="menu"${sending.has(task.id)?' disabled':''}>${esc(sending.has(task.id)?t('send.sending'):t('send.detail'))}</button>`:''}
 ${task.why?`<p class="why">${t('task.why',{text:rich(task.why)})}</p>`:''}
 ${(task.steps||[]).length?`<ol>${task.steps.map(s=>`<li>${rich(s)}</li>`).join('')}</ol>`:''}
 ${task.check?`<div class="check"><b>${esc(t('task.check'))}</b><span>${rich(task.check)}</span></div>`:''}
@@ -473,10 +564,92 @@ ${task.done&&task.doneAt?`<span class="doneat">${esc(t('task.doneAt',{date:new D
   // Coche et note (D7 : on coche et on annote ici ; ajouter ou retirer une tâche passe par Claude).
   async function edit(id,changes){
     const task=tasks.find(x=>x.id===id);if(!task)return;
+    // Passée à tester ou faite : la demande à Claude est close (même règle que Tarmac).
+    if(changes.done===true||changes.toTest===true)changes={...changes,requestedAt:null,requestedTo:''};
     const data={...changes,rev:(task.rev||0)+1,updatedAt:new Date().toISOString(),updatedBy:'artifact'};
     await db.collection('tasks').doc(id).update(data);
     push([{...task,...data}]);
   }
+
+  // ─── « Envoyer à Claude » ───
+  // Avec le pont (Claude desktop + Tarmac) : choix d'une session Claude ouverte dans Tarmac, ou nouvelle session.
+  // Sans pont (navigateur, téléphone) : la consigne est copiée et la tâche marquée « Demandée à Claude » dans la db.
+  // Un clic = un envoi : pendant l'envoi le bouton est désactivé, aucune erreur n'est réessayée toute seule.
+  const sending=new Set();let menuFor=null,toastTimer=null;
+  const UNREACHABLE=['server_not_connected','not_in_manifest','not_granted','capability_disabled','capability_removed','server_not_found','selection_required','blocked_by_policy'];
+  function toast(msg,kind){const el=$('toast');el.textContent=msg;el.className='toast'+(kind==='err'?' err':'');el.hidden=false;clearTimeout(toastTimer);toastTimer=setTimeout(()=>{el.hidden=true;},kind==='err'?9000:5000);}
+  // Même consigne que Tarmac (server/suivi/dispatch.ts) : seulement des données de la tâche, sans caractère de contrôle.
+  const clean=(v,max)=>{let x=String(v??'').replace(/\x1b\[[0-?]*[ -\/]*[@-~]/g,'').replace(/[\u0000-\u001f\u007f-\u009f\u2028\u2029\u200b-\u200f\u202a-\u202e\u2066-\u2069\ufeff]/g,' ').replace(/\s+/g,' ').trim();return x.length>max?x.slice(0,max-1).trimEnd()+'…':x;};
+  const promptFor=task=>t('send.prompt',{num:clean(task.num,20).replace(/[^\w.-]/g,'')||task.id,title:clean(task.title,200),id:task.id,project:CFG.projectId});
+  const stateLabel=st=>st==='idle'?t('send.state.idle'):st==='busy'?t('send.state.busy'):st==='permission'?t('send.state.permission'):t('send.state.unknown');
+  const hasBridge=()=>!!mcp&&bridge.state!=='off';
+  function closeMenu(){const m=$('sendMenu');m.hidden=true;m.innerHTML='';menuFor=null;}
+  function placeMenu(btn){
+    const m=$('sendMenu'),r=btn.getBoundingClientRect();
+    m.style.right=Math.max(8,innerWidth-r.right)+'px';
+    if(innerHeight-r.bottom<300&&r.top>300){m.style.top='';m.style.bottom=(innerHeight-r.top+6)+'px';}else{m.style.bottom='';m.style.top=(r.bottom+6)+'px';}
+  }
+  function menuHtml(task,body){
+    return `<div class="mh">${esc(t('send.menu',{num:task.num}))}</div>${body}<button type="button" role="menuitem" class="mnew" data-target="new" title="${esc(t('send.newHint'))}"><span class="mn">${esc(t('send.new'))}</span><span class="ms">${esc(t('send.newHint'))}</span></button><div class="mnote mfoot">${esc(t('send.outside'))}</div>`;
+  }
+  async function openMenu(btn,task){
+    if(menuFor===task.id){closeMenu();return;}
+    const m=$('sendMenu');menuFor=task.id;placeMenu(btn);
+    m.innerHTML=menuHtml(task,`<div class="mnote">${esc(t('send.loading'))}</div>`);m.hidden=false;
+    let list=null,note='';
+    try{const p=await call('suivi_sessions',{projectId:CFG.projectId});list=Array.isArray(p.sessions)?p.sessions:[];}
+    catch(err){
+      const code=err&&err.code;
+      if(UNREACHABLE.includes(code)){if(menuFor===task.id)closeMenu();goOffline();toast(t('send.unreachable',{code}),'err');return;}
+      note=t('send.sessionsFailed',{code:code||t('error')});
+    }
+    if(menuFor!==task.id)return;
+    const rows=(list||[]).map(x=>`<button type="button" role="menuitem" data-target="${esc(x.terminalId)}" data-name="${esc(x.name)}"${x.available?'':` disabled title="${esc(t('send.unavailable'))}"`}><span class="mn">${esc(x.name)} <span class="st st-${esc(x.state)}">${esc(stateLabel(x.state))}</span></span><span class="ms">${esc([x.title,t('send.active',{ago:ago(x.lastActivityAt||x.startedAt)})].filter(Boolean).join(' · '))}</span></button>`).join('');
+    m.innerHTML=menuHtml(task,note?`<div class="mnote">${esc(note)}</div>`:rows||`<div class="mnote">${esc(t('send.none'))}</div>`);
+  }
+  function goOffline(){bridge.state='off';if(bridge.timer){clearInterval(bridge.timer);bridge.timer=null;}renderSync();}
+  async function dispatchTo(id,target){
+    closeMenu();
+    if(sending.has(id))return;
+    sending.add(id);render();
+    try{
+      const r=await call('suivi_dispatch',{projectId:CFG.projectId,taskId:id,target});
+      if(r&&r.task)await applyRemote([r.task]);
+      bridge.state='on';bridge.at=new Date().toISOString();renderSync();
+      toast(r&&r.target==='new'?t('send.sentNew'):t('send.sent',{session:(r&&r.session)||''}));
+    }catch(err){
+      const code=err&&err.code;
+      if(code==='cancelled')toast(t('send.cancelled'),'err');
+      else if(code==='approval_required')toast(t('send.approval'),'err');
+      else if(UNREACHABLE.includes(code)){goOffline();toast(t('send.unreachable',{code}),'err');}
+      else if(code==='tool_error'){
+        const txt=err.result&&Array.isArray(err.result.content)&&err.result.content[0]&&err.result.content[0].text||err.message||'';
+        toast(t('send.toolError',{message:String(txt).replace(/^Error:\s*/,'')}),'err');
+      }
+      else toast(t('send.failed',{code:code||t('error')}),'err');
+    }finally{sending.delete(id);render();}
+  }
+  async function copyInstead(task){
+    const prompt=promptFor(task);let copied=false;
+    try{await navigator.clipboard.writeText(prompt);copied=true;}catch(e){}
+    if(!copied){try{const ta=document.createElement('textarea');ta.value=prompt;ta.setAttribute('readonly','');ta.style.position='fixed';ta.style.opacity='0';document.body.appendChild(ta);ta.select();copied=document.execCommand('copy');ta.remove();}catch(e){}}
+    if(db){try{await edit(task.id,{requestedAt:new Date().toISOString(),requestedTo:'copy'});}catch(err){status(t('save.unavailable'));}}
+    if(copied){toast(t('send.copied'));}
+    else{const el=$('status');el.hidden=false;el.innerHTML=`${esc(t('send.copyFailed'))}<code class="prompt">${esc(prompt)}</code>`;el.scrollIntoView({behavior:'smooth',block:'center'});}
+  }
+  document.addEventListener('click',e=>{
+    const sb=e.target.closest('[data-send]');
+    if(sb){
+      const task=tasks.find(x=>x.id===sb.dataset.send);if(!task||!isUntreated(task)||sending.has(task.id))return;
+      if(hasBridge())openMenu(sb,task);else copyInstead(task);
+      return;
+    }
+    const mi=e.target.closest('#sendMenu [data-target]');
+    if(mi){if(!mi.disabled&&menuFor)dispatchTo(menuFor,mi.dataset.target);return;}
+    if(menuFor&&!e.target.closest('#sendMenu'))closeMenu();
+  });
+  document.addEventListener('keydown',e=>{if(e.key==='Escape'&&menuFor)closeMenu();});
+  window.addEventListener('scroll',e=>{if(menuFor&&!(e.target&&e.target.closest&&e.target.closest('#sendMenu')))closeMenu();},true);
 
   $('backup').addEventListener('click',onBackup);
   $('tcount').addEventListener('click',()=>{setFilter('status','totest');render();document.querySelector('.filters')?.scrollIntoView({behavior:'smooth',block:'start'});});
