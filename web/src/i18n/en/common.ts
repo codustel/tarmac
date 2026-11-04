@@ -46,6 +46,7 @@ const en: typeof fr = {
   'common.lang.fr': 'Français',
   'common.license': 'Tarmac · MIT license',
   'common.licenseTitle': 'MIT License',
+  'common.version': 'Installed version',
   'common.licenseOpen': 'Read the license',
   'common.search': 'Search…',
   'common.refresh': 'Refresh',

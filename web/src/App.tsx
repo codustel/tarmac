@@ -22,6 +22,9 @@ import type { AgentKind } from './api';
 import { LicenseModal } from './views/LicenseModal';
 import { InstallButton, UpdateBanner } from './pwa';
 import { onIdeOpen } from './ide/store';
+
+/** Version affichée en bas de la barre latérale : celle de Tarmac Desktop dans l'app, sinon celle du cœur. */
+const appVersion = (core?: string) => navigator.userAgent.match(/TarmacDesktop\/([\w.-]+)/)?.[1] ?? core;
 import { useLanguageSetting, useT, type TKey } from './i18n';
 
 // Monaco est lourd : chargé seulement à la première ouverture de l'IDE.
@@ -340,6 +343,7 @@ function Main({ terminals }: { terminals: import('./api').TerminalSession[] }) {
           </div>
           <div className="text-center text-[10px] leading-relaxed text-faint">
             <button onClick={() => setLicenseOpen(true)} title={t('common.licenseOpen')} className="hover:text-fg hover:underline">{t('common.license')}</button>
+            {appVersion(meta.data?.version) && <span title={t('common.version')}> · {appVersion(meta.data?.version)}</span>}
             <br />© 2026 Ismaël Belaaouad · Codustel<br />
             <a href="https://www.linkedin.com/in/codustel/" target="_blank" rel="noreferrer" className="hover:text-fg">LinkedIn</a>
             {' · '}

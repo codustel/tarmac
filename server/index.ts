@@ -53,6 +53,7 @@ const exec = promisify(execFile);
 const webDir = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../web');
 /** Racine du dépôt Tarmac (même chemin depuis server/ et depuis dist/server/). */
 const APP_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..').replace(/[\\/]dist$/, '');
+const CORE_VERSION: string = JSON.parse(fs.readFileSync(path.join(APP_ROOT, 'package.json'), 'utf8')).version;
 const app = Fastify({ logger: { level: process.env.LOG_LEVEL ?? 'warn' } });
 
 // ─── Sécurité ───────────────────────────────────────────────────────────────
@@ -262,6 +263,7 @@ function uiBuildId(): string | null {
 
 app.get('/api/meta', async () => ({
   buildId: uiBuildId(),
+  version: CORE_VERSION,
   machine: demo()?.machine ?? machineName,
   ips: demo()?.ips ?? localIps(),
   home: os.homedir(),
@@ -1246,7 +1248,7 @@ app.post<{ Body: { dir: string; with: 'finder' | 'editor' | 'terminal' } }>('/ap
 await loadModules(app, {
   dirs: parseModuleDirs(envVar('MODULES')),
   dataDir: config.dataDir,
-  coreVersion: JSON.parse(fs.readFileSync(path.join(APP_ROOT, 'package.json'), 'utf8')).version,
+  coreVersion: CORE_VERSION,
   projects: () => lastScan.projects.map(({ id, name, dir, repoDir }) => ({ id, name, dir, repoDir })),
   lang: uiLang,
   events: coreEvents,

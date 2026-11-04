@@ -4,13 +4,15 @@ on:
   push:
     branches: [main]
   pull_request:
+  workflow_dispatch:
 
 permissions:
   contents: read
 
 jobs:
   check:
-    runs-on: macos-latest
+    # Exécuteur auto-hébergé si le dépôt définit CI_RUNS_ON_MAC (dépôt privé seulement), sinon macOS de GitHub.
+    runs-on: ${{ fromJSON(vars.CI_RUNS_ON_MAC || '"macos-latest"') }}
     steps:
       - uses: actions/checkout@v4
       - uses: pnpm/action-setup@v4

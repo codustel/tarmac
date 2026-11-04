@@ -359,6 +359,8 @@ export interface LogLine {
 
 export interface Meta {
   buildId: string | null;
+  /** Version du cœur (package.json). */
+  version?: string;
   machine: string;
   ips: Array<{ iface: string; address: string }>;
   /** Dossier personnel du serveur (affichage `~/…`). */

@@ -46,6 +46,7 @@ export default {
   'common.lang.fr': 'Français',
   'common.license': 'Tarmac · licence MIT',
   'common.licenseTitle': 'Licence MIT',
+  'common.version': 'Version installée',
   'common.licenseOpen': 'Lire la licence',
   'common.search': 'Rechercher…',
   'common.refresh': 'Actualiser',
