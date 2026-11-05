@@ -85,6 +85,9 @@ export default {
   'projects.empty.noResultHint': 'Modifie la recherche ou les filtres.',
   'projects.empty.none': 'Aucun projet détecté',
   'projects.empty.noneHint': 'Vérifie les dossiers à scanner dans les Réglages.',
+  'projects.empty.scanning': 'Recherche de tes projets…',
+  'projects.empty.scanningHintShort': 'La première recherche peut prendre quelques secondes.',
+  'projects.empty.scanningHint': 'Tarmac parcourt {roots} pour trouver tes projets. La première fois, cela peut prendre quelques secondes.',
 
   // Carte d'un projet
   'projects.group.monorepoTool': 'Monorepo — {tool}',

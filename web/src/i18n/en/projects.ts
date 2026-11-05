@@ -85,6 +85,9 @@ const en: typeof fr = {
   'projects.empty.noResultHint': 'Change the search or the filters.',
   'projects.empty.none': 'No projects found',
   'projects.empty.noneHint': 'Check the folders to scan in Settings.',
+  'projects.empty.scanning': 'Looking for your projects…',
+  'projects.empty.scanningHintShort': 'The first search can take a few seconds.',
+  'projects.empty.scanningHint': 'Tarmac is scanning {roots} to find your projects. The first time, this can take a few seconds.',
 
   // Project card
   'projects.group.monorepoTool': 'Monorepo — {tool}',

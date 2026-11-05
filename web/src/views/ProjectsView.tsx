@@ -1,7 +1,7 @@
 import { createContext, useContext, useEffect, useMemo, useState } from 'react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import {
-  BookOpen, Boxes, ChevronRight, ChevronsDownUp, ChevronsUpDown, Code2, Database, ExternalLink, FolderOpen, Layers, Lock, Package,
+  BookOpen, Boxes, ChevronRight, Loader2, ChevronsDownUp, ChevronsUpDown, Code2, Database, ExternalLink, FolderOpen, Layers, Lock, Package,
   Pencil, Play, RotateCw, ScrollText, Square, TerminalSquare, TriangleAlert,
 } from 'lucide-react';
 import { api, type NameSource, type Project, type ProcStatus } from '../api';
@@ -108,8 +108,10 @@ const CompactRows = createContext(false);
 /** Agents en cours par projet (id), pour les badges des lignes. */
 const RunningByProject = createContext<Map<string, RunningAgent[]>>(new Map());
 
-export function ProjectsView({ projects, query, onOpen, selectedId }: {
+export function ProjectsView({ projects, query, onOpen, selectedId, scanning }: {
   projects: Project[];
+  /** Premier scan des dossiers en cours (aucun projet encore connu) : dossiers parcourus, pour le message d'attente. */
+  scanning?: string[] | null;
   query: string;
   onOpen: (id: string, tab?: PanelTab) => void;
   selectedId: string | null;
@@ -242,7 +244,13 @@ export function ProjectsView({ projects, query, onOpen, selectedId }: {
         </div>
       </div>
 
-      {visibleGroups.length === 0 && visibleLoose.length === 0 ? (
+      {scanning && projects.length === 0 ? (
+        <Card>
+          <Empty icon={<Loader2 className="size-8 animate-spin" />} title={t('projects.empty.scanning')}>
+            {scanning.length ? t('projects.empty.scanningHint', { roots: scanning.join(', ') }) : t('projects.empty.scanningHintShort')}
+          </Empty>
+        </Card>
+      ) : visibleGroups.length === 0 && visibleLoose.length === 0 ? (
         <Card>
           <Empty icon={<Boxes className="size-8" />} title={projects.length ? t('projects.empty.noResult') : t('projects.empty.none')}>
             {projects.length ? t('projects.empty.noResultHint') : t('projects.empty.noneHint')}

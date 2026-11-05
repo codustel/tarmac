@@ -200,6 +200,11 @@ function Main({ terminals }: { terminals: import('./api').TerminalSession[] }) {
   });
 
   const list = projects.data ?? [];
+  // Premier scan pas encore terminé (liste pas encore reçue, aucun scan abouti, ou scan en cours sans projet connu) :
+  // message d'attente au lieu de « Aucun projet détecté ». Dossiers affichés avec ~.
+  const firstScan = !meta.isError && !projects.isError && list.length === 0
+    && (!projects.data || !meta.data?.scannedAt || !!meta.data?.scanning)
+    ? (meta.data?.roots ?? []).map((r) => tildify(r, meta.data?.home)) : null;
   const selectedProject = selected ? list.find((p) => p.id === selected.id) : undefined;
   // Onglet du panneau gardé d'un projet à l'autre (le panneau se rabat sur Console si le projet ne l'a pas).
   const lastTab = useRef<PanelTab | null>(null);
@@ -383,7 +388,7 @@ function Main({ terminals }: { terminals: import('./api').TerminalSession[] }) {
 
           <div className={cx('p-6', timelineSlot ? 'flex items-start gap-5' : 'max-w-[1400px]')}>
             <div className={cx(timelineSlot && 'min-w-0 max-w-[1400px] flex-1')}>
-            {tab === 'projects' && <ProjectsView projects={list} query={query} onOpen={openProject} selectedId={selected?.id ?? null} />}
+            {tab === 'projects' && <ProjectsView projects={list} query={query} onOpen={openProject} selectedId={selected?.id ?? null} scanning={firstScan} />}
             {tab === 'claude' && <ClaudeSessionsView terminals={terminals} activeId={claudeTab} onActive={setClaudeTab} projects={list} />}
             {tab === 'codex' && <ClaudeSessionsView agent="codex" terminals={terminals} activeId={codexTab} onActive={setCodexTab} projects={list} />}
             {tab === 'supabase' && <SupabaseView data={supabase.data} query={query} />}
