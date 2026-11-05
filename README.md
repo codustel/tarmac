@@ -23,7 +23,10 @@ sessions there: Claude Code (also followed from claude.ai or your phone) and Cod
 ChatGPT plans. It runs as a login service on
 `http://tarmac.localhost:7777` and installs as an app (PWA).
 
-![Tarmac: projects view](docs/assets/projects.webp)
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/assets/home-en-dark.webp">
+  <img src="docs/assets/home-en-light.webp" alt="Tarmac: projects view with the activity feed">
+</picture>
 
 | Claude Todolist | Console and Git menu | Settings |
 |---|---|---|

@@ -20,7 +20,10 @@ tourne comme service de session sur `http://tarmac.localhost:7777` et s'installe
 L'interface est en anglais ou en français (réglage **Langue**, ou langue du navigateur). La documentation détaillée
 de `docs/` est en anglais.
 
-![Tarmac : vue Projets](docs/assets/projects.webp)
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/assets/home-fr-dark.webp">
+  <img src="docs/assets/home-fr-light.webp" alt="Tarmac : vue Projets avec le fil d'activité">
+</picture>
 
 | Todolist Claude | Console et menu Git | Réglages |
 |---|---|---|
