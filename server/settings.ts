@@ -32,6 +32,8 @@ export interface Settings {
    * Par défaut Claude Code seul : comportement d'avant Codex, inchangé.
    */
   agents: { claude: boolean; codex: boolean };
+  /** Écran d'accueil « outils fournis avec Tarmac » déjà vu (7.14). */
+  toolsWelcomeSeen: boolean;
   /** Dossier où sont clonés les repos GitHub (par défaut le premier dossier scanné). */
   cloneDir: string;
   /** URL de production saisie à la main, par dossier absolu. */
@@ -72,6 +74,7 @@ const defaults = (): Settings => ({
   showClaudeUsage: true,
   showCodexUsage: true,
   agents: { claude: true, codex: false },
+  toolsWelcomeSeen: false,
   urls: {},
   theme: 'system',
   language: 'auto',
@@ -112,6 +115,7 @@ export interface SettingsPatch {
   showClaudeUsage?: boolean;
   showCodexUsage?: boolean;
   agents?: { claude?: boolean; codex?: boolean };
+  toolsWelcomeSeen?: boolean;
   cloneDir?: string;
   urls?: Record<string, string>;
   suivi?: { channels?: Partial<SuiviSettings['channels']>; bridgeIntervalSec?: number; folder?: string };
@@ -168,6 +172,7 @@ export function updateSettings(patch: SettingsPatch): { errors: string[] } {
   if (patch.showAllProjects !== undefined) next.showAllProjects = !!patch.showAllProjects;
   if (patch.showClaudeUsage !== undefined) next.showClaudeUsage = !!patch.showClaudeUsage;
   if (patch.showCodexUsage !== undefined) next.showCodexUsage = !!patch.showCodexUsage;
+  if (patch.toolsWelcomeSeen !== undefined) next.toolsWelcomeSeen = !!patch.toolsWelcomeSeen;
   if (patch.agents) {
     for (const k of ['claude', 'codex'] as const) if (typeof patch.agents[k] === 'boolean') next.agents[k] = patch.agents[k]!;
     if (!next.agents.claude && !next.agents.codex) errors.push(msg('settings.agentRequired'));

@@ -1,11 +1,12 @@
 import { Suspense, lazy, useCallback, useEffect, useRef, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { Activity, Boxes, Code2, Container, Database, FolderTree, Languages, ListChecks, Monitor, Moon, Network, RefreshCw, Search, Settings2, Smartphone, Sun } from 'lucide-react';
+import { Activity, AlertTriangle, Boxes, Code2, Container, Database, FolderTree, Languages, ListChecks, Monitor, Moon, Network, RefreshCw, Search, Settings2, Smartphone, Sun } from 'lucide-react';
 import { api } from './api';
 import { useConnected } from './socket';
 import { Button, GithubIcon, Kbd, copy, cx, tildify, timeAgo, useToast } from './ui';
 import { ProjectsView, isActive } from './views/ProjectsView';
 import { ProjectPanel, defaultTab, hasBrowser, type PanelTab } from './views/ProjectPanel';
+import { navAlerts } from './tools/logic';
 import { SupabaseView } from './views/SupabaseView';
 import { DockerView } from './views/DockerView';
 import { GithubView } from './views/GithubView';
@@ -20,6 +21,8 @@ import { TimelineView } from './views/TimelineView';
 import { AgentLed, CodexIcon, useEnabledAgents, useRunningAgents } from './views/Agents';
 import type { AgentKind } from './api';
 import { LicenseModal } from './views/LicenseModal';
+import { ToolsWelcome } from './views/ToolsWelcome';
+import { ToolGateModal } from './views/ToolGateModal';
 import { InstallButton, UpdateBanner } from './pwa';
 import { onIdeOpen } from './ide/store';
 
@@ -227,7 +230,9 @@ function Main({ terminals }: { terminals: import('./api').TerminalSession[] }) {
     return true;
   }, [suivi.data, projects.data]);
 
-  const nav: Array<{ id: Tab; label: string; icon: React.ReactNode; count?: number; live?: number; led?: boolean | null }> = [
+  const toolsQ = useQuery({ queryKey: ['tools'], queryFn: api.tools, staleTime: 10_000, refetchInterval: 60_000 });
+  const alerts = navAlerts(toolsQ.data ?? []);
+  const nav: Array<{ id: Tab; label: string; icon: React.ReactNode; count?: number; live?: number; led?: boolean | null; alert?: boolean }> = [
     { id: 'projects', label: t('common.nav.projects'), icon: <Boxes className="size-4" />, count: projects.data ? new Set(list.filter((p) => !p.loose).map((p) => p.group.id)).size : undefined, live: list.filter(isActive).length },
     { id: 'ide', label: t('common.nav.ide'), icon: <Code2 className="size-4" />, count: ideTabs.length || undefined },
     { id: 'todolist', label: t('common.nav.todolist'), icon: <ListChecks className="size-4" />, count: suivi.data ? suivi.data.reduce((a, p) => a + p.counts.toTest, 0) || undefined : undefined },
@@ -237,13 +242,14 @@ function Main({ terminals }: { terminals: import('./api').TerminalSession[] }) {
       label: t(k === 'codex' ? 'common.nav.codex' : 'common.nav.claude'),
       icon: k === 'codex' ? <CodexIcon size={15} /> : <ClaudeIcon size={15} />,
       count: terminals.filter((x) => x.kind === k).length || undefined,
+      alert: alerts[k],
       live: terminals.filter((x) => x.kind === k && x.status === 'running').length,
       led: runningOf(k).length ? runningOf(k).some((a) => a.working) : null,
     })),
-    { id: 'supabase', label: t('common.nav.supabase'), icon: <Database className="size-4" />, count: supabase.data?.instances.length, live: supabase.data?.instances.filter((i) => i.status !== 'stopped').length },
-    // Pas de compteur : la vue Docker n'interroge le moteur que lorsqu'elle est affichée.
-    { id: 'docker', label: t('common.nav.docker'), icon: <Container className="size-4" /> },
-    { id: 'github', label: t('common.nav.github'), icon: <GithubIcon className="size-4" />, count: github.data?.remoteOnly.length },
+    // Pas de compteur : la vue Docker n'interroge le moteur que lorsqu'elle est affichée. Docker avant Supabase (Supabase en dépend).
+    { id: 'docker', label: t('common.nav.docker'), icon: <Container className="size-4" />, alert: alerts.docker },
+    { id: 'supabase', label: t('common.nav.supabase'), icon: <Database className="size-4" />, count: supabase.data?.instances.length, live: supabase.data?.instances.filter((i) => i.status !== 'stopped').length, alert: alerts.supabase },
+    { id: 'github', label: t('common.nav.github'), icon: <GithubIcon className="size-4" />, count: github.data?.remoteOnly.length, alert: alerts.github },
     { id: 'ports', label: t('common.nav.ports'), icon: <Network className="size-4" />, count: ports.data?.assigned.length },
     { id: 'android', label: t('common.nav.android'), icon: <Smartphone className="size-4" />, count: android.data?.avds.length, live: android.data?.avds.filter((a) => a.state !== 'stopped').length },
     ...(modules.data ?? []).filter((m) => m.status === 'loaded' && m.webUrl)
@@ -272,6 +278,7 @@ function Main({ terminals }: { terminals: import('./api').TerminalSession[] }) {
       <span className="flex-1 text-left">{n.label}</span>
       {!!n.live && <span className="rounded bg-emerald-500/15 px-1.5 text-[10px] font-semibold text-emerald-600 dark:text-emerald-400 tabular-nums">{n.live}</span>}
       {n.count != null && <span className="text-[11px] text-faint tabular-nums">{n.count}</span>}
+      {n.alert && <AlertTriangle className="size-3.5 shrink-0 text-amber-500" aria-label={t('tools.nav.alert')} />}
     </button>
   );
 
@@ -356,6 +363,8 @@ function Main({ terminals }: { terminals: import('./api').TerminalSession[] }) {
           </div>
         </div>
       </aside>
+      <ToolsWelcome />
+      <ToolGateModal />
       {licenseOpen && <LicenseModal onClose={() => setLicenseOpen(false)} />}
 
       {/* ─── Contenu ─── */}

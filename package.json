@@ -3,7 +3,7 @@
   "version": "1.0.0",
   "private": false,
   "type": "module",
-  "description": "Every project, every agent session, one local runway: a macOS dashboard to run and watch your dev apps, local Supabase, GitHub repos and Claude Code and Codex sessions.",
+  "description": "Claude Code, Codex and every project on one runway: a local dashboard to run and watch your dev apps, ports, logs, Git, Docker, local Supabase and your Claude Code and Codex sessions. https://runtarmac.com",
   "keywords": [
     "tarmac",
     "dashboard",
@@ -23,7 +23,7 @@
     "github",
     "pwa"
   ],
-  "homepage": "https://github.com/codustel/tarmac#readme",
+  "homepage": "https://runtarmac.com",
   "bugs": {
     "url": "https://github.com/codustel/tarmac/issues"
   },

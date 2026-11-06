@@ -6,8 +6,10 @@ the activity LED and timeline, the **▶** button of the Todolist, and your plan
 
 ## Turn it on
 
-1. Install Codex and sign in with your ChatGPT account (`npm install -g @openai/codex` or `brew install codex`, then
-   `codex login`).
+1. Install Codex and sign in with your ChatGPT account: **Settings → Tools** (or the Tools screen at first launch,
+   or `tarmac setup --yes`) installs it with Homebrew, npm or the official installer, and **Sign in** runs
+   `codex login` in a Tarmac console. Installing it also runs step 3 and ticks Codex (step 2). If you start a
+   Codex session while `codex` is missing, Tarmac offers the same install and sign-in, then opens the session.
 2. In Tarmac, **Settings → Agents**: tick **Codex (ChatGPT)**. Claude Code, Codex, or both; Claude Code alone is the
    default and keeps Tarmac exactly as before.
 3. Run `tarmac setup --with-codex` (or answer yes when `tarmac setup` offers it: it does when `codex` is in your

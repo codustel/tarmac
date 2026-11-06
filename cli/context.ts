@@ -8,6 +8,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
+import { toolDirs } from '../server/tools/path.js';
 
 export const PKG_NAME = '@codustel/tarmac';
 export const LABEL = 'com.codustel.tarmac';
@@ -46,6 +47,8 @@ export interface Ctx {
   devManagerPlist: string;
   serverJs: string;
   mcpJs: string;
+  /** Dossiers d'installation des outils (git, gh, claude, codex), ajoutés au PATH pour les retrouver après installation. */
+  toolDirs: string[];
 }
 
 /** Dossier du paquet : premier parent dont le package.json porte le nom de Tarmac (sources ou dist/cli). */
@@ -68,6 +71,8 @@ export interface CtxOptions {
   hostsFile?: string;
   /** Préfixe des chemins système (/etc, /Library) : un dossier temporaire dans les tests. */
   sysRoot?: string;
+  /** Dossiers d'installation des outils : par défaut ceux du service (server/tools/path.ts) ; un bac à sable dans les tests. */
+  toolDirs?: string[];
 }
 
 export function makeCtx(o: CtxOptions = {}): Ctx {
@@ -102,6 +107,7 @@ export function makeCtx(o: CtxOptions = {}): Ctx {
     devManagerPlist: path.join(home, 'Library/LaunchAgents', `${DEV_MANAGER_LABEL}.plist`),
     serverJs: path.join(appDir, 'dist/server/index.js'),
     mcpJs: path.join(appDir, 'dist/server/mcp.js'),
+    toolDirs: o.toolDirs ?? toolDirs(home, o.platform ?? process.platform, process.execPath),
   };
 }
 

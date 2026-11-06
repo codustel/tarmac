@@ -17,6 +17,7 @@ import { logs, open, planUninstall, restart, start, status, stop, uninstallNotes
 import { asideName, localTime, staleDataDir } from '../server/dataDir.js';
 import { claudePresence, finalUrl, planSetup, type SetupOptions } from './setup.js';
 import { codexPresence, settingsAgents } from './codex.js';
+import { managedStatuses, toolsWanted } from './tools.js';
 
 const interactive = () => !!process.stdin.isTTY && !!process.stdout.isTTY;
 
@@ -54,17 +55,23 @@ function preflight(ctx: Ctx, out: Out): boolean {
 
 export async function setup(ctx: Ctx, flags: Flags, runner: Runner, out: Out): Promise<number> {
   if (!preflight(ctx, out)) return 1;
+  // Outils manquants (git, gh, claude, codex) : choisis avant tout, car un outil installé compte comme présent
+  // pour les intégrations Claude et Codex. Le dry-run ne pose pas de question : il montre tout ce qui serait proposé.
+  const statuses = await managedStatuses(ctx, runner);
+  const chosen = await toolsWanted({ yes: flags.yes || (flags.dryRun && interactive()) }, !flags.dryRun && interactive(), ask, statuses, out);
   const presence = claudePresence(ctx);
+  const claudeNow = presence.code || chosen.includes('claude');
   const o: SetupOptions = {
     domain: flags.domain ?? DEFAULT_DOMAIN,
     sudo: !flags.noSudo,
     port80: flags.port80,
-    claude: !flags.noClaude && presence.code,
-    claudeDesktop: !flags.noClaude && presence.code && presence.desktop,
+    claude: !flags.noClaude && claudeNow,
+    claudeDesktop: !flags.noClaude && claudeNow && presence.desktop,
     open: !flags.noOpen,
+    tools: { chosen, statuses, welcome: flags.yes },
   };
-  // Codex : proposé seulement s'il est installé ou coché dans Réglages → Agents (ou demandé par --with-codex).
-  const codexWanted = !flags.noCodex && (flags.withCodex || codexPresence(ctx).installed || settingsAgents(ctx).codex);
+  // Codex : proposé seulement s'il est installé (ou vient d'être choisi) ou coché dans Réglages → Agents (ou demandé par --with-codex).
+  const codexWanted = !flags.noCodex && (flags.withCodex || chosen.includes('codex') || codexPresence(ctx).installed || settingsAgents(ctx).codex);
   o.codex = codexWanted;
   if (!o.domain.endsWith('.localhost') && !o.sudo) {
     warn(out, `${o.domain} only resolves through /etc/hosts, which --no-sudo skips: use a *.localhost domain.`);
@@ -80,9 +87,10 @@ export async function setup(ctx: Ctx, flags: Flags, runner: Runner, out: Out): P
       staleNotice(ctx, out, stale);
       out.log(c.dim('   Moving it aside is asked for confirmation (--yes accepts it); if refused, it is kept as is.'));
     }
+    if (chosen.length && !flags.yes) out.log(c.dim('Each missing tool is asked for confirmation (--yes installs them all).'));
     if (o.sudo) out.log(c.dim('[sudo] steps are explained and confirmed first; --no-sudo skips them (URL with :port).'));
     if (o.claude) out.log(c.dim('The Claude Code step is asked for confirmation (--with-claude / --no-claude to decide up front).'));
-    if (!presence.code && !flags.noClaude) out.log(c.dim('Claude Code not found: its integration would be skipped.'));
+    if (!claudeNow && !flags.noClaude) out.log(c.dim('Claude Code not found: its integration would be skipped.'));
     if (o.codex) out.log(c.dim('The Codex step is asked for confirmation (--with-codex / --no-codex to decide up front).'));
     else if (!flags.noCodex) out.log(c.dim('Codex not found (and not enabled in Settings → Agents): its integration would be skipped (--with-codex to set it up anyway).'));
     return 0;
@@ -116,7 +124,7 @@ export async function setup(ctx: Ctx, flags: Flags, runner: Runner, out: Out): P
       ? await ask('Also register the MCP server in Claude desktop (Todolist artifact sync; Claude desktop must be quit and is relaunched)?', false)
       : false;
   } else o.claudeDesktop = false;
-  if (flags.withClaude && !presence.code) warn(out, 'Claude Code (claude CLI) not found: integration skipped.');
+  if (flags.withClaude && !claudeNow) warn(out, 'Claude Code (claude CLI) not found: integration skipped.');
   if (o.codex && !flags.withCodex && !flags.yes) {
     o.codex = interactive()
       ? await ask('Set up the Codex (ChatGPT) integration (MCP server "tarmac" in ~/.codex/config.toml, rule in ~/.codex/AGENTS.md, $suivi skill, SessionStart hook)?', true)

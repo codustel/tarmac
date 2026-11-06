@@ -27,7 +27,6 @@ const en: typeof fr = {
   'github.gh.connectedToast': 'gh CLI connected to GitHub',
   'github.gh.checking': 'Checking…',
   'github.gh.notInstalled': 'gh CLI not installed',
-  'github.gh.copied': 'Command copied',
   'github.gh.connected': 'Connected',
   'github.gh.connectedAs': 'Connected: {user}',
   'github.gh.switchAccount': 'Switch account',

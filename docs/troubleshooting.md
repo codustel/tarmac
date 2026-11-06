@@ -77,7 +77,27 @@ without `--no-sudo`. `http://localhost:7777` always works.
 
 Apps and consoles run with the `PATH` captured in `~/.tarmac/env` when you ran `tarmac setup`. If you installed a
 tool since (pnpm, bun, uv, a new Node…), run `tarmac setup` again from your terminal, or edit the `PATH=` line,
-then `tarmac restart`. The same applies when the Claude tab says `claude` is not found, or the Codex tab `codex`.
+then `tarmac restart`.
+
+## A tool is missing (git, gh, Claude Code, Codex, Docker, Supabase)
+
+- **git, `gh`, `claude`, `codex`**: open **Settings → Tools** and install or sign in there (or `tarmac setup --yes`).
+  Tarmac also finds the folders where it installs them (`~/.tarmac/tools/bin`, `~/.local/bin`, Homebrew, the npm
+  global folder) without a restart. Starting or resuming a Claude or Codex session with the tool missing offers the
+  install and sign-in on the spot.
+- **git on macOS**: macOS opens its own install window (Xcode command line tools). In the interface (Settings →
+  Tools, or the prompt shown on first use), Tarmac waits for it to finish (up to 15 minutes). `tarmac setup` does
+  not wait: it opens the window and moves on; finish the macOS install, then run `tarmac doctor` to check.
+- **Claude Code or Codex installed from Tarmac**: Tarmac also sets up its integration (MCP server, `/suivi` skill,
+  rule) and checks the agent in Settings → Agents; the row says whether it worked, with the details.
+- **No Install button, "No automatic installation available"**: no install method exists on this machine; use the
+  official page linked on the row.
+- **A row shows "installed outside Tarmac" and no Update button**: Tarmac cannot tell how it was installed; update
+  it the way you installed it.
+- **A tool failed to install**: the row shows the error and **Retry**.
+- **Docker or Supabase CLI**: Tarmac never installs them. A warning icon in the sidebar and a message in the view
+  say what to do (install Docker Desktop, run `brew install supabase/tap/supabase`, start Docker); **Check again**
+  once done.
 
 ## Codex
 

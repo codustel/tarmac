@@ -12,6 +12,9 @@ import {
 } from './context.js';
 import type { Action, Runtime, Step } from './plan.js';
 import { planCodexSetup } from './codex.js';
+import { planToolsInstall } from './tools.js';
+import type { ManagedId } from '../server/tools/registry.js';
+import type { ToolStatus } from '../server/tools/status.js';
 
 export interface SetupOptions {
   domain: string;
@@ -29,6 +32,8 @@ export interface SetupOptions {
   /** Intégration Codex (serveur MCP, règle AGENTS.md, skill, hook) : Codex installé ou coché dans les réglages. */
   codex?: boolean;
   open: boolean;
+  /** Outils choisis pour l'installation (git, gh, claude, codex) et leur état ; `welcome` : `--yes`, accueil des Outils marqué vu. */
+  tools?: { chosen: ManagedId[]; statuses: ToolStatus[]; welcome: boolean };
   /**
    * `~/.tarmac` existe mais `~/.app-manager` est plus récent : le mettre de côté (`~/.tarmac.old-…`) puis copier
    * `~/.app-manager` (sur confirmation, ou --yes). Sans cette option, `~/.tarmac` est gardé tel quel.
@@ -220,6 +225,11 @@ export function planSetup(ctx: Ctx, o: SetupOptions, runner: Runner): Step[] {
     });
   }
 
+  // 1b. Outils manquants : avant le (re)démarrage du service (étape 2), qui relit alors `settings.json` (agents
+  //     cochés, accueil vu), avant l'ouverture du navigateur (étape 6) et avant les intégrations, qui ont besoin
+  //     de `claude` et `codex`.
+  if (o.tools && (o.tools.chosen.length || o.tools.welcome)) steps.push(planToolsInstall(ctx, o.tools.chosen, o.tools.statuses, { welcome: o.tools.welcome }));
+
   // 2. LaunchAgent (démarrage à la connexion, relance en cas de plantage).
   steps.push({
     id: 'launch-agent',
@@ -349,7 +359,7 @@ export function planSetup(ctx: Ctx, o: SetupOptions, runner: Runner): Step[] {
     ],
   });
 
-  // 7. Intégration Claude Code (sur confirmation, demandée avant l'exécution du plan).
+  // 8. Intégration Claude Code (sur confirmation, demandée avant l'exécution du plan).
   if (o.claude) {
     steps.push({
       id: 'claude',
@@ -360,7 +370,7 @@ export function planSetup(ctx: Ctx, o: SetupOptions, runner: Runner): Step[] {
       ],
     });
   }
-  // 8. Intégration Codex (sur confirmation, comme Claude).
+  // 9. Intégration Codex (sur confirmation, comme Claude).
   if (o.codex) steps.push(planCodexSetup(ctx));
   return steps;
 }

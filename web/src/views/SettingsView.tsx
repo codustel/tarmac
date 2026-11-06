@@ -3,6 +3,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Check, FolderPlus, KeyRound, Plus, Save, Trash2, X } from 'lucide-react';
 import { api, type Settings, type SettingsPatch } from '../api';
 import { Badge, Button, Card, GithubIcon, copy, cx, tildify, useToast } from '../ui';
+import { ToolsCard } from './ToolsCard';
 import { GhCliLogin } from './GhCliLogin';
 import { ModuleIcon } from './ModuleView';
 import { AgentIcon } from './Agents';
@@ -113,6 +114,7 @@ export function SettingsView() {
 
   return (
     <div className="max-w-4xl space-y-6">
+      <ToolsCard mode="settings" />
       <LanguageCard />
       <Card className="divide-y divide-line">
         <div className="px-5 py-3 text-[11px] font-semibold uppercase tracking-wider text-faint">{t('settings.local')}</div>

@@ -145,7 +145,7 @@ test('setup --dry-run : tout est affiché, rien n’est lancé ni écrit', { ski
   const out = capture();
   assert.equal(await main(['setup', '--dry-run', '--port-80'], ctx, runner, out), 0);
   assert.deepEqual(runs, [], 'aucune commande lancée');
-  assert.ok(captures.every((a) => ['launchctl print', 'nc -z'].some((p) => a.join(' ').startsWith(p))), 'seulement des lectures');
+  assert.ok(captures.every((a) => ['launchctl print', 'nc -z', 'which -a', 'xcode-select -p'].some((p) => a.join(' ').startsWith(p))), 'seulement des lectures');
   assert.deepEqual(fs.readdirSync(home), [], 'rien d’écrit dans le dossier personnel');
   const text = out.text();
   for (const s of ['Dry run', 'Create the configuration ~/.tarmac/env', 'Install the login service', 'launchctl bootstrap gui/501',

@@ -1,9 +1,11 @@
 import { useState } from 'react';
+import { useQuery } from '@tanstack/react-query';
 import { ChevronDown, Copy, Database, ExternalLink, FolderGit2, Mail, PlugZap, Server } from 'lucide-react';
 import { api } from '../api';
 import type { SupabaseResponse } from '../api';
 import { Badge, Card, Empty, IconButton, VsCodeIcon, copy, cx, useToast } from '../ui';
 import { useT } from '../i18n';
+import { ToolMissing } from './ToolMissing';
 
 const tone = { running: 'green', partial: 'amber', stopped: 'neutral' } as const;
 const label = { running: 'supabase.status.running', partial: 'supabase.status.partial', stopped: 'supabase.status.stopped' } as const;
@@ -30,6 +32,8 @@ export function SupabaseView({ data, query }: { data: SupabaseResponse | undefin
   const toast = useToast();
   const t = useT();
   const [open, setOpen] = useState<string | null>(null);
+  const tools = useQuery({ queryKey: ['tools'], queryFn: api.tools, staleTime: 10_000 });
+  if (tools.data?.find((x) => x.id === 'supabase')?.state === 'absent') return <ToolMissing tool="supabase" />;
   if (!data) return null;
 
   if (data.docker === 'unavailable') {
@@ -37,6 +41,7 @@ export function SupabaseView({ data, query }: { data: SupabaseResponse | undefin
       <Card>
         <Empty icon={<PlugZap className="size-8" />} title={t('supabase.docker.title')}>
           {t('supabase.docker.hint', { error: data.error ?? '' })}
+          {tools.data?.find((x) => x.id === 'docker')?.state === 'absent' && <div className="mt-2 font-medium">{t('tools.missing.dockerRequired')}</div>}
         </Empty>
       </Card>
     );

@@ -258,7 +258,13 @@ export interface GhCliStatus {
   user: string | null;
 }
 
+import type { ToolStatus } from '../../server/tools/status';
+import type { IntegrationResult } from '../../server/tools/actions';
+import { withTool } from './tools/gate';
+export type { ToolStatus, IntegrationResult };
+
 export interface Settings {
+  toolsWelcomeSeen: boolean;
   roots: string[];
   github: { owners: string[]; tokenSet: boolean };
   portRange: { start: number; end: number };
@@ -282,6 +288,7 @@ export interface SuiviSettings {
 }
 
 export interface SettingsPatch {
+  toolsWelcomeSeen?: boolean;
   roots?: string[];
   github?: { owners?: string[]; token?: string | null };
   portRange?: { start: number; end: number };
@@ -514,7 +521,8 @@ async function request<T>(url: string, init?: RequestInit): Promise<T> {
     headers: { 'X-Tarmac-Lang': getLang(), ...(init?.body ? { 'Content-Type': 'application/json' } : {}) },
   });
   const data = await res.json().catch(() => ({}));
-  if (!res.ok) throw Object.assign(new Error(data.error ?? `HTTP ${res.status}`), { status: res.status });
+  // 424 (outil manquant) : `tool`, `state`, `installMethod` et `docUrl` restent sur l'erreur.
+  if (!res.ok) throw Object.assign(new Error(data.error ?? `HTTP ${res.status}`), { status: res.status, tool: data.tool as string | undefined, state: data.state as string | undefined, installMethod: data.installMethod as string | null | undefined, docUrl: data.docUrl as string | undefined });
   return data as T;
 }
 
@@ -530,10 +538,10 @@ export const api = {
   allClaudeSessions: () => request<ClaudeSession[]>('/api/claude/sessions'),
   runningAgents: () => request<RunningAgent[]>('/api/agents/running'),
   timeline: () => request<{ events: TimelineEvent[]; days: number }>('/api/timeline'),
-  openClaude: (id: string, resume?: string, prompt?: string) => request<TerminalSession>(`/api/projects/${id}/claude`, json({ resume, prompt, cols: 140, rows: 40 })),
+  openClaude: (id: string, resume?: string, prompt?: string) => withTool(() => request<TerminalSession>(`/api/projects/${id}/claude`, json({ resume, prompt, cols: 140, rows: 40 }))),
   codexSessions: (id: string, force = false) => request<ClaudeSession[]>(`/api/projects/${id}/codex-sessions${force ? '?force=1' : ''}`),
   allCodexSessions: () => request<ClaudeSession[]>('/api/codex/sessions'),
-  openCodex: (id: string, resume?: string, prompt?: string) => request<TerminalSession>(`/api/projects/${id}/codex`, json({ resume, prompt, cols: 140, rows: 40 })),
+  openCodex: (id: string, resume?: string, prompt?: string) => withTool(() => request<TerminalSession>(`/api/projects/${id}/codex`, json({ resume, prompt, cols: 140, rows: 40 }))),
   frameCheck: (id: string) => request<{ url: string | null; frameable: boolean; reason: string | null; pending?: boolean }>(`/api/projects/${id}/frame-check`),
   suiviProjects: () => request<SuiviProjectSummary[]>('/api/suivi/projects'),
   suivi: (projectId: string) => request<SuiviDetail>(`/api/suivi/projects/${encodeURIComponent(projectId)}`),
@@ -570,10 +578,16 @@ export const api = {
   freePorts: () => request<FreeReport>('/api/ports/free', { method: 'POST' }),
   scan: () => request('/api/scan', { method: 'POST' }),
   fetchGit: () => request('/api/git/fetch', { method: 'POST' }),
+  tools: () => request<ToolStatus[]>('/api/tools'),
+  /** Relevé sans le cache serveur de 30 s (bouton « Vérifier à nouveau »). */
+  toolsFresh: () => request<ToolStatus[]>('/api/tools?fresh=1'),
+  toolAction: (id: string, kind: 'install' | 'login' | 'update') => request<TerminalSession>(`/api/tools/${id}/${kind}`, json({ cols: 100, rows: 24 })),
+  /** Suite d'installation ; `integration` : intégration Tarmac posée pour claude/codex (sortie affichée), `null` sinon. */
+  toolAfterInstall: (id: string) => request<{ ok: boolean; integration: IntegrationResult | null }>(`/api/tools/${id}/after-install`, { method: 'POST' }),
   settings: () => request<Settings>('/api/settings'),
   claudeUsage: () => request<ClaudeUsage>('/api/claude/usage'),
   codexUsage: () => request<CodexUsage>('/api/codex/usage'),
-  clone: (fullName: string) => request<TerminalSession>('/api/github/clone', json({ fullName, cols: 110, rows: 22 })),
+  clone: (fullName: string) => withTool(() => request<TerminalSession>('/api/github/clone', json({ fullName, cols: 110, rows: 22 }))),
   ghCli: () => request<GhCliStatus>('/api/github/cli'),
   ghLogin: (cols?: number, rows?: number) => request<TerminalSession>('/api/github/cli/login', json({ cols, rows })),
   android: () => request<AndroidStatus>('/api/android'),

@@ -5,6 +5,7 @@ import { api, type DockerAction, type DockerContainer, type DockerOverview, type
 import { Badge, Button, Card, Empty, IconButton, cx, timeAgo, useToast } from '../ui';
 import { fmtBytes, fmtDateTime, fmtNumber } from '../i18n/format';
 import { useT } from '../i18n';
+import { ToolMissing } from './ToolMissing';
 
 /** Rafraîchissement léger, seulement quand la vue est affichée (requêtes montées avec elle). */
 const POLL_MS = 5_000;
@@ -85,11 +86,12 @@ export function DockerView({ query, onOpenProject }: { query: string; onOpenProj
 
   if (data.engine.status !== 'ok') {
     const s = data.engine.status;
+    if (s === 'absent') return <ToolMissing tool="docker" />;
     return (
       <Card>
-        <Empty icon={<PlugZap className="size-8" />} title={t(s === 'absent' ? 'docker.engine.absent.title' : s === 'stopped' ? 'docker.engine.stopped.title' : 'docker.engine.error.title')}>
+        <Empty icon={<PlugZap className="size-8" />} title={t(s === 'stopped' ? 'docker.engine.stopped.title' : 'docker.engine.error.title')}>
           <div className="space-y-3">
-            <div>{s === 'error' ? data.engine.error : t(s === 'absent' ? 'docker.engine.absent.hint' : 'docker.engine.stopped.hint')}</div>
+            <div>{s === 'error' ? data.engine.error : t('docker.engine.stopped.hint')}</div>
             {openButton && <div>{openButton}</div>}
           </div>
         </Empty>

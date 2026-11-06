@@ -28,7 +28,7 @@ import { GIT_COMMANDS, buildGitCommand } from './gitCommands.js';
 import { msg, runWithRequestLang, tr, uiLang } from './i18n.js';
 import { SUPABASE_COMMANDS, buildSupabaseCommand, findSupabaseDir } from './supabaseCommands.js';
 import { freeHistoryPorts, isPortBusy, killPort } from './ports.js';
-import { chain, hasCommand, isWindows, openTerminal, openWithEditor, portOwnerHint, quote, reveal, shellLabel } from './platform.js';
+import { chain, isWindows, openTerminal, openWithEditor, portOwnerHint, quote, reveal, shellLabel } from './platform.js';
 import { state, flushSync } from './store.js';
 import { publicSettings, settings, updateSettings, type SettingsPatch } from './settings.js';
 import { listDir, MAX_EDIT_BYTES, readFile as readProjectFile, resolveInside, statFile, writeFile as writeProjectFile } from './ide.js';
@@ -48,6 +48,16 @@ import { loadModules, parseModuleDirs } from './modules/loader.js';
 import { AgentTurnTracker, CoreEvents, ProcessStatusTracker, TaskStatusTracker, type AgentSnapshot } from './modules/events.js';
 import { envVar } from './dataDir.js';
 import { androidStatus, applyAndroidEnv, ensureEmulator, installCommand, isAvd, startAvd, stopAvd, waitForBootCommand } from './android.js';
+import { addToolDirs, toolDirs } from './tools/path.js';
+import { requireTool, ToolMissingError } from './tools/gate.js';
+import { registerToolRoutes } from './tools/routes.js';
+import { realExec as realToolExec } from './tools/status.js';
+import { makeCtx, realRunner } from '../cli/context.js';
+import { executePlan } from '../cli/plan.js';
+import { planCodexSetup } from '../cli/codex.js';
+
+// Le service (LaunchAgent, Desktop) n'hérite pas du PATH du shell : y ajouter les dossiers des outils, sans relance.
+addToolDirs(process.env, toolDirs(os.homedir(), process.platform, process.execPath), process.platform);
 
 const exec = promisify(execFile);
 const webDir = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../web');
@@ -843,9 +853,22 @@ app.get('/api/timeline', async () => {
   return { events: await timelineRun, days: TIMELINE_DAYS };
 });
 
+// Dépendances de l'état des outils, partagées par les routes /api/tools et la garde du premier appel.
+const toolStatusDeps = {
+  exec: realToolExec,
+  env: process.env,
+  home: os.homedir(),
+  platform: process.platform,
+  fetch: (url: string, init?: { signal?: AbortSignal; headers?: Record<string, string> }) => fetch(url, init),
+  dockerEngine: async () => (await dockerOverview()).engine,
+};
+// La garde n'a pas `fetch` : elle ne cherche jamais la dernière version (aucune attente réseau).
+const { fetch: _noFetch, ...toolGateBase } = toolStatusDeps;
+const toolGateDeps = { ...toolGateBase, msg };
+
 /**
  * Ouvre une session Claude Code (Remote Control) dans une console de Tarmac : nouvelle ou reprise.
- * Erreur avec `statusCode` (400 : identifiant invalide ou CLI absente).
+ * Erreur avec `statusCode` (400 : identifiant invalide ; 424 : CLI absente ou non connectée, voir tools/gate.ts).
  */
 async function openClaudeConsole(p: Project, opts: { resume?: string; prompt?: string; cols?: number; rows?: number }) {
   const { resume, cols, rows } = opts;
@@ -860,9 +883,7 @@ async function openClaudeConsole(p: Project, opts: { resume?: string; prompt?: s
     const open = terminals.findByClaude(resume);
     if (open) return terminals.list().find((t) => t.id === open)!;
   }
-  if (!isDemo() && !(await hasCommand('claude'))) {
-    throw Object.assign(new Error(msg('api.noClaudeCli')), { statusCode: 400 });
-  }
+  if (!isDemo()) await requireTool('claude', toolGateDeps);
   const displayName = p.group.isRoot || p.group.type === 'single' ? p.name : `${p.group.name} · ${p.name === p.group.name ? p.techName : p.name}`;
   const sessionId = resume ?? crypto.randomUUID();
   const sessions = resume ? await listClaudeSessions() : [];
@@ -889,6 +910,7 @@ app.post<{ Params: { id: string }; Body: { resume?: string; prompt?: string; col
   try {
     return await openClaudeConsole(p, req.body ?? {});
   } catch (e: any) {
+    if (e instanceof ToolMissingError) return reply.code(e.statusCode).send(e.body());
     return reply.code(e.statusCode ?? 500).send({ error: e.message });
   }
 });
@@ -912,9 +934,7 @@ async function openCodexConsole(p: Project, opts: { resume?: string; prompt?: st
     const open = terminals.findByCodex(resume);
     if (open) return terminals.list().find((t) => t.id === open)!;
   }
-  if (!isDemo() && !(await hasCommand('codex'))) {
-    throw Object.assign(new Error(msg('api.noCodexCli')), { statusCode: 400 });
-  }
+  if (!isDemo()) await requireTool('codex', toolGateDeps);
   const displayName = p.group.isRoot || p.group.type === 'single' ? p.name : `${p.group.name} · ${p.name === p.group.name ? p.techName : p.name}`;
   const title = resume ? (await listCodexSessions()).find((s) => s.id === resume)?.title : undefined;
   // Mode démo : `codex` résolu vers le faux Codex des fixtures (jamais le vrai).
@@ -937,6 +957,7 @@ app.post<{ Params: { id: string }; Body: { resume?: string; prompt?: string; col
   try {
     return await openCodexConsole(p, req.body ?? {});
   } catch (e: any) {
+    if (e instanceof ToolMissingError) return reply.code(e.statusCode).send(e.body());
     return reply.code(e.statusCode ?? 500).send({ error: e.message });
   }
 });
@@ -1028,6 +1049,16 @@ app.post<{ Body: { fullName: string; cols?: number; rows?: number } }>('/api/git
   // Déjà en cours ?
   const running = terminals.list(CLONE_PREFIX + fullName).find((t) => t.status === 'running');
   if (running) return running;
+  // Garde du premier appel : sans git (outils Xcode absents), proposer l'installation plutôt que l'amorce /usr/bin/git
+  // de macOS. `gh` absent ou non connecté n'est pas requis : git clone reste le repli.
+  if (!isDemo()) {
+    try {
+      await requireTool('git', toolGateDeps);
+    } catch (e) {
+      if (e instanceof ToolMissingError) return reply.code(e.statusCode).send(e.body());
+      throw e;
+    }
+  }
 
   // `gh repo clone` réutilise l'authentification de la CLI (repos privés) ; sinon git clone en SSH.
   // Mode démo : faux `gh` (sans réseau) en tête du PATH.
@@ -1076,26 +1107,43 @@ async function ghCliStatus() {
 
 app.get('/api/github/cli', async () => ghCliStatus());
 
-/** Lance `gh auth login` (flux navigateur + code à usage unique) dans une console système. */
-app.post<{ Body: { cols?: number; rows?: number } }>('/api/github/cli/login', async (req, reply) => {
-  if (isDemo()) return reply.code(400).send({ error: msg('api.demoMode') });
-  const st = await ghCliStatus();
-  if (!st.installed) return reply.code(400).send({ error: msg('api.noGhCli') });
-  try {
-    return await terminals.create(
-      { id: SYSTEM_ID, dir: os.homedir(), env: {}, pathPrepend: [] },
-      {
-        command: 'gh auth login --hostname github.com --git-protocol https --web',
-        label: 'gh auth login',
-        // gh refuse de stocker un token si GH_TOKEN / GITHUB_TOKEN est défini dans l'environnement.
-        unsetEnv: ['GH_TOKEN', 'GITHUB_TOKEN', 'GH_ENTERPRISE_TOKEN'],
-        cols: req.body?.cols,
-        rows: req.body?.rows,
-      },
-    );
-  } catch (e: any) {
-    return reply.code(500).send({ error: e.message });
-  }
+// ─── Outils fournis (git, gh, claude, codex) : état et actions dans la console système ───
+// `POST /api/github/cli/login` reste un alias de `/api/tools/gh/login`.
+registerToolRoutes(app, {
+  status: toolStatusDeps,
+  platform: process.platform,
+  isDemo,
+  launch: (spec) => terminals.create({ id: SYSTEM_ID, dir: os.homedir(), env: {}, pathPrepend: [] }, spec),
+  onSessionExit: (listener) => { terminals.on('exit', (sid: string) => listener(sid)); },
+  after: {
+    // Sortie renvoyée par /api/tools/:id/after-install et affichée sur la ligne de l'outil (décision 9 : rien de caché).
+    runScript: async (script, args) => {
+      if (process.platform === 'win32') return '';
+      const ctx = makeCtx();
+      try {
+        const { stdout, stderr } = await exec('/bin/bash', [path.join(ctx.appDir, script), ...args], { timeout: 120_000 });
+        return `${stdout}${stderr}`;
+      } catch (e: any) {
+        const output = `${e.stdout ?? ''}${e.stderr ?? ''}`;
+        const last = output.trim().split('\n').pop();
+        throw Object.assign(new Error(last || e.message), { output });
+      }
+    },
+    codexPlan: async () => {
+      const ctx = makeCtx();
+      const lines: string[] = [];
+      const out = { log: (s = '') => { lines.push(s); }, error: (s: string) => { lines.push(s); } };
+      try {
+        await executePlan({ ctx, runner: realRunner, out }, [planCodexSetup(ctx)]);
+      } catch (e: any) {
+        throw Object.assign(new Error(e.message), { output: lines.join('\n') });
+      }
+      return lines.join('\n');
+    },
+    setAgents: (agents) => { updateSettings({ agents }); },
+    invalidateGithub: invalidateGithubCache,
+  },
+  msg,
 });
 
 // Fin d'une connexion gh → le cache GitHub est invalidé pour utiliser le nouveau token.

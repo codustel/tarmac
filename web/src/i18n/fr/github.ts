@@ -27,7 +27,6 @@ export default {
   'github.gh.connectedToast': 'CLI gh connectée à GitHub',
   'github.gh.checking': 'Vérification…',
   'github.gh.notInstalled': 'CLI gh non installée',
-  'github.gh.copied': 'Commande copiée',
   'github.gh.connected': 'Connectée',
   'github.gh.connectedAs': 'Connectée : {user}',
   'github.gh.switchAccount': 'Changer de compte',

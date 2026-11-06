@@ -5,9 +5,10 @@
 import dns from 'node:dns/promises';
 import fs from 'node:fs';
 import path from 'node:path';
-import { LABEL, MIN_NODE, OLD_LABEL, c, configured, nodeOk, tilde, which, type Ctx, type Out, type Runner } from './context.js';
+import { LABEL, MIN_NODE, OLD_LABEL, c, configured, nodeOk, tilde, type Ctx, type Out, type Runner } from './context.js';
 import { answers, type Port80 } from './setup.js';
 import { codexPresence, settingsAgents } from './codex.js';
+import { managedStatuses } from './tools.js';
 
 export interface Facts {
   platform: string;
@@ -127,7 +128,9 @@ export async function gatherFacts(ctx: Ctx, runner: Runner): Promise<Facts> {
   let domainAddrs: string[] = [];
   try { domainAddrs = (await dns.lookup(domain, { all: true })).map((a) => a.address); } catch { /* non résolu */ }
   const plistText = fs.existsSync(ctx.plist) ? fs.readFileSync(ctx.plist, 'utf8') : '';
-  const gh = which('gh', ctx.env) ? (runner.capture(['gh', 'auth', 'status'], { timeoutMs: 8000 }) !== null ? 'ok' : 'logged-out') : 'missing';
+  // git, gh, claude, codex : mêmes faits que l'écran Réglages → Outils (server/tools/status.ts).
+  const tool = new Map((await managedStatuses(ctx, runner)).map((t) => [t.id, t.state]));
+  const gh = tool.get('gh') === 'absent' ? 'missing' : tool.get('gh') === 'ready' ? 'ok' : 'logged-out';
   const claudeJson = (() => { try { return JSON.parse(fs.readFileSync(path.join(ctx.home, '.claude.json'), 'utf8')); } catch { return {}; } })();
   const claudeDir = ctx.env.CLAUDE_CONFIG_DIR ?? path.join(ctx.home, '.claude');
   const pfInstalled = fs.existsSync(ctx.pfAnchor);
@@ -150,15 +153,15 @@ export async function gatherFacts(ctx: Ctx, runner: Runner): Promise<Facts> {
     domainAddrs,
     urlAnswers,
     pfRedirect: !pfInstalled ? 'none' : port80 ? 'active' : 'not-applied',
-    git: which('git', ctx.env) !== null,
+    git: tool.get('git') !== 'absent',
     gh,
     docker: dockerSocket(ctx),
-    claude: which('claude', ctx.env) !== null,
+    claude: tool.get('claude') !== 'absent',
     claudeMcp: !!claudeJson?.mcpServers?.tarmac,
     claudeSkill: fs.existsSync(path.join(claudeDir, 'skills/suivi/SKILL.md')),
     claudeMcpLegacy: !!claudeJson?.mcpServers?.['app-manager'],
     agents: settingsAgents(ctx),
-    codex: codexPresence(ctx),
+    codex: { ...codexPresence(ctx), installed: tool.get('codex') !== 'absent' },
   };
 }
 

@@ -121,7 +121,8 @@ Options for setup:
   --with-codex     Set up the Codex (ChatGPT) integration without asking
   --no-codex       Do not set up the Codex integration
   --no-open        Do not open the browser at the end
-  -y, --yes        Answer yes to every question
+  -y, --yes        Answer yes to every question, and install the missing tools (git, gh, Claude Code, Codex).
+                   Without it, each missing tool is asked about; without a terminal, none is installed
 
 Options for uninstall:
   --purge          Also delete ~/.tarmac (settings, history, Todolist database)
@@ -131,4 +132,5 @@ Other options:
   -h, --help       Show this help
   -v, --version    Show the version
 
+Website: https://runtarmac.com
 Docs: https://github.com/codustel/tarmac#readme`;

@@ -5,7 +5,9 @@
   </picture>
 </p>
 
-<p align="center"><strong>Tarmac — tous vos projets et vos agents, une seule piste</strong></p>
+<p align="center"><strong>Tarmac — Claude Code, Codex et tous vos projets, sur une seule piste</strong></p>
+
+<p align="center"><a href="https://runtarmac.com/fr/"><strong>runtarmac.com</strong></a> · <a href="https://runtarmac.com/fr/installation/">Installation</a> · <a href="https://runtarmac.com/fr/fonctions/claude-code-codex/">Claude Code + Codex</a> · <a href="https://runtarmac.com/fr/tarifs/">Gratuit et Pro</a> · <a href="https://runtarmac.com/fr/blog/">Blog</a></p>
 
 <p align="center">Créé par <strong>Ismaël Belaaouad</strong> · Codustel — <a href="https://www.linkedin.com/in/codustel/">LinkedIn</a> · <a href="https://x.com/ismael_b_ai">X</a></p>
 

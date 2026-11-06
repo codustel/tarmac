@@ -17,8 +17,12 @@ messages, branch, and whether it is **active** (a `claude` process runs in that 
 - Open sessions appear as tabs on the **Claude sessions** page; each can also open in its own browser tab.
 
 With **Remote Control**, the same session is reachable from claude.ai/code and the Claude mobile app. It needs
-Claude Code signed in to claude.ai (`/login`), not an API key. The `claude` command must be in the `PATH` captured
-in `~/.tarmac/env` (see [Configuration](configuration.md#environment-variables-tarmacenv)).
+Claude Code signed in to claude.ai (`/login`), not an API key.
+
+Claude Code is installed and signed in from Tarmac: **Settings → Tools** (or the Tools screen at first launch), or
+`tarmac setup --yes`. Installing it also sets up the integration and ticks Claude in **Settings → Agents**. If
+`claude` is missing when you start or resume a session, Tarmac offers to install it and sign in, then opens the
+session, with no restart of the service.
 
 Claude Code deletes transcripts older than 30 days. To keep the history longer, set `"cleanupPeriodDays": 365` in
 `~/.claude/settings.json`. Cloud sessions started on claude.ai/code (not on this Mac) are not stored locally and do

@@ -5,7 +5,9 @@
   </picture>
 </p>
 
-<p align="center"><strong>Tarmac — every project, every agent session, one local runway</strong></p>
+<p align="center"><strong>Tarmac — Claude Code, Codex and every project, on one runway</strong></p>
+
+<p align="center"><a href="https://runtarmac.com"><strong>runtarmac.com</strong></a> · <a href="https://runtarmac.com/install/">Install</a> · <a href="https://runtarmac.com/features/claude-code-codex/">Claude Code + Codex</a> · <a href="https://runtarmac.com/pricing/">Free and Pro</a> · <a href="https://runtarmac.com/blog/">Blog</a></p>
 
 <p align="center">
   <a href="https://www.npmjs.com/package/@codustel/tarmac"><img src="https://img.shields.io/npm/v/@codustel/tarmac" alt="npm version"></a>
@@ -76,9 +78,11 @@ are `git fetch` on your repositories and the GitHub API with your own token, to 
 
 - macOS (Apple silicon or Intel).
 - [Node.js](https://nodejs.org) **22.13 or later** (Tarmac uses the built-in `node:sqlite`).
-- Optional: [GitHub CLI](https://cli.github.com) (`gh`), Docker Desktop / OrbStack / Colima (Docker view, local Supabase),
+- Optional, and installed for you by Tarmac (see [Tools](#tools)): Git, [GitHub CLI](https://cli.github.com) (`gh`),
   [Claude Code](https://claude.com/claude-code) and / or [Codex](https://developers.openai.com/codex) (agent
   sessions and Todolist).
+- Optional, to install yourself (Tarmac only flags them): Docker Desktop / OrbStack / Colima (Docker view, local
+  Supabase) and the Supabase CLI.
 
 ## Install
 
@@ -89,8 +93,8 @@ tarmac setup
 
 `tarmac setup` creates `~/.tarmac/env`, installs a login service (LaunchAgent), then, with your confirmation and
 your password (`sudo`), adds `tarmac.localhost` to `/etc/hosts`. Last,
-it offers to set up the Claude Code integration, and the Codex one when `codex` is installed (or with
-`--with-codex`). Run `tarmac setup --dry-run` first to see every action without changing anything.
+it offers to install the tools that are missing (git, `gh`, Claude Code, Codex: see [Tools](#tools)), then to set up
+the Claude Code integration, and the Codex one when `codex` is installed (or with `--with-codex`). Run `tarmac setup --dry-run` first to see every action without changing anything.
 
 **Tarmac's address is `http://tarmac.localhost:7777`**: it always works, with or without `sudo` (Chrome, Firefox
 and Safari resolve `*.localhost` on their own). `tarmac setup --no-sudo` skips the `/etc/hosts` step.
@@ -105,11 +109,33 @@ An existing **App Manager** install (Tarmac's former name) is migrated: its serv
 copied from `~/.app-manager` to `~/.tarmac` (the original is kept). If an older `~/.tarmac` is already there,
 `tarmac setup` says so and offers to move it aside (`~/.tarmac.old-<date>`, nothing is deleted) before copying.
 
+## Tools
+
+Nothing to install by hand: Tarmac installs the tools it needs and never bundles a binary. For each one it uses the
+first method available: Homebrew, then npm, then the tool's official installer (`git` on macOS: Homebrew, else the
+Xcode command line tools window opened by macOS). Installs run in a visible Tarmac console.
+
+- **First launch**: a **Tools** welcome screen lists Git, GitHub CLI, Claude Code and Codex, all ticked
+  ("Recommended: leave everything checked"). It shows once, and only when a managed tool is missing; **Later**
+  closes it. Installing Claude Code or Codex also sets up Tarmac's integration (MCP server, `/suivi` skill, rule,
+  hook) and ticks the agent in **Settings → Agents**.
+- **Settings → Tools**: the same list at any time: state (Missing, Signed out, Ready), version, **Sign in** (runs the
+  tool's login in the console: you sign in yourself, in the browser) and **Update** when a newer version exists.
+  A tool installed outside Tarmac is only updated by the method that installed it; if Tarmac cannot tell, the row
+  says "installed outside Tarmac" and has no button. Nothing updates automatically.
+- **At first use**: if `claude` or `codex` disappeared, starting or resuming a session offers to install it, then to
+  sign in, then opens the session, with no restart of the service.
+- **Terminal**: `tarmac setup` asks about each missing tool; `tarmac setup --yes` installs them all; without a
+  terminal and without `--yes`, none is installed.
+- **Docker and Supabase CLI** are never installed by Tarmac: the sidebar shows a warning icon on their entries (also
+  when Docker is installed but stopped), and the view explains what to do, with a **Check again** button. The
+  Claude, Codex and GitHub entries show the same icon when their tool is missing or signed out.
+
 ## First steps
 
 1. Open `http://tarmac.localhost:7777` (`tarmac open`). Click **Install the app** in the sidebar to get a Dock icon.
 2. In **Settings**, check the folders to scan (by default the usual code folders that exist: `~/Developer`,
-   `~/Projects`, `~/dev`, `~/code`…), then connect the GitHub CLI in one click.
+   `~/Projects`, `~/dev`, `~/code`…), then connect the GitHub CLI in one click (**Settings → Tools**).
 3. Start an app with **Start**, open its console, or open an agent session from its **Claude** or **Codex** tab
    (tick Codex in **Settings → Agents** first; Claude Code alone is the default).
 4. With the integration, type `/suivi init` in a Claude Code session, or `$suivi init` in a Codex session, to create

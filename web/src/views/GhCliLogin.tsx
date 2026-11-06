@@ -1,11 +1,13 @@
 import { useEffect, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { CheckCircle2, Copy, LogIn, RefreshCw, X } from 'lucide-react';
+import { CheckCircle2, Download, ExternalLink, LogIn, RefreshCw, X } from 'lucide-react';
 import { api, type TerminalSession } from '../api';
 import { socket } from '../socket';
-import { Badge, Button, GithubIcon, IconButton, copy, useToast } from '../ui';
+import { Badge, Button, GithubIcon, IconButton, useToast } from '../ui';
 import { useT } from '../i18n';
 import { TerminalView } from './TerminalView';
+import { gate } from '../tools/gate';
+import { gateAction } from '../tools/logic';
 
 /** État de la CLI `gh` + bouton de connexion (flux navigateur dans une console intégrée). */
 export function GhCliLogin({ compact }: { compact?: boolean }) {
@@ -14,6 +16,16 @@ export function GhCliLogin({ compact }: { compact?: boolean }) {
   const t = useT();
   const status = useQuery({ queryKey: ['ghcli'], queryFn: api.ghCli, staleTime: 30_000 });
   const [session, setSession] = useState<TerminalSession | null>(null);
+  // gh absent : installation par Tarmac (garde du premier appel), moyen d'installation lu dans l'état des outils.
+  const absent = status.data?.installed === false;
+  const tools = useQuery({ queryKey: ['tools'], queryFn: api.tools, staleTime: 10_000, enabled: absent });
+  const ghTool = tools.data?.find((x) => x.id === 'gh');
+  const ghReq = { tool: 'gh', state: 'absent', installMethod: ghTool ? ghTool.installMethod : undefined, docUrl: ghTool?.docUrl };
+  const install = async () => {
+    if (!(await gate.ask(ghReq))) return;
+    qc.invalidateQueries({ queryKey: ['ghcli'] });
+    qc.invalidateQueries({ queryKey: ['github'] });
+  };
 
   const login = useMutation({
     mutationFn: () => api.ghLogin(100, 24),
@@ -50,9 +62,13 @@ export function GhCliLogin({ compact }: { compact?: boolean }) {
         ) : !st.installed ? (
           <>
             <Badge tone="amber">{t('github.gh.notInstalled')}</Badge>
-            <button onClick={() => copy('brew install gh', toast, t('github.gh.copied'))} className="inline-flex items-center gap-1 font-mono text-xs text-muted hover:text-fg">
-              brew install gh <Copy className="size-3" />
-            </button>
+            {gateAction(ghReq) === 'doc' ? (
+              <a href={ghReq.docUrl} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 text-xs text-muted hover:text-fg">
+                {t('tools.gate.openDoc')} <ExternalLink className="size-3" />
+              </a>
+            ) : (
+              <Button size="sm" variant="primary" icon={<Download className="size-3.5" />} onClick={() => void install()}>{t('tools.gate.installBtn')}</Button>
+            )}
           </>
         ) : st.loggedIn ? (
           <>
