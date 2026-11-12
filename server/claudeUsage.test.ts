@@ -146,3 +146,36 @@ test('mode démo : Max 20x, 42 / 63 / Fable 28, sans appel réseau', async () =>
   const noSession = demoClaudeUsage({ claudeUsage: { plan: 'Pro', session: null, week: 10, models: [] } } as unknown as DemoFixtures);
   assert.deepEqual(noSession.limits.map((l) => l.id), ['week']);
 });
+
+const never = <T>() => new Promise<T>(() => {});
+
+test('get : readCredentials qui ne rend jamais la main → erreur timeout bornée, inflight libérée', async () => {
+  let reads = 0;
+  const { svc, tick } = service({ timeoutMs: 20, readCredentials: () => { reads++; return never(); } });
+  const r = await svc.get();
+  assert.deepEqual(r, { status: 'error', plan: null, limits: [], fetchedAt: null, error: 'timeout' });
+  assert.ok(!JSON.stringify(r).includes(FAKE_TOKEN));
+  assert.equal(reads, 1);
+  await svc.get();
+  assert.equal(reads, 1, 'échec mis en cache le temps du TTL normal');
+  tick(CACHE_MS + 1);
+  await svc.get();
+  assert.equal(reads, 2, 'cache expiré : nouvelle lecture (inflight libérée)');
+});
+
+test('get : fetch (réponse ou r.json()) qui ne se termine jamais → erreur timeout bornée', async () => {
+  for (const f of [
+    (() => never<Response>()) as typeof fetch,
+    (async () => ({ status: 200, ok: true, json: () => never() })) as unknown as typeof fetch,
+  ]) {
+    let calls = 0;
+    const { svc, tick } = service({ timeoutMs: 20, fetch: ((...a: unknown[]) => { calls++; return (f as any)(...a); }) as typeof fetch });
+    const r = await svc.get();
+    assert.equal(r.status, 'error');
+    assert.equal(r.error, 'timeout');
+    assert.ok(!JSON.stringify(r).includes(FAKE_TOKEN));
+    tick(CACHE_MS + 1);
+    await svc.get();
+    assert.equal(calls, 2, 'nouvel appel après le délai');
+  }
+});

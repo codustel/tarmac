@@ -25,6 +25,12 @@ export const CACHE_MS = 60_000;
 /** Après un 429 (trop de requêtes) : pause plus longue. */
 const BACKOFF_MS = 5 * 60_000;
 const TIMEOUT_MS = 6_000;
+/**
+ * Échéance globale d'un rafraîchissement (au-delà de 2 × 4 s pour le trousseau et 6 s pour le `fetch`) : après
+ * une veille du Mac, une attente sous-jacente peut ne jamais se terminer ; sans cette borne, la promesse partagée
+ * resterait en attente jusqu'au redémarrage du serveur.
+ */
+export const LOAD_TIMEOUT_MS = 15_000;
 
 export interface UsageLimit {
   /** `session` (5 h), `week` (tous modèles) ou `model:<nom>` (limite hebdomadaire propre à un modèle). */
@@ -142,6 +148,8 @@ export interface UsageDeps {
   demo: () => ClaudeUsage | null;
   /** false : affichage désactivé dans les réglages (rien n'est lu). */
   enabled: () => boolean;
+  /** Échéance globale d'un rafraîchissement (défaut `LOAD_TIMEOUT_MS`) ; injectable pour les tests. */
+  timeoutMs?: number;
 }
 
 /** Service avec cache : `get()` relit le jeton et appelle l'API au plus une fois par minute. */
@@ -163,7 +171,11 @@ export class ClaudeUsageService {
   private async load(): Promise<ClaudeUsage> {
     const at = this.deps.now();
     let ttl = CACHE_MS;
-    const value = await (async (): Promise<ClaudeUsage> => {
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const deadline = new Promise<ClaudeUsage>((resolve) => {
+      timer = setTimeout(() => resolve({ status: 'error', plan: null, limits: [], fetchedAt: null, error: 'timeout' }), this.deps.timeoutMs ?? LOAD_TIMEOUT_MS);
+    });
+    const value = await Promise.race([deadline, (async (): Promise<ClaudeUsage> => {
       const c = await this.deps.readCredentials().catch(() => null);
       if (!c) return { status: 'not-connected', plan: null, limits: [], fetchedAt: null };
       const plan = planLabel(c.subscriptionType, c.rateLimitTier);
@@ -181,7 +193,7 @@ export class ClaudeUsageService {
       } catch (e: any) {
         return { status: 'error', plan, limits: [], fetchedAt: null, error: e?.name === 'TimeoutError' ? 'timeout' : 'network' };
       }
-    })();
+    })()]).finally(() => clearTimeout(timer));
     this.cache = { at, ttl, value };
     return value;
   }

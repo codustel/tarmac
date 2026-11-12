@@ -12,6 +12,7 @@ import { monaco } from './monaco';
 import { fmtBytes, translateNow, useT } from '../i18n';
 import { cx } from '../ui';
 import { applyMonacoTheme } from './theme';
+import { isSaveShortcut, normalizeSaveAsPath } from './saveAs';
 
 /** Police du code (comme les consoles de l'app). */
 const CODE_FONT = '"JetBrains Mono", "SF Mono", ui-monospace, Menlo, monospace';
@@ -271,7 +272,12 @@ export function Workspace({ project, visible, onDirty }: { project: Project; vis
     const all = tabs.map((x) => x.path);
     const file = fileOf(path);
     const abs = `${project.dir}/${file}`;
+    const isText = docs.current.get(path)?.kind === 'text';
+    const mod = /Mac|iPhone|iPad/.test(navigator.platform) ? '⌘' : 'Ctrl+';
     return [
+      { label: tr('ide.tabs.save'), hint: `${mod}S`, disabled: !isText, onClick: () => save(path) },
+      { label: tr('ide.tabs.saveAs'), disabled: !isText, onClick: () => setSaveAs({ path, value: file }) },
+      'separator',
       { label: tr(t.pinned ? 'ide.tabs.unpin' : 'ide.tabs.pin'), onClick: () => setPinned(path, !t.pinned) },
       ...(t.preview ? [{ label: tr('ide.tabs.keepOpen'), hint: tr('ide.tabs.doubleClick'), onClick: () => openFile(path, false) }] : []),
       'separator',
@@ -331,6 +337,40 @@ export function Workspace({ project, visible, onDirty }: { project: Project; vis
     d.savedAlt = alt;
     refreshDirty(path);
   }, [id, refreshDirty, toast]);
+
+  // ─── Enregistrer sous : copie le contenu courant vers un nouveau chemin du projet et ouvre ce fichier ───
+  const [saveAsDlg, setSaveAs] = useState<{ path: string; value: string } | null>(null);
+  const doSaveAs = async (path: string, input: string) => {
+    const d = docs.current.get(path);
+    if (d?.kind !== 'text') return;
+    const target = normalizeSaveAsPath(input);
+    if (!target) return toast('err', tr('ide.saveAs.invalid'));
+    setSaveAs(null);
+    if (target === path) return save(path);
+    try {
+      await api.fsStat(id, target);
+      if (!confirm(tr('ide.saveAs.confirmOverwrite', { name: target }))) return;
+    } catch (e: any) {
+      if (e.status !== 404) return toast('err', e.message);
+    }
+    const content = d.model.getValue();
+    let r: { mtime: number };
+    try {
+      r = await api.fsWrite(id, target, content, null, true);
+    } catch (e: any) {
+      return toast('err', e.message);
+    }
+    // Cible déjà ouverte : son éditeur prend le contenu écrit (sinon il resterait périmé).
+    const other = docs.current.get(target);
+    if (other?.kind === 'text') {
+      other.model.setValue(content);
+      other.mtime = r.mtime;
+      other.savedAlt = other.model.getAlternativeVersionId();
+      refreshDirty(target);
+    }
+    refreshTree();
+    openFile(target, false);
+  };
 
   /** Recharge les fichiers modifiés sur le disque (par Claude, git…) s'ils n'ont pas de modifications locales. */
   const syncFromDisk = useCallback(async (paths: string[]) => {
@@ -459,7 +499,7 @@ export function Workspace({ project, visible, onDirty }: { project: Project; vis
   useEffect(() => {
     if (!visible) return;
     const onKey = (e: KeyboardEvent) => {
-      if ((e.metaKey || e.ctrlKey) && e.key === 's') {
+      if (isSaveShortcut(e)) {
         e.preventDefault();
         saveActive.current();
       }
@@ -874,6 +914,30 @@ export function Workspace({ project, visible, onDirty }: { project: Project; vis
         {activeDoc?.kind === 'text' && <span>{activeDoc.model.getLanguageId()}</span>}
         {dirty.size > 0 && <span style={{ color: 'var(--ide-git-m)' }}>{tr('ide.status.unsaved', { count: dirty.size })}</span>}
       </div>
+      {saveAsDlg && (
+        <div className="fixed inset-0 z-50 flex items-start justify-center bg-black/40 pt-[20vh]" onMouseDown={(e) => { if (e.target === e.currentTarget) setSaveAs(null); }}>
+          <form
+            className="w-[min(480px,90vw)] rounded-lg border border-line bg-panel p-4 shadow-xl"
+            onSubmit={(e) => { e.preventDefault(); doSaveAs(saveAsDlg.path, saveAsDlg.value); }}
+            onKeyDown={(e) => { if (e.key === 'Escape') setSaveAs(null); }}
+          >
+            <label className="mb-2 block text-sm font-medium">{tr('ide.saveAs.title')}</label>
+            <input
+              autoFocus
+              value={saveAsDlg.value}
+              onChange={(e) => setSaveAs({ ...saveAsDlg, value: e.target.value })}
+              onFocus={(e) => e.target.select()}
+              className="w-full rounded-md border border-line bg-panel-2 px-2.5 py-1.5 font-mono text-sm outline-none focus:border-accent"
+              spellCheck={false}
+            />
+            <p className="mt-1.5 text-xs text-muted">{tr('ide.saveAs.hint')}</p>
+            <div className="mt-3 flex justify-end gap-2">
+              <button type="button" onClick={() => setSaveAs(null)} className="rounded-md px-3 py-1.5 text-sm hover:bg-accent/10">{tr('ide.saveAs.cancel')}</button>
+              <button type="submit" className="rounded-md bg-accent px-3 py-1.5 text-sm text-white">{tr('ide.saveAs.ok')}</button>
+            </div>
+          </form>
+        </div>
+      )}
       {menu && tabs.some((t) => t.path === menu.path) && <ContextMenu x={menu.x} y={menu.y} items={menuItems(menu.path)} onClose={closeMenu} />}
     </div>
   );
