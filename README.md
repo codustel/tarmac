@@ -19,7 +19,7 @@
 
 <p align="center"><a href="README.fr.md">Version française</a></p>
 
-**Tarmac** is a local dashboard for macOS. It finds every project in your code folders, starts and stops them with
+**Tarmac** is a local dashboard for macOS and Windows. It finds every project in your code folders, starts and stops them with
 a free port, streams their logs, gives you a console and a Git menu in the browser, and runs your coding agents'
 sessions there: Claude Code (also followed from claude.ai or your phone) and Codex, OpenAI's agent included in
 ChatGPT plans. It runs as a login service on
