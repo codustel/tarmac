@@ -13,7 +13,7 @@
 
 <p align="center"><a href="README.md">English version</a></p>
 
-**Tarmac** est un tableau de bord local pour macOS. Il trouve tous les projets de vos dossiers de code, les démarre
+**Tarmac** est un tableau de bord local pour macOS et Windows. Il trouve tous les projets de vos dossiers de code, les démarre
 et les arrête sur un port libre, affiche leurs logs en direct, offre une console et un menu Git dans le navigateur,
 et y fait tourner les sessions de vos agents de code : Claude Code (suivi aussi depuis claude.ai ou votre téléphone)
 et Codex, l'agent d'OpenAI inclus dans les abonnements ChatGPT. Il
