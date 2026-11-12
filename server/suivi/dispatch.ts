@@ -230,14 +230,21 @@ export function cleanText(s: unknown, max = 200): string {
   return text.length > max ? text.slice(0, max - 1).trimEnd() + '…' : text;
 }
 
-/** Consigne envoyée à Claude, dans la langue de l'app. */
-export function buildPrompt(task: Pick<Task, 'id' | 'num' | 'title'>, projectId: string, lang: Lang): string {
+/** Suffixe fixe des consignes envoyées par un pilote automatique (module) : jamais de push, s'arrêter si bloqué. */
+export const AUTOPILOT_SUFFIX = {
+  fr: ' Mode pilote automatique : ne fais aucun git push ; si tu es bloqué ou as une question, arrête-toi et dis-le sans passer la tâche à tester.',
+  en: ' Autopilot mode: do not run any git push; if you are blocked or have a question, stop and say so without marking the task to test.',
+} as const;
+
+/** Consigne envoyée à Claude, dans la langue de l'app (`autopilot` : suffixe du pilote automatique ajouté). */
+export function buildPrompt(task: Pick<Task, 'id' | 'num' | 'title'>, projectId: string, lang: Lang, autopilot = false): string {
   const num = cleanText(task.num, 20).replace(/[^\w.-]/g, '') || task.id;
   const title = cleanText(task.title);
-  return tr({
+  const base = tr({
     fr: 'Traite la tâche {num} « {title} » (id {id}) du suivi {project} : lis-la avec suivi_get, fais-la, puis passe-la à tester (règles du suivi).',
     en: 'Handle task {num} “{title}” (id {id}) from the {project} tracker: read it with suivi_get, do it, then mark it to test (tracker rules).',
   }, { num, title, id: task.id, project: projectId }, lang);
+  return autopilot ? base + AUTOPILOT_SUFFIX[lang] : base;
 }
 
 /** Collage entre crochets puis Entrée : la TUI de Claude Code le reçoit comme un message tapé. */
@@ -300,7 +307,7 @@ export class SuiviDispatcher {
    * Envoie la tâche à une session en cours (`terminalId`) ou à une nouvelle session (`new`) de l'agent choisi
    * (`agent`, le premier agent coché par défaut), puis la marque demandée.
    */
-  async dispatch(projectId: string, taskId: string, target: DispatchTarget, agent?: AgentKind): Promise<DispatchResult> {
+  async dispatch(projectId: string, taskId: string, target: DispatchTarget, agent?: AgentKind, opts: { autopilot?: boolean } = {}): Promise<DispatchResult> {
     const { service } = this.deps;
     const sp = service.requireProject(projectId);
     if (typeof taskId !== 'string' || !TASK_ID_RE.test(taskId)) throw new SuiviError(tr({ en: 'Invalid task ID', fr: 'Identifiant de tâche invalide' }));
@@ -314,7 +321,7 @@ export class SuiviDispatcher {
     if (agent !== undefined && (typeof agent !== 'string' || !enabled.includes(agent))) {
       throw new SuiviError(tr({ en: 'Unknown or disabled agent (Settings → Agents)', fr: 'Agent inconnu ou désactivé (Réglages → Agents)' }));
     }
-    const prompt = buildPrompt(task, projectId, this.deps.lang());
+    const prompt = buildPrompt(task, projectId, this.deps.lang(), opts.autopilot === true);
 
     let terminalId: string, session: string;
     if (target === 'new') {

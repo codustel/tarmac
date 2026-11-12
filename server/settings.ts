@@ -34,6 +34,8 @@ export interface Settings {
   agents: { claude: boolean; codex: boolean };
   /** Écran d'accueil « outils fournis avec Tarmac » déjà vu (7.14). */
   toolsWelcomeSeen: boolean;
+  /** Masque les fonctionnalités Pro verrouillées de la barre latérale (7.16). */
+  hideProTeasers: boolean;
   /** Dossier où sont clonés les repos GitHub (par défaut le premier dossier scanné). */
   cloneDir: string;
   /** URL de production saisie à la main, par dossier absolu. */
@@ -75,6 +77,7 @@ const defaults = (): Settings => ({
   showCodexUsage: true,
   agents: { claude: true, codex: false },
   toolsWelcomeSeen: false,
+  hideProTeasers: false,
   urls: {},
   theme: 'system',
   language: 'auto',
@@ -116,6 +119,7 @@ export interface SettingsPatch {
   showCodexUsage?: boolean;
   agents?: { claude?: boolean; codex?: boolean };
   toolsWelcomeSeen?: boolean;
+  hideProTeasers?: boolean;
   cloneDir?: string;
   urls?: Record<string, string>;
   suivi?: { channels?: Partial<SuiviSettings['channels']>; bridgeIntervalSec?: number; folder?: string };
@@ -173,6 +177,7 @@ export function updateSettings(patch: SettingsPatch): { errors: string[] } {
   if (patch.showClaudeUsage !== undefined) next.showClaudeUsage = !!patch.showClaudeUsage;
   if (patch.showCodexUsage !== undefined) next.showCodexUsage = !!patch.showCodexUsage;
   if (patch.toolsWelcomeSeen !== undefined) next.toolsWelcomeSeen = !!patch.toolsWelcomeSeen;
+  if (patch.hideProTeasers !== undefined) next.hideProTeasers = !!patch.hideProTeasers;
   if (patch.agents) {
     for (const k of ['claude', 'codex'] as const) if (typeof patch.agents[k] === 'boolean') next.agents[k] = patch.agents[k]!;
     if (!next.agents.claude && !next.agents.codex) errors.push(msg('settings.agentRequired'));

@@ -12,6 +12,7 @@ import android from './en/android';
 import activity from './en/activity';
 import codex from './en/codex';
 import tools from './en/tools';
+import pro from './en/pro';
 
 /** English dictionary (fallback language). Typed on `fr`: a missing key is a typecheck error. */
-export const en: Dict = { ...common, ...settings, ...claude, ...todolist, ...projects, ...ide, ...github, ...supabase, ...docker, ...android, ...activity, ...codex, ...tools };
+export const en: Dict = { ...common, ...settings, ...claude, ...todolist, ...projects, ...ide, ...github, ...supabase, ...docker, ...android, ...activity, ...codex, ...tools, ...pro };

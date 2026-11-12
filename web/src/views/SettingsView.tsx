@@ -245,6 +245,7 @@ export function SettingsView() {
 
       {q.data && <AgentsCard settings={q.data} />}
       {q.data && <SuiviSettingsCard settings={q.data} />}
+      {q.data && <ProTeasersCard settings={q.data} />}
       <ModulesCard />
     </div>
   );
@@ -306,6 +307,30 @@ function AgentsCard({ settings }: { settings: Settings }) {
           </label>
         </Field>
       )}
+    </Card>
+  );
+}
+
+/** Interrupteur « Masquer les fonctionnalités Pro » (7.16) : visible aussi sans module Pro. */
+function ProTeasersCard({ settings }: { settings: Settings }) {
+  const t = useT();
+  const qc = useQueryClient();
+  const toast = useToast();
+  const save = useMutation({
+    mutationFn: (patch: SettingsPatch) => api.saveSettings(patch),
+    onSuccess: (s) => qc.setQueryData(['settings'], s),
+    onError: (e: Error) => toast('err', e.message),
+  });
+  return (
+    <Card className="divide-y divide-line">
+      <div className="px-5 py-3 text-[11px] font-semibold uppercase tracking-wider text-faint">{t('pro.settings.title')}</div>
+      <Field title={t('pro.settings.hide')} hint={t('pro.settings.hint')}>
+        <label className="inline-flex cursor-pointer items-center gap-2 text-[13px]">
+          <input type="checkbox" checked={!!settings.hideProTeasers} disabled={save.isPending}
+            onChange={(e) => save.mutate({ hideProTeasers: e.target.checked })} className="size-4 accent-[var(--accent)]" />
+          {t('pro.settings.hide')}
+        </label>
+      </Field>
     </Card>
   );
 }

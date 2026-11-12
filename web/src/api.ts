@@ -157,6 +157,8 @@ export interface ClaudeSession {
   active: boolean;
   terminalId: string | null;
   project?: { id: string; name: string } | null;
+  /** Pastilles fournies par les modules (texte seul) ; absentes ou vides sans module. */
+  badges?: { label: string; title?: string }[];
 }
 
 /** Agent de code : Claude Code ou Codex (ChatGPT). */
@@ -265,6 +267,7 @@ export type { ToolStatus, IntegrationResult };
 
 export interface Settings {
   toolsWelcomeSeen: boolean;
+  hideProTeasers: boolean;
   roots: string[];
   github: { owners: string[]; tokenSet: boolean };
   portRange: { start: number; end: number };
@@ -289,6 +292,7 @@ export interface SuiviSettings {
 
 export interface SettingsPatch {
   toolsWelcomeSeen?: boolean;
+  hideProTeasers?: boolean;
   roots?: string[];
   github?: { owners?: string[]; token?: string | null };
   portRange?: { start: number; end: number };
@@ -326,6 +330,8 @@ export interface SuiviTask {
   createdAt: string | null; parent: string | null; sources: SuiviSource[]; archived: boolean;
   /** « Demandée à Claude » : date et destinataire (nom de session, `new`, `copy`) ; vidés une fois traitée. */
   requestedAt?: string | null; requestedTo?: string;
+  /** Marquée pour le pilote automatique (module Pro). */
+  auto?: boolean;
 }
 /** Session Claude en cours dans une console de Tarmac, pour un projet de suivi (« Envoyer à Claude »). */
 export interface SuiviClaudeSession {
@@ -545,7 +551,7 @@ export const api = {
   frameCheck: (id: string) => request<{ url: string | null; frameable: boolean; reason: string | null; pending?: boolean }>(`/api/projects/${id}/frame-check`),
   suiviProjects: () => request<SuiviProjectSummary[]>('/api/suivi/projects'),
   suivi: (projectId: string) => request<SuiviDetail>(`/api/suivi/projects/${encodeURIComponent(projectId)}`),
-  suiviPatch: (projectId: string, taskId: string, baseRev: number, changes: Partial<Pick<SuiviTask, 'done' | 'doneAt' | 'note' | 'toTest' | 'tested' | 'testedAt'>>) =>
+  suiviPatch: (projectId: string, taskId: string, baseRev: number, changes: Partial<Pick<SuiviTask, 'done' | 'doneAt' | 'note' | 'toTest' | 'tested' | 'testedAt' | 'auto'>>) =>
     request<SuiviTask>(`/api/suivi/projects/${encodeURIComponent(projectId)}/tasks/${encodeURIComponent(taskId)}`, json({ baseRev, changes }, 'PATCH')),
   suiviSessions: (projectId: string) => request<SuiviClaudeSession[]>(`/api/suivi/projects/${encodeURIComponent(projectId)}/sessions`),
   suiviDispatch: (projectId: string, taskId: string, target: string, agent?: AgentKind) =>

@@ -89,7 +89,7 @@ export class TaskStatusTracker {
 
   has(projectId: string) { return this.last.has(projectId); }
 
-  update(projectId: string, projectName: string | null, tasks: Array<{ id: string; num: string; title: string; done: boolean; toTest: boolean }>, now = Date.now()): ModuleTaskStatusEvent[] {
+  update(projectId: string, projectName: string | null, tasks: Array<{ id: string; num: string; title: string; done: boolean; toTest: boolean; auto?: boolean }>, now = Date.now()): ModuleTaskStatusEvent[] {
     const before = this.last.get(projectId);
     const next = new Map(tasks.map((t) => [t.id, taskStatus(t)] as const));
     this.last.set(projectId, next);
@@ -98,7 +98,7 @@ export class TaskStatusTracker {
     return tasks.flatMap((t) => {
       const status = next.get(t.id)!;
       const previous = before.get(t.id) ?? null;
-      return previous === status ? [] : [{ suiviProjectId: projectId, projectName, taskId: t.id, num: t.num, title: t.title, status, previous, at }];
+      return previous === status ? [] : [{ suiviProjectId: projectId, projectName, taskId: t.id, num: t.num, title: t.title, status, previous, auto: t.auto === true, at }];
     });
   }
 

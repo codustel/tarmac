@@ -190,3 +190,53 @@ test('note réécrite par Claude pendant que l’artefact renvoie l’ancienne v
   s.pushTasks('acme/demo', [v1, v2], 'A', { uiOnly: true });
   assert.equal(s.task('acme/demo', 'a')!.note, 'Note réécrite');
 });
+
+// ─── Champ `auto` (pilote automatique, 7.10) ──────────────────────────────────
+test('auto : faux par défaut, relu sans le champ, accepté en création et en patch', () => {
+  const { s } = fresh();
+  s.importFile('acme/demo', file([T('a', 1), T('b', 2)]));
+  assert.equal(s.task('acme/demo', 'a')!.auto, false);
+  assert.equal(s.upsertTask('acme/demo', { id: 'b', auto: true }).auto, true);
+  const c = s.upsertTask('acme/demo', { title: 'neuve', auto: true });
+  assert.equal(c.auto, true);
+  const a = s.task('acme/demo', 'a')!;
+  const a2 = s.patchTask('acme/demo', 'a', a.rev, { auto: true }, 'tarmac');
+  assert.equal(a2.auto, true);
+  assert.equal(a2.rev, a.rev + 1);
+  assert.equal(s.history('acme/demo', 'a')[0].field, 'auto');
+  assert.equal(s.exportFile('acme/demo').tasks.every((t: any) => typeof t.auto === 'boolean'), true);
+});
+
+test('auto : l\'artefact ne le modifie jamais (page, rattrapage, patch), Tarmac si', () => {
+  const { s } = fresh();
+  s.importFile('acme/demo', file([T('a', 1), T('b', 2)]));
+  s.upsertTask('acme/demo', { id: 'a', auto: true });
+  const a = s.task('acme/demo', 'a')!;
+  const later = (ms: number) => new Date(Date.now() + ms).toISOString();
+  // Page d'artefact (canal A, uiOnly) : coche reçue, `auto` absent ou différent ignoré.
+  s.pushTasks('acme/demo', [{ ...T('a', 1), auto: false, done: true, rev: a.rev + 1, updatedAt: later(5000) }], 'A', { uiOnly: true });
+  assert.deepEqual([s.task('acme/demo', 'a')!.done, s.task('acme/demo', 'a')!.auto], [true, true]);
+  const b = s.task('acme/demo', 'b')!;
+  s.pushTasks('acme/demo', [{ ...b, auto: true, rev: b.rev + 1, updatedAt: later(6000) }], 'A', { uiOnly: true });
+  assert.equal(s.task('acme/demo', 'b')!.auto, false, 'artefact : pas de bascule à vrai');
+  // Rattrapage (canal C) : même règle, y compris pour une tâche créée par l'artefact.
+  const r = s.task('acme/demo', 'a')!;
+  s.pushTasks('acme/demo', [{ ...T('a', 1), auto: false, note: 'x', rev: r.rev + 1, updatedAt: later(9000) }, { ...T('n', 9), auto: true, rev: 1, updatedAt: later(9000) }], 'C');
+  assert.equal(s.task('acme/demo', 'a')!.auto, true);
+  assert.equal(s.task('acme/demo', 'n')!.auto, false);
+  // Patch REST d'origine artefact : refusé ; d'origine Tarmac : accepté.
+  const cur = s.task('acme/demo', 'b')!;
+  assert.throws(() => s.patchTask('acme/demo', 'b', cur.rev, { auto: true }, 'artifact'), (e: any) => e.statusCode === 403);
+  assert.equal(s.patchTask('acme/demo', 'b', cur.rev, { auto: true }, 'tarmac').auto, true);
+});
+
+test('auto : jamais accepté d\'un fichier importé (copie de dépôt), la valeur de Tarmac est gardée', () => {
+  const { s } = fresh();
+  s.importFile('acme/demo', file([T('a', 1), T('b', 2, { auto: true })]));
+  assert.equal(s.task('acme/demo', 'b')!.auto, false, 'tâche créée par import : auto ignoré');
+  const a = s.task('acme/demo', 'a')!;
+  s.patchTask('acme/demo', 'a', a.rev, { auto: true }, 'tarmac');
+  s.importFile('acme/demo', file([T('a', 1, { auto: false }), T('b', 2, { auto: true })], new Date(Date.now() + 1000).toISOString()));
+  assert.equal(s.task('acme/demo', 'a')!.auto, true, 'import ne retire pas auto');
+  assert.equal(s.task('acme/demo', 'b')!.auto, false, 'import ne pose pas auto');
+});

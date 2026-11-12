@@ -45,6 +45,9 @@ import { setSuiviDir, TodolistWatcher, type ProjectRoot } from './suivi/watch.js
 import { demo, demoBinDir, demoClaudeUsage, isDemo } from './demo/index.js';
 import { crossOriginFetch, originAllowed } from './originGuard.js';
 import { loadModules, parseModuleDirs } from './modules/loader.js';
+import { makeLaunchConsole } from './modules/console.js';
+import { buildCoreExtensions } from './modules/extensions.js';
+import { SessionBadges, withBadges } from './modules/badges.js';
 import { AgentTurnTracker, CoreEvents, ProcessStatusTracker, TaskStatusTracker, type AgentSnapshot } from './modules/events.js';
 import { envVar } from './dataDir.js';
 import { androidStatus, applyAndroidEnv, ensureEmulator, installCommand, isAvd, startAvd, stopAvd, waitForBootCommand } from './android.js';
@@ -154,6 +157,7 @@ function broadcast(msg: unknown) {
 
 // ─── Événements du cœur relayés aux modules (ctx.core.on, docs/extensions.md) ─
 const coreEvents = new CoreEvents();
+const sessionBadges = new SessionBadges();
 const processTracker = new ProcessStatusTracker();
 const taskTracker = new TaskStatusTracker();
 const suiviPending = new Set<string>();
@@ -696,7 +700,7 @@ app.get<{ Params: { id: string }; Querystring: { force?: string } }>('/api/proje
   const p = findProject(req.params.id);
   if (!p) return reply.code(404).send({ error: msg('api.unknownProject') });
   const all = await listClaudeSessions(req.query.force === '1');
-  return all.filter((s) => s.cwd === p.dir || s.cwd.startsWith(p.dir + path.sep)).map(withTerminal);
+  return withBadges(all.filter((s) => s.cwd === p.dir || s.cwd.startsWith(p.dir + path.sep)).map(withTerminal), sessionBadges, transcriptFile);
 });
 
 // Utilisation de l'abonnement Claude : plan, limites et remises à zéro (jamais le jeton, voir claudeUsage.ts).
@@ -761,7 +765,7 @@ function projectsOf<T extends { cwd: string }>(items: T[], key: (x: T) => string
 app.get('/api/claude/sessions', async () => {
   const all = await listClaudeSessions();
   const projectOf = projectsOf(all, (s) => s.id);
-  return all.map((s) => ({ ...withTerminal(s), project: projectOf.get(s.id) ?? null }));
+  return withBadges(all.map((s) => ({ ...withTerminal(s), project: projectOf.get(s.id) ?? null })), sessionBadges, transcriptFile);
 });
 
 // ─── Agents en cours (Tarmac et ailleurs) ───────────────────────────────────
@@ -1300,6 +1304,22 @@ await loadModules(app, {
   projects: () => lastScan.projects.map(({ id, name, dir, repoDir }) => ({ id, name, dir, repoDir })),
   lang: uiLang,
   events: coreEvents,
+  launchConsole: makeLaunchConsole({
+    isDemo,
+    create: (target, spec) => terminals.create(target, spec),
+    demoMessage: () => msg('api.demoMode'),
+  }),
+  extensions: buildCoreExtensions({
+    projects: () => suivi.projects(),
+    tasks: (id) => suivi.tasks(id, { archived: true }),
+    appProjectId: (sp) => suiviDispatcher.appProjectsOf(sp)[0]?.id ?? null,
+    dispatch: (projectId, taskId, target, agent, o) => suiviDispatcher.dispatch(projectId, taskId, target, agent, o),
+    sessionIdOf: (tid) => { const t = terminals.list().find((x) => x.id === tid); return t?.claudeSessionId ?? t?.codexSessionId ?? null; },
+    claudeUsage: () => claudeUsage.get(),
+    codexUsage: () => (!settings.agents.codex || !settings.showCodexUsage ? null : (() => { try { return readCodexUsage(); } catch { return { status: 'error', plan: null, limits: [], fetchedAt: null } as CodexUsage; } })()),
+    terminals: () => terminals.list(),
+  }),
+  badges: sessionBadges,
 });
 // Référence des statuts de tâches : les transitions suivantes deviennent des `suivi:task`.
 if (coreEvents.count('suivi:task')) for (const sp of suivi.projects()) taskTracker.update(sp.projectId, sp.name, suivi.tasks(sp.projectId));

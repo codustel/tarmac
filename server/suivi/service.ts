@@ -10,7 +10,7 @@ import { compareVersions, mergeTask, same, type FieldChange } from './merge.js';
 import { buildTheme, sanitizeTheme } from './theme.js';
 import { planRestructure, type RestructurePlan } from './restructure.js';
 import {
-  clearRequestIfHandled, countTasks, sanitizeField, sanitizeTask, SuiviError, TASK_FIELDS, TASK_ID_RE, UI_FIELDS,
+  clearRequestIfHandled, countTasks, sanitizeField, sanitizeTask, SuiviError, TASK_FIELDS, TARMAC_UI_FIELDS, TASK_ID_RE, UI_FIELDS,
   type Channel, type Origin, type SuiviProject, type Task, type TaskField,
 } from './types.js';
 
@@ -195,7 +195,7 @@ export class SuiviService {
    * Modification depuis l'onglet Tarmac ou l'artefact : seuls `done`, `doneAt`, `note`, `toTest`
    * (D7) ; `409` si la tâche a changé depuis `baseRev`.
    */
-  patchTask(projectId: string, taskId: string, baseRev: number, changes: Record<string, unknown>, origin: Origin, allowed: readonly TaskField[] = UI_FIELDS): Task {
+  patchTask(projectId: string, taskId: string, baseRev: number, changes: Record<string, unknown>, origin: Origin, allowed: readonly TaskField[] = origin === 'tarmac' ? TARMAC_UI_FIELDS : UI_FIELDS): Task {
     this.requireProject(projectId);
     const current = this.task(projectId, taskId);
     if (!current) throw new SuiviError(tr({ en: 'Unknown task', fr: 'Tâche inconnue' }), 404);
@@ -254,7 +254,9 @@ export class SuiviService {
       // Copie de dépôt (fichier, import) : donnée qu'un dépôt cloné peut fabriquer ; « Demandée à Claude » n'en
       // vient jamais (seulement d'un clic sur ▶ Claude), la valeur de Tarmac est gardée.
       const local = this.task(projectId, t.id);
-      return { ...t, updatedAt: t.updatedAt ?? exportedAt, updatedBy: t.updatedBy ?? origin, requestedAt: local?.requestedAt ?? null, requestedTo: local?.requestedTo ?? '' };
+      return { ...t, updatedAt: t.updatedAt ?? exportedAt, updatedBy: t.updatedBy ?? origin, requestedAt: local?.requestedAt ?? null, requestedTo: local?.requestedTo ?? '',
+        // `auto` déclenche un traitement sans surveillance : jamais accepté d'un fichier de dépôt, la valeur de Tarmac est gardée.
+        auto: local?.auto ?? false };
     });
     const res: ImportResult = { created: 0, updated: 0, unchanged: 0, lost: 0, total: incoming.length };
     this.tx(() => {
@@ -280,10 +282,13 @@ export class SuiviService {
     if (raws.length > 5000) throw new SuiviError(msg('suivi.tooManyTasks'));
     let refused = 0;
     const incoming = raws.flatMap((raw) => {
-      const t = { ...sanitizeTask(raw), updatedBy: 'artifact' as const };
+      const t0 = { ...sanitizeTask(raw), updatedBy: 'artifact' as const };
+      const local = this.task(projectId, t0.id);
+      // `auto` (traitement sans surveillance) ne vient jamais de l'artefact, quel que soit le canal : la valeur de Tarmac est
+      // gardée (faux pour une tâche que l'artefact crée).
+      const t = { ...t0, auto: local?.auto ?? false };
       if (!opts.uiOnly) return [t];
       // Page d'artefact (D7) : seulement la coche et la note de tâches existantes.
-      const local = this.task(projectId, t.id);
       if (!local) { refused++; return []; }
       const ui = Object.fromEntries(UI_FIELDS.map((f) => [f, t[f]]));
       return [{ ...local, ...ui, rev: t.rev, updatedAt: t.updatedAt, updatedBy: 'artifact' as const }];

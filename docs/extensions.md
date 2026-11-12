@@ -78,6 +78,13 @@ export function register(ctx) {
 | `core.projects()` | Detected projects, read only: `{ id, name, dir, repoDir }`. |
 | `core.lang()` | Interface language, `'en'` or `'fr'` (for texts the server writes, such as notifications). |
 | `core.on(event, cb)` | Read-only subscription to a Tarmac event (see below). Returns an unsubscribe function. |
+| `core.launchConsole(spec)` | Runs `spec.command` in Tarmac's system console (the one of the Tools screen, working directory = HOME) and returns the session `{ id, label, status, exitCode }`. `spec`: `{ command, label, env?, unsetEnv?, cols?, rows? }`; `env` adds variables, `unsetEnv` removes some. Refused in demo mode. Opens no new right: a module already runs in the server process. |
+| `core.suivi.projects()` | Todolist projects, read only: `{ suiviProjectId, name, appProjectId }` (`appProjectId`: the scanned project where a session opens, or `null`). |
+| `core.suivi.tasks(suiviProjectId)` | Tasks of a Todolist project, archived ones included, sorted by `order`: `{ id, num, title, order, status, auto, archived }`. `auto` is the task's "auto" mark, set by the user in the Todolist. |
+| `core.dispatch(suiviProjectId, taskId, { agent? })` | Sends an untreated task to a **new** agent session in a Tarmac console, like the ▶ button (`agent`: `'claude'` by default, or `'codex'`). The instruction always ends with a fixed autopilot suffix: no `git push`, and stop and say so when blocked instead of marking the task to test. Same guards as ▶ (task untreated, agent enabled). Resolves to `{ terminalId, sessionId }` (`sessionId` may be `null` until the console reveals it); rejects with a readable message otherwise. |
+| `core.usage()` | Plan usage, from what Tarmac already reads: `{ claude: { status, session }, codex: { status, session } \| null }`. `session` is the 5-hour window `{ utilization, resetsAt }` or `null` (plan without such a window, or usage unreadable: `status` is then not `ok`). Claude usage needs "show Claude usage" on in Tarmac. `codex` is `null` when Codex is off. Never contains a token, header or keychain value. |
+| `core.terminals()` | Tarmac consoles, read only: `{ id, projectId, status: 'running' \| 'exited', exitCode }`. |
+| `core.sessionBadges(provider)` | Badges shown next to each Claude session (see below). Returns an unsubscribe function. |
 
 If `register` throws, the module is marked *error*, the routes it had already declared answer `503` and its event
 subscriptions are removed.
@@ -101,7 +108,7 @@ export function register(ctx) {
 |---|---|---|
 | `agent:turn` | An agent session (Claude Code, Codex) changes state, or is seen for the first time (`previous: null`). Checked every 4 s while someone listens. | `agent` (`claude` \| `codex`), `key` (`<agent>:<pid>`), `sessionId`, `terminalId` (Tarmac console, or null), `projectId`, `projectName`, `title`, `state`, `previous`, `previousMs` (time spent in `previous`), `at` |
 | `process:status` | An app started by Tarmac changes status. | `projectId`, `projectName`, `status`, `previous`, `exitCode`, `at` |
-| `suivi:task` | A task of a Todolist changes status, or is created (`previous: null`). | `suiviProjectId`, `projectName`, `taskId`, `num`, `title`, `status`, `previous`, `at` |
+| `suivi:task` | A task of a Todolist changes status, or is created (`previous: null`). | `suiviProjectId`, `projectName`, `taskId`, `num`, `title`, `status`, `previous`, `auto`, `at` |
 
 - Agent `state`: `working` (answering or running a tool), `idle` (turn finished, waiting for a message), `permission`
   (a permission or choice box is on screen). `permission` is only detected in Tarmac consoles, whose screen Tarmac
@@ -109,6 +116,25 @@ export function register(ctx) {
 - App `status`: `stopped`, `starting`, `running`, `stopping`, `crashed`. `crashed` means the process exited on its
   own with a non-zero code or a signal; a stop you asked for gives `stopped`.
 - Task `status`: `todo`, `toTest`, `done`.
+
+### Session badges
+
+`ctx.core.sessionBadges(provider)` adds small text badges next to each session in the Claude tab. Tarmac calls
+`provider(sessions)` when it lists sessions, with frozen `{ id, cwd, file, sizeBytes, updatedAt }` objects (`file` is
+the transcript path, or `null`). Return `{ [sessionId]: [{ label, title? }] }`.
+
+```js
+export function register(ctx) {
+  ctx.core.sessionBadges((sessions) =>
+    Object.fromEntries(sessions.map((s) => [s.id, [{ label: `${(s.sizeBytes / 1e6).toFixed(1)} MB`, title: 'History size' }]])));
+}
+```
+
+- Text only, never HTML; translate the labels yourself (`ctx.core.lang()`).
+- At most 4 badges per session and per module; `label` is cut at 24 characters, `title` at 200. Unknown session ids
+  are ignored; badges appear in module loading order.
+- Each provider has 1.5 s to answer. An error or a timeout is logged and gives no badges; the list is returned anyway.
+- Without a provider, nothing is computed. A module in error or disabled is no longer called.
 
 ## Web side
 
@@ -130,6 +156,7 @@ mounted again when the interface language changes.
 | `id`, `lang` | Module id; `'en'` or `'fr'`. |
 | `theme()`, `onThemeChange(cb)` | Current theme and changes; `onThemeChange` returns an unsubscribe function. |
 | `api(path, init)` | `fetch` to the module's routes: `ctx.api('/summary')` → `/api/modules/<id>/summary`. |
+| `mountConsole(el, sessionId, opts?)` | Mounts in `el` the console of a session started by `core.launchConsole` (same view as the Tools screen). `opts.onExit(exitCode)` is called once when the process ends. Returns an unmount function. |
 
 The view is framework-agnostic: use plain DOM, or bundle your own React, Vue or Svelte (Tarmac's React is not
 shared, so versions never clash). The page's CSS variables (`--bg`, `--panel`, `--line`, `--fg`, `--muted`…)
@@ -142,6 +169,10 @@ The npm package publishes the API types:
 ```ts
 import type { ModuleContext, MountModule, RegisterModule } from '@codustel/tarmac/modules';
 ```
+
+## Locked Pro entries
+
+The free app shows Tarmac Pro features as locked sidebar entries with a Pro badge. An entry disappears as soon as a module with the same `id` is loaded (whatever its status). The list lives in `web/src/pro/features.ts`: a new Pro feature is one more line there.
 
 ## Developing a module
 

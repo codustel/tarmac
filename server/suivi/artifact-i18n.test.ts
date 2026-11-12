@@ -38,3 +38,9 @@ test('artefact : chaque clé utilisée par la page existe', () => {
 test('artefact : titre par défaut « Todolist <Nom> » inchangé', () => {
   assert.match(html, /<title>Todolist Shop<\/title>/);
 });
+
+test('artefact : badge « auto » en lecture seule, aucune bascule ni écriture du champ', () => {
+  assert.match(script, /class=\\?"badge-auto\\?"/);
+  assert.ok(!/data-auto|auto-btn/.test(html), 'pas de bouton');
+  assert.ok(!/edit\([^)]*\{auto:/.test(script), 'l\'artefact n\'écrit jamais auto');
+});

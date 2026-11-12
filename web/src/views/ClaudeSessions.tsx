@@ -62,6 +62,7 @@ export function SessionRow({ s, projectId, onOpenTab, showProject, agent = 'clau
           <span className="inline-flex items-center gap-0.5"><MessageSquare className="size-3" />{s.messages}</span>
           {s.gitBranch && <span className="inline-flex items-center gap-0.5 font-mono"><GitBranch className="size-3" />{s.gitBranch}</span>}
           <span className="truncate font-mono opacity-70">{s.id.slice(0, 8)}</span>
+          {s.badges?.map((b, i) => <Badge key={i} title={b.title}>{b.label}</Badge>)}
         </div>
       </div>
       {s.terminalId ? (

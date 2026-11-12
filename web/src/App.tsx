@@ -23,6 +23,8 @@ import type { AgentKind } from './api';
 import { LicenseModal } from './views/LicenseModal';
 import { ToolsWelcome } from './views/ToolsWelcome';
 import { ToolGateModal } from './views/ToolGateModal';
+import { PRO_FEATURES, lockedProFeatures, type ProFeature } from './pro/features';
+import { ProBadge, ProUpsellModal } from './pro/ProUpsellModal';
 import { InstallButton, UpdateBanner } from './pwa';
 import { onIdeOpen } from './ide/store';
 
@@ -263,6 +265,11 @@ function Main({ terminals }: { terminals: import('./api').TerminalSession[] }) {
     ? [t.loc(moduleTab?.name ?? tab.slice(2)), moduleTab ? t('common.moduleSub', { version: moduleTab.version }) : '']
     : [t(TITLES[tab as CoreTab][0]), t(TITLES[tab as CoreTab][1])];
 
+  // Fonctionnalités Pro verrouillées (7.16) : section « Pro » de la barre latérale, fenêtre au clic.
+  const [proFeature, setProFeature] = useState<ProFeature | null>(null);
+  const proSettings = useQuery({ queryKey: ['settings'], queryFn: api.settings, staleTime: 60_000 });
+  const proLocked = lockedProFeatures(PRO_FEATURES, modules.data ?? [], { isDesktop: /TarmacDesktop/.test(navigator.userAgent), hidden: !!proSettings.data?.hideProTeasers });
+
   const NavButton = ({ n }: { n: (typeof nav)[number] }) => (
     <button
       onClick={() => setTab(n.id)}
@@ -306,6 +313,19 @@ function Main({ terminals }: { terminals: import('./api').TerminalSession[] }) {
         </div>
         <nav className="shrink-0 p-2 space-y-0.5">
           {nav.map((n) => <NavButton key={n.id} n={n} />)}
+          {proLocked.length > 0 && (
+            <div className="pt-2" data-testid="pro-section">
+              <div className="px-2.5 pb-1 text-[10px] font-semibold uppercase tracking-wider text-faint">{t('pro.section')}</div>
+              {proLocked.map((f) => (
+                <button key={f.id} onClick={() => setProFeature(f)} data-testid={`pro-${f.id}`}
+                  className="flex w-full items-center gap-2.5 rounded-md px-2.5 h-8 text-[13px] text-muted/70 transition-colors hover:bg-panel-2/60 hover:text-muted">
+                  <f.icon className="size-4 shrink-0" />
+                  <span className="flex-1 text-left">{t.loc(f.name)}</span>
+                  <ProBadge />
+                </button>
+              ))}
+            </div>
+          )}
           <div className="my-2 border-t border-line" />
           <NavButton n={{ id: 'settings', label: t('common.nav.settings'), icon: <Settings2 className="size-4" /> }} />
         </nav>
@@ -365,6 +385,7 @@ function Main({ terminals }: { terminals: import('./api').TerminalSession[] }) {
       </aside>
       <ToolsWelcome />
       <ToolGateModal />
+      {proFeature && <ProUpsellModal feature={proFeature} onClose={() => setProFeature(null)} />}
       {licenseOpen && <LicenseModal onClose={() => setLicenseOpen(false)} />}
 
       {/* ─── Contenu ─── */}

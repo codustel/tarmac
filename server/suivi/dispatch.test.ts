@@ -415,3 +415,14 @@ test('MCP Claude Code : tous les outils, dont sessions et dispatch', { timeout: 
     for (const n of ['suivi_get', 'suivi_upsert_task', 'suivi_sessions', 'suivi_dispatch']) assert.ok(names.includes(n), n);
   } finally { m.close(); }
 });
+
+test('buildPrompt : suffixe du pilote automatique (aucun push, s\'arrêter si bloqué), absent sinon', () => {
+  const t = { id: 't-4-12', num: '4.12', title: 'Ajouter le bouton' };
+  assert.ok(!buildPrompt(t, 'acme/shop', 'fr').includes('pilote automatique'));
+  const fr = buildPrompt(t, 'acme/shop', 'fr', true);
+  assert.ok(fr.startsWith(buildPrompt(t, 'acme/shop', 'fr')));
+  assert.match(fr, /ne fais aucun git push/);
+  assert.match(fr, /sans passer la tâche à tester/);
+  assert.match(buildPrompt(t, 'acme/shop', 'en', true), /do not run any git push/);
+  assert.ok(!/[\r\n]/.test(fr), 'une seule ligne : collée dans la TUI');
+});

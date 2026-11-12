@@ -144,6 +144,10 @@ body {
 .tl .tl-who-claude { background: var(--tl-cyan-soft); color: var(--tl-cyan); }
 .tl .tl-badge-totest { font-size: 11px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; color: var(--tl-amber); border: 1px solid var(--tl-amber); border-radius: 6px; padding: 2px 7px; white-space: nowrap; }
 .tl button.tl-badge-totest { background: none; cursor: pointer; }
+.tl .tl-auto { font-size: 11px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; color: var(--tl-muted); background: transparent; border: 1px solid var(--tl-line); border-radius: 6px; padding: 2px 7px; white-space: nowrap; cursor: pointer; opacity: .7; }
+.tl .tl-auto:hover { opacity: 1; }
+.tl .tl-auto-pro { display: inline-flex; gap: 5px; align-items: center; opacity: 1; }
+.tl .tl-auto-on { color: var(--tl-cyan); border-color: var(--tl-cyan); opacity: 1; }
 .tl .tl-badge-requested { font-size: 11px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; color: var(--tl-cyan); border: 1px dashed var(--tl-cyan); border-radius: 6px; padding: 2px 7px; white-space: nowrap; }
 /* « ▶ Claude » : envoie une tâche non traitée à une session Claude des consoles de Tarmac (menu des sessions). */
 .tl .tl-send { position: relative; display: inline-flex; }

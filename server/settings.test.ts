@@ -53,3 +53,19 @@ test('réglage Agents : cocher Codex, garder au moins un agent', () => {
   assert.equal(r.c.length, 1, 'aucun agent : refusé');
   assert.deepEqual(r.after, { claude: false, codex: true }, 'rien n’est changé après un refus');
 });
+
+test('hideProTeasers : défaut false, enregistré, non-booléen traité comme les autres booléens', () => {
+  const r = inDataDir(`
+    const d = settings.hideProTeasers;
+    updateSettings({ hideProTeasers: true });
+    const a = settings.hideProTeasers;
+    updateSettings({ hideProTeasers: false });
+    const b = settings.hideProTeasers;
+    updateSettings({ hideProTeasers: 'x' });
+    return { d, a, b, c: settings.hideProTeasers };`);
+  assert.deepEqual(r, { d: false, a: true, b: false, c: true });
+});
+
+test('hideProTeasers persiste dans settings.json', () => {
+  assert.equal(inDataDir('return settings.hideProTeasers;', { hideProTeasers: true }), true);
+});

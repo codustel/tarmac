@@ -3,6 +3,7 @@ import type { ModuleInfo } from '../api';
 import type { ModuleWebContext, MountModule } from '../../../server/modules/api';
 import { cx } from '../ui';
 import { useT } from '../i18n';
+import { mountConsole } from '../tools/mountConsole';
 
 const currentTheme = (): 'light' | 'dark' => (document.documentElement.classList.contains('dark') ? 'dark' : 'light');
 
@@ -35,6 +36,7 @@ export function ModuleView({ module }: { module: ModuleInfo | undefined }) {
         obs.observe(document.documentElement, { attributes: true, attributeFilter: ['class'] });
         return () => obs.disconnect();
       },
+      mountConsole,
       api: (p, init) => fetch(`/api/modules/${id}${p.startsWith('/') ? p : `/${p}`}`, {
         ...init,
         headers: { 'X-Tarmac-Lang': t.lang, ...(init?.headers as Record<string, string> | undefined) },

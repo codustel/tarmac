@@ -58,3 +58,12 @@ test('TaskStatusTracker : premier relevé = référence, puis transitions et cr�
   assert.deepEqual(ev.map((e) => [e.taskId, e.status, e.previous]), [['1', 'toTest', 'todo'], ['3', 'todo', null]]);
   assert.deepEqual(t.update('p', 'P', [task('1', { done: true, toTest: true })]).map((e) => [e.taskId, e.status]), [['1', 'done']]);
 });
+
+test('TaskStatusTracker : `auto` dans l\'événement ; une bascule de `auto` seule n\'émet rien', () => {
+  const t = new TaskStatusTracker();
+  const task = (id: string, auto: boolean, toTest = false) => ({ id, num: id, title: 'T' + id, done: false, toTest, auto });
+  t.update('p', 'P', [task('1', false)]);
+  assert.deepEqual(t.update('p', 'P', [task('1', true)]), []);
+  const ev = t.update('p', 'P', [task('1', true, true), task('2', false)]);
+  assert.deepEqual(ev.map((e) => [e.taskId, e.status, e.auto]), [['1', 'toTest', true], ['2', 'todo', false]]);
+});

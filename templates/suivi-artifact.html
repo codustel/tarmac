@@ -71,6 +71,8 @@ __FONTS__
   "save.unavailable":"Enregistrement indisponible dans cette vue : ouvre la page dans claude.ai.",
   "save.unavailableCheck":"Enregistrement indisponible dans cette vue : ouvre la page dans claude.ai pour cocher.",
   "save.testFailed":"Le test n’a pas pu être enregistré ({code}). Réessaie.",
+  "auto.badge":"Auto",
+  "auto.title":"Tâche marquée pour le pilote automatique (Pro) ; se règle depuis la Todolist de Tarmac",
   "save.checkFailed":"La case n’a pas pu être enregistrée ({code}). Réessaie dans un instant.",
   "save.noteFailed":"La note n’a pas pu être enregistrée. Réessaie.",
   "load.slow":"Le suivi met du temps à se charger…",
@@ -172,6 +174,8 @@ __FONTS__
   "save.unavailable":"Saving isn’t available in this view: open the page on claude.ai.",
   "save.unavailableCheck":"Saving isn’t available in this view: open the page on claude.ai to check tasks off.",
   "save.testFailed":"The test couldn’t be saved ({code}). Try again.",
+  "auto.badge":"Auto",
+  "auto.title":"Task marked for the autopilot (Pro); set it from the Tarmac Todolist",
   "save.checkFailed":"The checkbox couldn’t be saved ({code}). Try again in a moment.",
   "save.noteFailed":"The note couldn’t be saved. Try again.",
   "load.slow":"The tracker is taking a while to load…",
@@ -294,6 +298,7 @@ button.btn[disabled]{opacity:.55;cursor:default}
 .status{border-style:solid;font-size:13px;padding:10px 14px}
 /* « ▶ Claude » : envoie une tâche non traitée à une session Claude de Tarmac (menu des sessions) ou copie la consigne. */
 .badge-requested{font:700 11px var(--body);letter-spacing:.06em;text-transform:uppercase;color:var(--cyan);border:1px dashed var(--cyan);border-radius:6px;padding:2px 7px;white-space:nowrap}
+.badge-auto{font:700 11px var(--body);letter-spacing:.06em;text-transform:uppercase;color:var(--cyan);border:1px solid var(--cyan);border-radius:6px;padding:2px 7px;white-space:nowrap}
 .send-btn{font:600 12px var(--body);color:var(--cyan);background:var(--cyan-soft);border:1px solid transparent;border-radius:99px;padding:3px 9px;cursor:pointer;white-space:nowrap}
 .send-btn:hover{border-color:var(--cyan)}
 .send-btn[disabled],button.btn.small[disabled]{opacity:.6;cursor:default}
@@ -554,7 +559,7 @@ button.btn.small{font-size:13px;padding:6px 12px;align-self:flex-start}
 <input type="checkbox" id="cb-${id}" data-id="${id}" ${task.done?'checked':''} aria-label="${esc(t('task.markDone',{num:task.num}))}">
 <span class="num">${esc(task.num)}</span>
 <button class="ttl" type="button" data-toggle="${id}" aria-expanded="${o}">${esc(task.title)}</button>
-<span class="tags">${isToTest(task)?`<button type="button" class="badge-totest" data-tested="${id}" title="${esc(t('task.toTestTitle'))}">${esc(t('task.toTest'))}</button>`:task.tested?`<button type="button" class="badge-tested" data-untest="${id}" title="${esc(testedTitle)}">${esc(t('task.tested'))}</button>`:''}${isRequested(task)?`<span class="badge-requested" title="${esc(t('requested.title',{date:new Date(task.requestedAt).toLocaleString(LOCALE,{dateStyle:'medium',timeStyle:'short'}),to:task.requestedTo==='new'?t('requested.new'):task.requestedTo&&task.requestedTo!=='copy'?task.requestedTo:t('requested.copy')}))}">${esc(t('requested.badge'))}</span>`:''}${isUntreated(task)?`<button type="button" class="send-btn" data-send="${id}" aria-haspopup="menu" title="${esc(t('send.title'))}"${sending.has(task.id)?' disabled':''}>${esc(sending.has(task.id)?t('send.sending'):t('send.button'))}</button>`:''}${whoPill(task.who)}${task.createdAt?`<span class="created" title="${esc(t('task.createdOn',{date:fmtDT(task.createdAt)}))}">${esc(fmtShort(task.createdAt))}</span>`:''}<span class="time">${fmtMin(task.minutes)}</span></span></div>
+<span class="tags">${isToTest(task)?`<button type="button" class="badge-totest" data-tested="${id}" title="${esc(t('task.toTestTitle'))}">${esc(t('task.toTest'))}</button>`:task.tested?`<button type="button" class="badge-tested" data-untest="${id}" title="${esc(testedTitle)}">${esc(t('task.tested'))}</button>`:''}${isRequested(task)?`<span class="badge-requested" title="${esc(t('requested.title',{date:new Date(task.requestedAt).toLocaleString(LOCALE,{dateStyle:'medium',timeStyle:'short'}),to:task.requestedTo==='new'?t('requested.new'):task.requestedTo&&task.requestedTo!=='copy'?task.requestedTo:t('requested.copy')}))}">${esc(t('requested.badge'))}</span>`:''}${isUntreated(task)&&task.auto?`<span class="badge-auto" title="${esc(t('auto.title'))}">${esc(t('auto.badge'))}</span>`:''}${isUntreated(task)?`<button type="button" class="send-btn" data-send="${id}" aria-haspopup="menu" title="${esc(t('send.title'))}"${sending.has(task.id)?' disabled':''}>${esc(sending.has(task.id)?t('send.sending'):t('send.button'))}</button>`:''}${whoPill(task.who)}${task.createdAt?`<span class="created" title="${esc(t('task.createdOn',{date:fmtDT(task.createdAt)}))}">${esc(fmtShort(task.createdAt))}</span>`:''}<span class="time">${fmtMin(task.minutes)}</span></span></div>
 <div class="detail" ${o?'':'hidden'}>
 ${isUntreated(task)?`<button type="button" class="btn small" data-send="${id}" aria-haspopup="menu"${sending.has(task.id)?' disabled':''}>${esc(sending.has(task.id)?t('send.sending'):t('send.detail'))}</button>`:''}
 ${task.why?`<p class="why">${t('task.why',{text:rich(task.why)})}</p>`:''}

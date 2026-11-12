@@ -13,7 +13,7 @@
 
 <p align="center"><a href="README.md">English version</a></p>
 
-**Tarmac** est un tableau de bord local pour macOS et Windows. Il trouve tous les projets de vos dossiers de code, les démarre
+**Tarmac** est un tableau de bord local pour macOS. Il trouve tous les projets de vos dossiers de code, les démarre
 et les arrête sur un port libre, affiche leurs logs en direct, offre une console et un menu Git dans le navigateur,
 et y fait tourner les sessions de vos agents de code : Claude Code (suivi aussi depuis claude.ai ou votre téléphone)
 et Codex, l'agent d'OpenAI inclus dans les abonnements ChatGPT. Il
@@ -81,6 +81,25 @@ sont `git fetch` sur vos dépôts et l'API GitHub avec votre propre token, pour 
 - Facultatif : [GitHub CLI](https://cli.github.com) (`gh`), Docker Desktop / OrbStack / Colima (vue Docker, Supabase local),
   [Claude Code](https://claude.com/claude-code) et / ou [Codex](https://developers.openai.com/codex) (sessions
   d'agent et Todolist).
+
+### Installer les dépendances soi-même
+
+Tarmac installe pour vous Git, `gh`, Claude Code et Codex (premier lancement, ou **Réglages → Outils**). Pour tout
+installer à la main, ou pour Node.js, Docker et la CLI Supabase, que Tarmac n'installe jamais, tapez ces commandes
+dans le Terminal (macOS). Sous Windows, suivez [Windows (WSL 2)](docs/windows.md) (en anglais).
+
+| Dépendance | Sert à | Installer | Ensuite |
+|---|---|---|---|
+| [Homebrew](https://brew.sh) | les commandes ci-dessous | `/bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"` | |
+| [Node.js](https://nodejs.org) 22.13+ | Tarmac lui-même (obligatoire) | `brew install node` (ou avec [nvm](https://github.com/nvm-sh/nvm) : `nvm install 22`) | `node -v` |
+| Git | menu Git, clonage | `brew install git` (ou `xcode-select --install`) | |
+| [GitHub CLI](https://cli.github.com) | onglet GitHub, Cloner | `brew install gh` | `gh auth login` |
+| [Claude Code](https://claude.com/claude-code) | sessions Claude, Todolist | `curl -fsSL https://claude.ai/install.sh \| bash` (ou `npm install -g @anthropic-ai/claude-code`) | `claude` (connexion au premier lancement) |
+| [Codex](https://developers.openai.com/codex) | sessions Codex, Todolist | `npm install -g @openai/codex` (ou `brew install --cask codex`) | `codex login` |
+| Docker : [Docker Desktop](https://www.docker.com/products/docker-desktop/), [OrbStack](https://orbstack.dev) ou [Colima](https://github.com/abiosoft/colima) | vue Docker, Supabase local | `brew install --cask docker-desktop`, ou `brew install --cask orbstack`, ou `brew install colima docker` | ouvrir l'app (Colima : `colima start`) |
+| [CLI Supabase](https://supabase.com/docs/guides/local-development/cli/getting-started) | Supabase local | `brew install supabase/tap/supabase` | `supabase start` dans un projet |
+
+`tarmac doctor` liste ensuite ce qui manque encore.
 
 ## Installation
 

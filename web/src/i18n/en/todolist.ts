@@ -119,6 +119,7 @@ const en: typeof fr = {
   'todolist.field.check': 'check',
   'todolist.field.sources': 'sources',
   'todolist.field.requestedAt': 'asked Claude',
+  'todolist.field.auto': 'autopilot',
   'todolist.field.requestedTo': 'session asked',
 
   // “Send to Claude” (▶ Claude button of an untreated task)
@@ -144,6 +145,9 @@ const en: typeof fr = {
   'todolist.requestedTitle': 'Asked on {date}, to {to}',
   'todolist.requestedNew': 'a new session',
   'todolist.requestedCopy': 'Claude (instruction copied)',
+  'todolist.auto': 'Auto',
+  'todolist.autoTitle': "Task for the autopilot (Pro) to handle: click to turn it on or off",
+  'todolist.autoProTitle': "Autopilot: a Pro feature, click to learn more",
   'todolist.requestedCount': 'Asked Claude: {n}',
   'todolist.origin.tarmac': 'Tarmac',
   'todolist.origin.artifact': 'artifact',

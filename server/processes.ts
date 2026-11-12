@@ -2,6 +2,7 @@ import { spawn, type ChildProcess } from 'node:child_process';
 import { EventEmitter } from 'node:events';
 import { config } from './config.js';
 import { tr } from './i18n.js';
+import { AnnouncedPort } from './announcedPort.js';
 import { allocatePort, isPortBusy } from './ports.js';
 import { appSpawnOptions, killTree, prependPath, spawnCommand } from './platform.js';
 import { state, persist } from './store.js';
@@ -26,6 +27,7 @@ interface Runtime {
   child?: ChildProcess;
   stopRequested?: boolean;
   readyTimer?: NodeJS.Timeout;
+  announced?: AnnouncedPort;
 }
 
 export interface RuntimeSummary {
@@ -37,10 +39,6 @@ export interface RuntimeSummary {
   exitCode: number | null;
   adopted: boolean;
 }
-
-const URL_RE = /https?:\/\/(?:localhost|127\.0\.0\.1|\[::1?\]|0\.0\.0\.0):(\d{2,5})/;
-// eslint-disable-next-line no-control-regex
-const ANSI_RE = /\x1b\[[0-9;]*m/g;
 
 const isAlive = (pid: number) => {
   try {
@@ -104,10 +102,11 @@ class ProcessManager extends EventEmitter {
     this.emit('log', id, line);
 
     // L'app annonce un autre port que prévu (config interne prioritaire) → on suit le port réel.
-    const m = text.replace(ANSI_RE, '').match(URL_RE);
-    if (m && r.status === 'starting' && Number(m[1]) !== r.port) {
-      this.log(id, 'sys', tr({ en: 'Port announced by the app: {port} (expected {expected}).', fr: 'Port annoncé par l’app : {port} (prévu {expected}).' }, { port: m[1], expected: String(r.port) }));
-      r.port = Number(m[1]);
+    // Seule la première URL du lancement compte (les suivantes : services tiers, cf. AnnouncedPort).
+    const announced = stream !== 'sys' && r.status === 'starting' ? r.announced?.take(text) : null;
+    if (announced != null && announced !== r.port) {
+      this.log(id, 'sys', tr({ en: 'Port announced by the app: {port} (expected {expected}).', fr: 'Port annoncé par l’app : {port} (prévu {expected}).' }, { port: String(announced), expected: String(r.port) }));
+      r.port = announced;
       if (state.processes[id]) state.processes[id].port = r.port;
       persist();
     }
@@ -152,7 +151,7 @@ class ProcessManager extends EventEmitter {
 
     Object.assign(r, {
       status: 'starting', port, pid: null, exitCode: null, adopted: false, stopRequested: false,
-      startedAt: new Date().toISOString(), logs: [],
+      startedAt: new Date().toISOString(), logs: [], announced: new AnnouncedPort(),
     } satisfies Partial<Runtime>);
     this.log(app.id, 'sys', `$ ${cmd} ${args.join(' ')}   (cwd: ${app.relPath}${port !== null ? `, port ${port}` : ''})`);
 

@@ -6,6 +6,7 @@ import path from 'node:path';
 import Fastify from 'fastify';
 import { loadModules, parseModuleDirs, type LoadOptions } from './loader.js';
 import { CoreEvents } from './events.js';
+import { SessionBadges } from './badges.js';
 
 const tmp = () => fs.mkdtempSync(path.join(os.tmpdir(), 'tarmac-modules-'));
 
@@ -152,5 +153,74 @@ test('core.on et core.lang : événements relayés, erreur d’un abonné attrib
   assert.equal(events.count('agent:turn'), 0);
   events.emit('agent:turn', { ...turn, state: 'permission' });
   assert.deepEqual((await app.inject('/api/modules/listener/seen')).json().seen, ['working', 'idle']);
+  await app.close();
+});
+
+test('ctx.core.launchConsole : transmis à l\'option du cœur ; refus sans option', async () => {
+  const root = tmp();
+  const dir = makeModule(root, 'con', { apiVersion: 1, id: 'con', name: 'Con', server: 'server.js' }, {
+    'server.js': `export function register(ctx) {
+      ctx.app.get('/go', async () => ({ s: await ctx.core.launchConsole({ command: 'x', label: 'L', env: { A: '1' } }) }));
+    }`,
+  });
+  const calls: any[] = [];
+  const { app } = await setup([dir], tmp(), { launchConsole: async (spec) => { calls.push(spec); return { id: 's1', label: 'L', status: 'running', exitCode: null }; } });
+  assert.equal((await app.inject('/api/modules/con/go')).json().s.id, 's1');
+  assert.deepEqual(calls[0].env, { A: '1' });
+  const bare = await setup([dir]);
+  assert.equal((await bare.app.inject('/api/modules/con/go')).statusCode, 500);
+});
+
+test('core.suivi, dispatch, usage, terminals : fournis par le cœur ; valeurs inertes par défaut', async () => {
+  const root = tmp();
+  const m = makeModule(root, 'ext', { apiVersion: 1, id: 'ext', name: 'E', server: 'server.js' }, {
+    'server.js': `
+      export function register(ctx) {
+        ctx.app.get('/x', async () => {
+          let refused = null;
+          try { await ctx.core.dispatch('p', 't'); } catch (e) { refused = e.message; }
+          return { projects: ctx.core.suivi.projects(), tasks: ctx.core.suivi.tasks('p'), usage: await ctx.core.usage(), terminals: ctx.core.terminals(), refused };
+        });
+      }`,
+  });
+  const inert = await setup([m]);
+  const a = (await inert.app.inject('/api/modules/ext/x')).json();
+  assert.deepEqual([a.projects, a.tasks, a.terminals], [[], [], []]);
+  assert.equal(a.usage.claude.status, 'error');
+  assert.match(a.refused, /not available/);
+  await inert.app.close();
+
+  const extensions = {
+    suivi: { projects: () => [{ suiviProjectId: 'p', name: 'P', appProjectId: 'ap' }], tasks: () => [] },
+    dispatch: async () => ({ terminalId: 'term', sessionId: null }),
+    usage: async () => ({ claude: { status: 'ok' as const, session: { utilization: 7, resetsAt: null } }, codex: null }),
+    terminals: () => [{ id: 'term', projectId: 'ap', status: 'running' as const, exitCode: null }],
+  };
+  const real = await setup([m], tmp(), { extensions });
+  const b = (await real.app.inject('/api/modules/ext/x')).json();
+  assert.equal(b.projects[0].appProjectId, 'ap');
+  assert.equal(b.usage.claude.session.utilization, 7);
+  assert.equal(b.terminals[0].id, 'term');
+  assert.equal(b.refused, null);
+  await real.app.close();
+});
+
+test('core.sessionBadges : fournisseur du module relayé, retiré si register échoue ou après désabonnement', async () => {
+  const root = tmp();
+  const good = makeModule(root, 'good', { apiVersion: 1, id: 'good', name: 'G', server: 'server.js' }, {
+    'server.js': `export function register(ctx) {
+      const off = ctx.core.sessionBadges((sessions) => ({ [sessions[0].id]: [{ label: ctx.core.lang() }] }));
+      ctx.app.post('/off', async () => { off(); return { ok: true }; });
+    }`,
+  });
+  const failing = makeModule(root, 'failing', { apiVersion: 1, id: 'failing', name: 'F', server: 'server.js' }, {
+    'server.js': `export function register(ctx) { ctx.core.sessionBadges(() => ({ s1: [{ label: 'never' }] })); throw new Error('register failed'); }`,
+  });
+  const badges = new SessionBadges({ warn: () => {} });
+  const { app } = await setup([good, failing], tmp(), { badges, lang: () => 'fr' });
+  assert.equal(badges.size, 1);
+  assert.deepEqual(await badges.collect([{ id: 's1' }]), { s1: [{ label: 'fr' }] });
+  await app.inject({ method: 'POST', url: '/api/modules/good/off' });
+  assert.equal(badges.size, 0);
   await app.close();
 });

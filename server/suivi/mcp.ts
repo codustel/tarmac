@@ -55,6 +55,7 @@ const TASK_FIELDS = {
   doneAt: z.string().nullable().optional(),
   toTest: z.boolean().optional().describe('Done by Claude, waiting for the user to test it'),
   note: z.string().optional(),
+  auto: z.boolean().optional().describe('Marks the task for an autopilot module (Tarmac Pro): it may start it unattended, in order'),
   sources: z.array(SOURCE).optional(),
   archived: z.boolean().optional().describe('Removes the task from the view (never delete)'),
   order: z.number().optional(),

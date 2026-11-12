@@ -119,6 +119,7 @@ export default {
   'todolist.field.check': 'vérification',
   'todolist.field.sources': 'sources',
   'todolist.field.requestedAt': 'demandée à Claude',
+  'todolist.field.auto': 'pilote auto',
   'todolist.field.requestedTo': 'session demandée',
 
   // « Envoyer à Claude » (bouton ▶ Claude d'une tâche non traitée)
@@ -144,6 +145,9 @@ export default {
   'todolist.requestedTitle': 'Demandée le {date} à {to}',
   'todolist.requestedNew': 'une nouvelle session',
   'todolist.requestedCopy': 'Claude (consigne copiée)',
+  'todolist.auto': 'Auto',
+  'todolist.autoTitle': "Tâche à traiter par le pilote automatique (Pro) : clique pour l'activer ou la retirer",
+  'todolist.autoProTitle': "Pilote auto : fonctionnalité Pro, clique pour la découvrir",
   'todolist.requestedCount': 'Demandées à Claude : {n}',
   'todolist.origin.tarmac': 'Tarmac',
   'todolist.origin.artifact': 'artefact',

@@ -19,7 +19,7 @@
 
 <p align="center"><a href="README.fr.md">Version française</a></p>
 
-**Tarmac** is a local dashboard for macOS and Windows. It finds every project in your code folders, starts and stops them with
+**Tarmac** is a local dashboard for macOS. It finds every project in your code folders, starts and stops them with
 a free port, streams their logs, gives you a console and a Git menu in the browser, and runs your coding agents'
 sessions there: Claude Code (also followed from claude.ai or your phone) and Codex, OpenAI's agent included in
 ChatGPT plans. It runs as a login service on
@@ -83,6 +83,25 @@ are `git fetch` on your repositories and the GitHub API with your own token, to 
   sessions and Todolist).
 - Optional, to install yourself (Tarmac only flags them): Docker Desktop / OrbStack / Colima (Docker view, local
   Supabase) and the Supabase CLI.
+
+### Install the dependencies yourself
+
+Tarmac installs Git, `gh`, Claude Code and Codex for you (see [Tools](#tools)). To install everything by hand
+instead, or for Node.js, Docker and the Supabase CLI, which Tarmac never installs, type these commands in Terminal
+(macOS). On Windows, follow [Windows (WSL 2)](docs/windows.md).
+
+| Dependency | Needed for | Install | Then |
+|---|---|---|---|
+| [Homebrew](https://brew.sh) | the commands below | `/bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"` | |
+| [Node.js](https://nodejs.org) 22.13+ | Tarmac itself (required) | `brew install node` (or with [nvm](https://github.com/nvm-sh/nvm): `nvm install 22`) | `node -v` |
+| Git | Git menu, cloning | `brew install git` (or `xcode-select --install`) | |
+| [GitHub CLI](https://cli.github.com) | GitHub tab, Clone | `brew install gh` | `gh auth login` |
+| [Claude Code](https://claude.com/claude-code) | Claude sessions, Todolist | `curl -fsSL https://claude.ai/install.sh \| bash` (or `npm install -g @anthropic-ai/claude-code`) | `claude` (sign in on first launch) |
+| [Codex](https://developers.openai.com/codex) | Codex sessions, Todolist | `npm install -g @openai/codex` (or `brew install --cask codex`) | `codex login` |
+| Docker: [Docker Desktop](https://www.docker.com/products/docker-desktop/), [OrbStack](https://orbstack.dev) or [Colima](https://github.com/abiosoft/colima) | Docker view, local Supabase | `brew install --cask docker-desktop`, or `brew install --cask orbstack`, or `brew install colima docker` | open the app (Colima: `colima start`) |
+| [Supabase CLI](https://supabase.com/docs/guides/local-development/cli/getting-started) | local Supabase | `brew install supabase/tap/supabase` | `supabase start` in a project |
+
+`tarmac doctor` then lists what is still missing.
 
 ## Install
 

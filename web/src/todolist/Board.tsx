@@ -4,6 +4,8 @@ import { api, type AgentKind, type SuiviDetail, type SuiviJournalEntry, type Sui
 import { copy, useToast } from '../ui';
 import { fmtDate, fmtDateTime, translateNow, useT, type TKey } from '../i18n';
 import { RequestedBadge, SendToClaude } from './SendToClaude';
+import { PRO_FEATURES, autoButtonMode } from '../pro/features';
+import { ProBadge, ProUpsellModal } from '../pro/ProUpsellModal';
 
 /** Date courte d'une tâche (« 3 nov. »), avec l'année si ce n'est pas l'année en cours. */
 const fmtShortDate = (d: string) =>
@@ -21,7 +23,7 @@ export function WhoIcon({ who, className }: { who: string; className?: string })
   return <span className={className} role="img" title={name} aria-label={name}>{i > 0 ? label.slice(0, i) : label}</span>;
 }
 const FIELDS = ['created', 'done', 'tested', 'testedAt', 'testNote', 'doneAt', 'note', 'toTest', 'title', 'archived',
-  'order', 'phase', 'who', 'minutes', 'why', 'steps', 'check', 'sources', 'requestedAt', 'requestedTo'] as const;
+  'order', 'phase', 'who', 'minutes', 'why', 'steps', 'check', 'sources', 'requestedAt', 'requestedTo', 'auto'] as const;
 const FIELD = Object.fromEntries(FIELDS.map((f) => [f, `todolist.field.${f}`])) as Record<string, TKey>;
 const ORIGIN: Record<string, TKey> = { tarmac: 'todolist.origin.tarmac', 'app-manager': 'todolist.origin.tarmac', artifact: 'todolist.origin.artifact', claude: 'todolist.origin.claude' };
 
@@ -113,6 +115,11 @@ export function Board({ suiviId, appProjectId, focusTaskId, onOpenTerminal }: {
     setTimeout(() => document.getElementById(`tl-task-${suiviId}-${t.id}`)?.scrollIntoView({ behavior: 'smooth', block: 'center' }), 80);
   }, [focusTaskId, q.data, suiviId]);
 
+  // Bouton « Auto » : bascule avec le module Pro `autopilot`, sinon pastille Pro qui ouvre la proposition (7.16).
+  const modulesQ = useQuery({ queryKey: ['modules'], queryFn: api.modules, staleTime: Infinity });
+  const settingsQ = useQuery({ queryKey: ['settings'], queryFn: api.settings, staleTime: 60_000 });
+  const autoMode = modulesQ.data ? autoButtonMode(modulesQ.data, !!settingsQ.data?.hideProTeasers) : 'none';
+  const [autoUpsell, setAutoUpsell] = useState(false);
   const patch = useMutation({
     mutationFn: ({ t, changes }: { t: SuiviTask; changes: Parameters<typeof api.suiviPatch>[3] }) => api.suiviPatch(suiviId, t.id, t.rev, changes),
     onSuccess: (task) => {
@@ -280,6 +287,14 @@ export function Board({ suiviId, appProjectId, focusTaskId, onOpenTerminal }: {
                               <button type="button" className="tl-badge-tested" disabled={patch.isPending} title={t.testedAt ? tr('todolist.board.testedOnTitle', { date: fmtDate(t.testedAt, {}) }) : tr('todolist.board.testedTitle')}
                                 onClick={() => patch.mutate({ t, changes: { toTest: true, tested: false, testedAt: null } })}>{tr('todolist.board.tested')}</button>
                             ) : null}
+                            {(!t.done && !t.toTest) && autoMode === 'toggle' && (
+                              <button type="button" className={`tl-auto${t.auto ? ' tl-auto-on' : ''}`} aria-pressed={!!t.auto} disabled={patch.isPending} title={tr('todolist.autoTitle')}
+                                onClick={() => patch.mutate({ t, changes: { auto: !t.auto } })}>{tr('todolist.auto')}</button>
+                            )}
+                            {(!t.done && !t.toTest) && autoMode === 'pro' && (
+                              <button type="button" className="tl-auto tl-auto-pro" title={tr('todolist.autoProTitle')} data-testid={`auto-pro-${t.id}`}
+                                onClick={() => setAutoUpsell(true)}>{tr('todolist.auto')} <ProBadge /></button>
+                            )}
                             <RequestedBadge task={t} />
                             <SendToClaude suiviId={suiviId} task={t} onOpenTerminal={onOpenTerminal} />
                             <WhoIcon who={t.who} className={`tl-pill tl-pill-icon tl-who-${t.who}`} />
@@ -345,6 +360,7 @@ export function Board({ suiviId, appProjectId, focusTaskId, onOpenTerminal }: {
           {counts.total > 0 && shownCount === 0 && <div className="tl-empty">{tr('todolist.board.noMatch')}</div>}
         </div>
       </div>
+      {autoUpsell && <ProUpsellModal feature={PRO_FEATURES.find((f) => f.id === 'autopilot')!} onClose={() => setAutoUpsell(false)} />}
     </div>
   );
 }

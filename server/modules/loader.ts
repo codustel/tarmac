@@ -11,6 +11,8 @@ import fastifyStatic from '@fastify/static';
 import { openSqlite } from '../sqlite.js';
 import type { ModuleContext, ModuleManifest, ModuleProject, ModuleText, RegisterModule } from './api.js';
 import { CoreEvents } from './events.js';
+import { NO_EXTENSIONS, type CoreExtensions } from './extensions.js';
+import { SessionBadges } from './badges.js';
 
 export const MODULE_API_VERSION = 1;
 const ID = /^[a-z][a-z0-9-]{1,39}$/;
@@ -40,6 +42,12 @@ export interface LoadOptions {
   lang?: () => 'en' | 'fr';
   /** Bus des événements du cœur relayés aux modules (`ctx.core.on`) ; un bus vide par défaut. */
   events?: CoreEvents;
+  /** Lance une commande dans la console système (`ctx.core.launchConsole`) ; absent → refusé. */
+  launchConsole?: ModuleContext['core']['launchConsole'];
+  /** Points d'extension du cœur (Todolist, envoi de tâche, usage, consoles) ; vides par défaut. */
+  extensions?: CoreExtensions;
+  /** Registre des fournisseurs de pastilles de sessions (`ctx.core.sessionBadges`) ; un registre vide par défaut. */
+  badges?: SessionBadges;
 }
 
 /** `TARMAC_MODULES` → dossiers absolus (vides ignorés). */
@@ -84,6 +92,7 @@ function jsonSettings(file: string): ModuleContext['settings'] {
 export async function loadModules(app: FastifyInstance, opts: LoadOptions): Promise<ModuleInfo[]> {
   const infos: ModuleInfo[] = [];
   const events = opts.events ?? new CoreEvents();
+  const badges = opts.badges ?? new SessionBadges();
   const lang = opts.lang ?? (() => 'en' as const);
   for (const dir of opts.dirs) {
     const info: ModuleInfo = { id: path.basename(dir), name: path.basename(dir), version: '', dir, icon: null, webUrl: null, status: 'error', error: null };
@@ -126,6 +135,12 @@ export async function loadModules(app: FastifyInstance, opts: LoadOptions): Prom
             subs.add(unsubscribe);
             return unsubscribe;
           };
+          const sessionBadges: ModuleContext['core']['sessionBadges'] = (provider) => {
+            const off = badges.add(m.id, provider, () => info.status === 'loaded');
+            const unsubscribe = () => { off(); subs.delete(unsubscribe); };
+            subs.add(unsubscribe);
+            return unsubscribe;
+          };
           const ctx: ModuleContext = {
             id: m.id,
             app: scope,
@@ -133,7 +148,11 @@ export async function loadModules(app: FastifyInstance, opts: LoadOptions): Prom
             openDb: (migrations) => openSqlite(path.join(dataDir, 'data.db'), migrations),
             settings: jsonSettings(path.join(dataDir, 'settings.json')),
             log,
-            core: { version: opts.coreVersion, projects: opts.projects, lang, on },
+            core: {
+              version: opts.coreVersion, projects: opts.projects, lang, on, sessionBadges,
+              ...(opts.extensions ?? NO_EXTENSIONS),
+              launchConsole: opts.launchConsole ?? (async () => { throw new Error('Console unavailable'); }),
+            },
           };
           try {
             await register(ctx);

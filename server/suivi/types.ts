@@ -51,6 +51,8 @@ export interface Task {
    */
   requestedAt: string | null;
   requestedTo: string;
+  /** Marquée « auto » : candidate au traitement par un module de pilote automatique (inerte sans module). */
+  auto: boolean;
 }
 
 /** Couleurs d'une variante (claire ou sombre) du thème d'un projet. */
@@ -85,12 +87,15 @@ export interface SuiviProject {
 export const TASK_FIELDS = [
   'order', 'phase', 'phaseTitle', 'num', 'title', 'who', 'minutes', 'why', 'steps', 'check',
   'done', 'doneAt', 'note', 'toTest', 'tested', 'testedAt', 'testNote', 'parent', 'sources', 'archived',
-  'requestedAt', 'requestedTo',
+  'requestedAt', 'requestedTo', 'auto',
 ] as const;
 export type TaskField = (typeof TASK_FIELDS)[number];
 
 /** Champs modifiables depuis l'onglet Todolist de Tarmac et l'artefact (D7 : on y coche et on y annote). */
 export const UI_FIELDS: readonly TaskField[] = ['done', 'doneAt', 'note', 'toTest', 'tested', 'testedAt', 'requestedAt', 'requestedTo'];
+
+/** Champs modifiables depuis la vue Tarmac : ceux de l'artefact, plus `auto` (déclenche un traitement sans surveillance : l'artefact ne le modifie jamais, il l'affiche seulement). */
+export const TARMAC_UI_FIELDS: readonly TaskField[] = [...UI_FIELDS, 'auto'];
 
 /** Tâche « non traitée » : ni faite, ni à tester, ni archivée (seules celles-ci peuvent être envoyées à Claude). */
 export const isUntreated = (t: Pick<Task, 'done' | 'toTest' | 'archived'>) => !t.done && !t.toTest && !t.archived;
@@ -139,7 +144,7 @@ export function sanitizeField(field: TaskField, v: unknown): unknown {
     case 'testNote': return str(v, 4000);
     case 'who': return WHO.includes(v as Who) ? v : 'claude';
     case 'steps': return Array.isArray(v) ? v.slice(0, 60).map((s) => str(s, 2000)) : [];
-    case 'done': case 'toTest': case 'tested': case 'archived': return v === true;
+    case 'done': case 'toTest': case 'tested': case 'archived': case 'auto': return v === true;
     case 'doneAt': case 'testedAt': case 'requestedAt': return date(v);
     // Texte affiché tel quel : caractères de contrôle retirés.
     case 'requestedTo': return str(v, 120).replace(/[\u0000-\u001f\u007f-\u009f]/g, ' ').trim();
