@@ -184,14 +184,40 @@ export async function listClaudeSessions(force = false): Promise<Omit<ClaudeSess
 }
 
 /**
- * Rattache chaque session au projet le plus profond dont le dossier contient son `cwd`.
+ * Dépôt principal d'un worktree git lié (dossier voisin du projet, hors de son arbre), ou null : remonte jusqu'au
+ * `.git` ; un *fichier* `.git` (`gitdir: <principal>/.git/worktrees/<nom>`) + `commondir` désignent le `.git` commun.
+ */
+export function worktreeMain(cwd: string): string | null {
+  try {
+    for (let d = cwd; ; d = path.dirname(d)) {
+      const git = path.join(d, '.git');
+      if (fs.existsSync(git)) {
+        if (!fs.statSync(git).isFile()) return null;
+        const m = /^gitdir:\s*(.+)$/m.exec(fs.readFileSync(git, 'utf8'));
+        if (!m) return null;
+        const gitdir = path.resolve(d, m[1].trim());
+        const common = path.resolve(gitdir, fs.readFileSync(path.join(gitdir, 'commondir'), 'utf8').trim());
+        return path.basename(common) === '.git' ? path.dirname(common) : null;
+      }
+      if (path.dirname(d) === d) return null;
+    }
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Rattache chaque session au projet le plus profond dont le dossier contient son `cwd` ; à défaut, un worktree git
+ * lié (voisin du projet, hors de son arbre) va au projet de son dépôt principal.
  * `dirs` : dossiers des projets (apps et racines de groupe).
  */
-export function assignSessions<T extends { cwd: string }>(sessions: T[], dirs: string[]): Map<string, T[]> {
+export function assignSessions<T extends { cwd: string }>(sessions: T[], dirs: string[], mainOf: (cwd: string) => string | null = worktreeMain): Map<string, T[]> {
   const sorted = [...new Set(dirs)].sort((a, b) => b.length - a.length);
+  const find = (cwd: string) => sorted.find((p) => cwd === p || cwd.startsWith(p + path.sep));
   const out = new Map<string, T[]>();
   for (const s of sessions) {
-    const d = sorted.find((p) => s.cwd === p || s.cwd.startsWith(p + path.sep));
+    const main = find(s.cwd) ? null : mainOf(s.cwd);
+    const d = find(s.cwd) ?? (main ? find(main) : undefined);
     if (d) out.set(d, [...(out.get(d) ?? []), s]);
   }
   return out;
