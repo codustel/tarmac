@@ -1,6 +1,6 @@
 {
   "name": "@codustel/tarmac",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "private": false,
   "type": "module",
   "description": "Claude Code, Codex and every project on one runway: a local dashboard to run and watch your dev apps, ports, logs, Git, Docker, local Supabase and your Claude Code and Codex sessions. https://runtarmac.com",

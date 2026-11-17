@@ -1,6 +1,7 @@
 # Using Tarmac on Windows (WSL 2)
 
-Tarmac is built for macOS, and `tarmac setup` only runs there. On Windows it runs **inside WSL 2** (Ubuntu or
+On Windows, [Tarmac Pro](https://runtarmac.com/pricing/) installs natively, with automatic updates. The free
+version described here runs **inside WSL 2** (Ubuntu or
 Debian), started by hand: the dashboard, project detection, start / stop with ports and live logs, consoles,
 the Git menu, GitHub, local Supabase and the Claude Todolist all work, and you use it from your Windows browser.
 This setup is not officially supported: it is tested on Linux (Debian, Node 22), not on every Windows machine.

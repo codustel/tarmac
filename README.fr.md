@@ -13,7 +13,7 @@
 
 <p align="center"><a href="README.md">English version</a></p>
 
-**Tarmac** est un tableau de bord local pour macOS. Il trouve tous les projets de vos dossiers de code, les démarre
+**Tarmac** est un tableau de bord local pour macOS et Windows. Il trouve tous les projets de vos dossiers de code, les démarre
 et les arrête sur un port libre, affiche leurs logs en direct, offre une console et un menu Git dans le navigateur,
 et y fait tourner les sessions de vos agents de code : Claude Code (suivi aussi depuis claude.ai ou votre téléphone)
 et Codex, l'agent d'OpenAI inclus dans les abonnements ChatGPT. Il
@@ -76,7 +76,8 @@ sont `git fetch` sur vos dépôts et l'API GitHub avec votre propre token, pour 
 
 ## Prérequis
 
-- macOS (Apple silicon ou Intel).
+- macOS (Apple silicon ou Intel), ou Windows : en natif avec [Tarmac Pro](https://runtarmac.com/fr/tarifs/), ou la
+  version gratuite dans WSL 2 (voir [Windows (WSL 2)](docs/windows.md), en anglais).
 - [Node.js](https://nodejs.org) **22.13 ou plus récent** (Tarmac utilise `node:sqlite`, intégré à Node).
 - Facultatif : [GitHub CLI](https://cli.github.com) (`gh`), Docker Desktop / OrbStack / Colima (vue Docker, Supabase local),
   [Claude Code](https://claude.com/claude-code) et / ou [Codex](https://developers.openai.com/codex) (sessions
@@ -181,7 +182,7 @@ Codex passe par la vue Todolist de Tarmac et la copie `Todolist/` (voir [Codex](
 - [Codex](docs/codex.md) : sessions Codex, serveur MCP, règle `AGENTS.md`, skill `$suivi`, bouton ▶ et utilisation.
 - [Security](docs/security.md) : où Tarmac écoute, ce qu'il peut lancer, ce qui demande `sudo` et pourquoi.
 - [Troubleshooting](docs/troubleshooting.md) : accès à `~/Documents`, port 80, app installée, migration.
-- [Windows (WSL 2)](docs/windows.md) : utiliser Tarmac sous Windows, et ce qui n'y marche pas.
+- [Windows (WSL 2)](docs/windows.md) : utiliser la version gratuite sous Windows, et ce qui y change.
 - [Extensions](docs/extensions.md) (en anglais) : modules qui ajoutent des routes, une vue et des réglages sans modifier Tarmac.
 - [Uninstall](docs/uninstall.md).
 
@@ -191,8 +192,10 @@ Codex passe par la vue Todolist de Tarmac et la copie `Todolist/` (voir [Codex](
 sécurisés, nécessaires à l'app installée (PWA), au service worker et au presse-papiers. `http://tarmac.test`
 fonctionne aussi et redirige vers cette adresse.
 
-**Windows ou Linux ?** Tarmac est fait pour macOS et `tarmac setup` ne tourne que là. Sous Windows, il tourne dans
-WSL 2, lancé à la main, avec quelques fonctions en moins : voir [Windows (WSL 2)](docs/windows.md).
+**Windows ou Linux ?** Oui sous Windows, de deux façons. [Tarmac Pro](https://runtarmac.com/fr/tarifs/) a un
+installeur Windows natif avec mises à jour automatiques. La version gratuite tourne dans WSL 2, lancée à la main,
+avec quelques fonctions en moins : voir [Windows (WSL 2)](docs/windows.md). Le paquet npm et `tarmac setup` sont
+pour macOS. Sous Linux, la version gratuite tourne depuis un clone, comme dans WSL 2.
 
 **Faut-il le port 80 ?** Non. Tarmac utilise `http://tarmac.localhost:7777` ; `--port-80` sert seulement à avoir une adresse sans port.
 

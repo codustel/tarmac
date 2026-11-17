@@ -12,14 +12,14 @@
 <p align="center">
   <a href="https://www.npmjs.com/package/@codustel/tarmac"><img src="https://img.shields.io/npm/v/@codustel/tarmac" alt="npm version"></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-blue" alt="MIT license"></a>
-  <img src="https://img.shields.io/badge/platform-macOS-lightgrey" alt="macOS">
+  <img src="https://img.shields.io/badge/platform-macOS%20%7C%20Windows-lightgrey" alt="macOS and Windows">
 </p>
 
 <p align="center">Created by <strong>Ismaël Belaaouad</strong> · Codustel — <a href="https://www.linkedin.com/in/codustel/">LinkedIn</a> · <a href="https://x.com/ismael_b_ai">X</a></p>
 
 <p align="center"><a href="README.fr.md">Version française</a></p>
 
-**Tarmac** is a local dashboard for macOS. It finds every project in your code folders, starts and stops them with
+**Tarmac** is a local dashboard for macOS and Windows. It finds every project in your code folders, starts and stops them with
 a free port, streams their logs, gives you a console and a Git menu in the browser, and runs your coding agents'
 sessions there: Claude Code (also followed from claude.ai or your phone) and Codex, OpenAI's agent included in
 ChatGPT plans. It runs as a login service on
@@ -76,7 +76,8 @@ are `git fetch` on your repositories and the GitHub API with your own token, to 
 
 ## Requirements
 
-- macOS (Apple silicon or Intel).
+- macOS (Apple silicon or Intel), or Windows: natively with [Tarmac Pro](https://runtarmac.com/pricing/), or the
+  free version inside WSL 2 (see [Windows (WSL 2)](docs/windows.md)).
 - [Node.js](https://nodejs.org) **22.13 or later** (Tarmac uses the built-in `node:sqlite`).
 - Optional, and installed for you by Tarmac (see [Tools](#tools)): Git, [GitHub CLI](https://cli.github.com) (`gh`),
   [Claude Code](https://claude.com/claude-code) and / or [Codex](https://developers.openai.com/codex) (agent
@@ -200,7 +201,7 @@ copy (see [Codex](docs/codex.md)).
 - [Codex](docs/codex.md): Codex sessions, MCP server, `AGENTS.md` rule, `$suivi` skill, ▶ button and usage.
 - [Security](docs/security.md): what Tarmac listens on, what it can run, what needs `sudo` and why.
 - [Troubleshooting](docs/troubleshooting.md): `~/Documents` access, port 80, installed app, migration.
-- [Windows (WSL 2)](docs/windows.md): running Tarmac on Windows, and what does not work there.
+- [Windows (WSL 2)](docs/windows.md): running the free version on Windows, and what differs there.
 - [Extensions](docs/extensions.md): modules that add routes, a view and settings without patching Tarmac.
 - [Uninstall](docs/uninstall.md).
 
@@ -209,8 +210,10 @@ copy (see [Codex](docs/codex.md)).
 **Why `tarmac.localhost`?** Browsers treat `localhost` and `*.localhost` as secure contexts, which the installed app
 (PWA), the service worker and the clipboard need. `http://tarmac.test` also works and redirects there.
 
-**Does it work on Windows or Linux?** Tarmac is built for macOS and `tarmac setup` only runs there. On Windows it
-runs inside WSL 2, started by hand, with a few features missing: see [Windows (WSL 2)](docs/windows.md).
+**Does it work on Windows or Linux?** Yes on Windows, two ways. [Tarmac Pro](https://runtarmac.com/pricing/) has a
+native Windows installer with automatic updates. The free version runs inside WSL 2, started by hand, with a few
+features missing: see [Windows (WSL 2)](docs/windows.md). The npm package and `tarmac setup` are for macOS. On
+Linux, the free version runs from a clone, the same way as in WSL 2.
 
 **Do I need port 80?** No. Tarmac uses `http://tarmac.localhost:7777`; `--port-80` is only for an address without port.
 

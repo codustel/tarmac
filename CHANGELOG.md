@@ -3,6 +3,13 @@
 All notable changes to Tarmac are listed here. The format follows [Keep a Changelog](https://keepachangelog.com),
 and versions follow [Semantic Versioning](https://semver.org).
 
+## [1.0.1] - 2026-11-17
+
+### Changed
+
+- README and Windows guide: Windows is presented as supported, natively with Tarmac Pro or with the free
+  version inside WSL 2. The npm package itself remains for macOS.
+
 ## [1.0.0] - 2026-11-17
 
 First public release. Tarmac was previously a private tool named App Manager.
@@ -39,4 +46,5 @@ First public release. Tarmac was previously a private tool named App Manager.
 - `tarmac setup` replaces the App Manager service, copies `~/.app-manager` to `~/.tarmac` (the original is kept),
   replaces `manager.localhost` with `tarmac.localhost`, and the `app-manager` MCP server with `tarmac`.
 
+[1.0.1]: https://github.com/codustel/tarmac/releases/tag/v1.0.1
 [1.0.0]: https://github.com/codustel/tarmac/releases/tag/v1.0.0
