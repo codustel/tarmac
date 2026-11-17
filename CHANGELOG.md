@@ -3,7 +3,7 @@
 All notable changes to Tarmac are listed here. The format follows [Keep a Changelog](https://keepachangelog.com),
 and versions follow [Semantic Versioning](https://semver.org).
 
-## [1.0.0] - Unreleased
+## [1.0.0] - 2026-11-17
 
 First public release. Tarmac was previously a private tool named App Manager.
 
