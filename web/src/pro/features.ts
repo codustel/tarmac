@@ -1,4 +1,4 @@
-import { Bell, BookOpenCheck, Gauge, LineChart, MonitorDown, Moon, type LucideIcon } from 'lucide-react';
+import { Bell, BookOpenCheck, Eraser, Gauge, LineChart, MonitorDown, Moon, type LucideIcon } from 'lucide-react';
 
 /** Texte bilingue. */
 export type Bi = { fr: string; en: string };
@@ -35,6 +35,9 @@ export const PRO_FEATURES: ProFeature[] = [
   { id: 'setup', unlockedBy: { module: 'setup' }, icon: BookOpenCheck,
     name: { fr: 'Tout installer', en: 'Install everything' },
     pitch: { fr: 'Homebrew, Node, Docker, Supabase… installés en un clic, dans le bon ordre.', en: 'Homebrew, Node, Docker, Supabase… installed in one click, in the right order.' } },
+  { id: 'leftovers', unlockedBy: { module: 'leftovers' }, icon: Eraser,
+    name: { fr: 'Restes de sessions', en: 'Session leftovers' },
+    pitch: { fr: 'Retrouvez et arrêtez les serveurs et navigateurs que vos sessions Claude et Codex ont laissés tourner.', en: 'Find and stop the servers and browsers your Claude and Codex sessions left running.' } },
 ];
 
 /** Fonctionnalités à montrer : aucune si `hidden`, sinon celles dont le module est absent (et pas Desktop si `isDesktop`). */
@@ -52,10 +55,13 @@ export function lockedProFeatures(
 export const pricingUrl = (lang: 'fr' | 'en') => (lang === 'fr' ? 'https://runtarmac.com/fr/tarifs/' : 'https://runtarmac.com/pricing/');
 
 /**
- * Bouton « Auto » d'une tâche de la Todolist : `toggle` (module `autopilot` chargé : bascule normale), `pro`
- * (absent : pastille Pro, ouvre la proposition) ou `none` (absent et propositions Pro coupées).
+ * Bouton d'une fonctionnalité Pro : `toggle` (module `moduleId` chargé : fonctionnalité normale), `pro` (absent :
+ * pastille Pro, ouvre la proposition) ou `none` (absent et propositions Pro coupées).
  */
-export function autoButtonMode(modules: Array<{ id: string }>, hidden: boolean): 'toggle' | 'pro' | 'none' {
-  if (modules.some((m) => m.id === 'autopilot')) return 'toggle';
+export function proButtonMode(modules: Array<{ id: string; status?: string }>, moduleId: string, hidden: boolean): 'toggle' | 'pro' | 'none' {
+  if (modules.some((m) => m.id === moduleId)) return 'toggle';
   return hidden ? 'none' : 'pro';
 }
+
+/** Bouton « Auto » d'une tâche de la Todolist (module `autopilot`). */
+export const autoButtonMode = (modules: Array<{ id: string; status?: string }>, hidden: boolean) => proButtonMode(modules, 'autopilot', hidden);

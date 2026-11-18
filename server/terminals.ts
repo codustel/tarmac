@@ -3,6 +3,7 @@ import crypto from 'node:crypto';
 import type { IPty } from '@lydell/node-pty';
 import type { Project } from './scanner.js';
 import { tr } from './i18n.js';
+import { BOOT_ID, sessionMarkerEnv } from './bootId.js';
 import { commandArgs, interactiveArgs, killTree, prependPath, shell as currentShell } from './platform.js';
 
 /** Cible d'une console : un projet, ou une cible « système » (ex. `gh auth login`). */
@@ -94,6 +95,7 @@ class TerminalManager extends EventEmitter {
     if (!pty) throw new Error(tr({ en: 'Console unavailable (node-pty): {error}', fr: 'Console indisponible (node-pty) : {error}' }, { error: String(ptyError) }));
 
     const shell = currentShell();
+    const id = crypto.randomUUID().slice(0, 8);
     const env: Record<string, string> = {
       ...(process.env as Record<string, string>),
       ...project.env,
@@ -104,6 +106,7 @@ class TerminalManager extends EventEmitter {
     };
     prependPath(env, project.pathPrepend);
     for (const k of opts.unsetEnv ?? []) delete env[k];
+    Object.assign(env, sessionMarkerEnv(BOOT_ID, id, opts.kind));
 
     // Commande : shell non-login (`-c`, `-NoProfile`) pour garder le PATH de Tarmac (et le venv) intact.
     const args = opts.command ? commandArgs(opts.command, shell) : interactiveArgs(shell);
@@ -116,7 +119,7 @@ class TerminalManager extends EventEmitter {
     });
 
     const s: Session = {
-      id: crypto.randomUUID().slice(0, 8),
+      id,
       projectId: project.id,
       projectName: opts.projectName ?? '',
       kind: opts.kind ?? (opts.command ? 'command' : 'shell'),

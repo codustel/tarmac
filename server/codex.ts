@@ -150,7 +150,14 @@ const fileOf = new Map<string, string>();
 let cache: { at: number; dir: string; sessions: CodexSession[] } = { at: 0, dir: '', sessions: [] };
 
 /** Process `codex` en cours (mode démo : seulement ceux du HOME factice). */
-export const codexProcs = () => scanAgentProcs({ claudeDir: claudeDir(), kinds: ['codex'], onlyUnder: isDemo() ? realHome() : null });
+export const codexProcs = (strict = false) => scanAgentProcs({ claudeDir: claudeDir(), kinds: ['codex'], onlyUnder: isDemo() ? realHome() : null, strict });
+/** Process `codex` vivants avec leur session rattachée (`sessionId`, null si inconnue) : `resume <id>`, sinon transcript du dossier. */
+export async function codexProcsWithSession(strict = false) {
+  const procs = await codexProcs(strict);
+  const sessions = await listCodexSessions().catch(() => []);
+  const att = attachSessions(procs, sessions.map((s) => ({ ...s, agent: 'codex' as const })));
+  return procs.map((p) => ({ ...p, sessionId: att.get(p.pid)?.sessionId ?? null }));
+}
 const realHome = () => { try { return fs.realpathSync(os.homedir()); } catch { return os.homedir(); } };
 
 const emptyTitle = <S extends { title: string; titleSource: ClaudeSession['titleSource'] }>(list: S[]): S[] =>

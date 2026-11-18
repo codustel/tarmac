@@ -1,3 +1,4 @@
+import { LeftoversButton } from './LeftoversButton';
 import { useMemo, useState } from 'react';
 import { useMutation, useQuery } from '@tanstack/react-query';
 import { ChevronDown, ChevronRight, ExternalLink, GitBranch, History, MessageSquare, Play, Plus, Radio, RefreshCw, Search, SquareTerminal, X } from 'lucide-react';
@@ -213,6 +214,7 @@ export function ClaudeSessionsView({ terminals, activeId, onActive, projects, ag
             </div>
           ))}
         </div>
+        <LeftoversButton agent={agent} />
         <Button icon={<History className="size-3.5" />} variant={showHistory ? 'primary' : 'default'} onClick={() => setShowHistory((v) => !v)}>
           {tr('claude.view.history')}{all.data ? ` · ${all.data.length}` : ''}
         </Button>

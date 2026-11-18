@@ -1,25 +1,25 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { PRO_FEATURES, autoButtonMode, lockedProFeatures, pricingUrl } from './features';
+import { PRO_FEATURES, autoButtonMode, proButtonMode, lockedProFeatures, pricingUrl } from './features';
 
 const mod = (id: string, status = 'loaded') => ({ id, status });
 const ids = (l: { id: string }[]) => l.map((f) => f.id);
 
-test('rien de chargé : les 6 fonctionnalités', () => {
+test('rien de chargé : les 7 fonctionnalités', () => {
   assert.deepEqual(ids(lockedProFeatures(PRO_FEATURES, [], { isDesktop: false, hidden: false })).sort(),
-    ['autopilot', 'context', 'costs', 'desktop', 'notifications', 'setup']);
+    ['autopilot', 'context', 'costs', 'desktop', 'leftovers', 'notifications', 'setup']);
 });
 
 test('module costs présent, même en erreur : ni coûts ni contexte', () => {
   const r = ids(lockedProFeatures(PRO_FEATURES, [mod('costs', 'error')], { isDesktop: false, hidden: false }));
   assert.ok(!r.includes('costs') && !r.includes('context'));
-  assert.equal(r.length, 4);
+  assert.equal(r.length, 5);
 });
 
 test('isDesktop : pas de Desktop', () => {
   const r = ids(lockedProFeatures(PRO_FEATURES, [], { isDesktop: true, hidden: false }));
   assert.ok(!r.includes('desktop'));
-  assert.equal(r.length, 5);
+  assert.equal(r.length, 6);
 });
 
 test('hidden : liste vide', () => {
@@ -27,7 +27,7 @@ test('hidden : liste vide', () => {
 });
 
 test('modules inconnus sans effet', () => {
-  assert.equal(lockedProFeatures(PRO_FEATURES, [mod('autre')], { isDesktop: false, hidden: false }).length, 6);
+  assert.equal(lockedProFeatures(PRO_FEATURES, [mod('autre')], { isDesktop: false, hidden: false }).length, 7);
 });
 
 test('pricingUrl par langue', () => {
@@ -52,4 +52,11 @@ test('bouton « Auto » de la Todolist : bascule avec le module autopilot (tout 
   assert.equal(autoButtonMode([], false), 'pro');
   assert.equal(autoButtonMode([], true), 'none');
   assert.equal(autoButtonMode([mod('autopilot')], true), 'toggle');
+});
+
+test('bouton Pro générique : module chargé → toggle, absent → pastille Pro, masqué si coupé', () => {
+  assert.equal(proButtonMode([mod('leftovers')], 'leftovers', false), 'toggle');
+  assert.equal(proButtonMode([], 'leftovers', false), 'pro');
+  assert.equal(proButtonMode([], 'leftovers', true), 'none');
+  assert.equal(proButtonMode([mod('autopilot')], 'leftovers', false), 'pro');
 });

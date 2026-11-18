@@ -273,6 +273,8 @@ export interface ScanOptions {
   onlyUnder?: string | null;
   /** Âge maximal du cache (2,5 s par défaut). */
   maxAgeMs?: number;
+  /** Relance l'erreur si `ps` échoue au lieu de renvoyer une liste vide (qui ferait croire qu'aucun agent ne tourne). */
+  strict?: boolean;
 }
 
 /** Cache et lecture en cours, par jeu d'options (Claude et Codex sont lus à part). */
@@ -282,7 +284,7 @@ const inflights = new Map<string, Promise<AgentProc[]>>();
 /** Process d'agents en cours (cache de 2,5 s, une seule lecture à la fois par jeu d'options). */
 export async function scanAgentProcs(opts: ScanOptions): Promise<AgentProc[]> {
   const kinds = opts.kinds ?? ['claude'];
-  const key = `${opts.claudeDir}|${opts.onlyUnder ?? ''}|${kinds.join(',')}`;
+  const key = `${opts.claudeDir}|${opts.onlyUnder ?? ''}|${kinds.join(',')}|${opts.strict ? 'strict' : ''}`;
   const cache = caches.get(key);
   if (cache && Date.now() - cache.at < (opts.maxAgeMs ?? 2500)) return cache.procs;
   const running = inflights.get(key);
@@ -300,7 +302,7 @@ export async function scanAgentProcs(opts: ScanOptions): Promise<AgentProc[]> {
         ]);
         rows = parsePs(a.stdout, b.stdout);
       }
-    } catch { return []; }
+    } catch (e) { if (opts.strict) throw e; return []; }
     const candidates = rows.filter((r) => { const a = agentOf(r.comm, r.args); return !!a && kinds.includes(a); });
     let cwds = new Map<number, string>();
     if (candidates.length && !isWindows()) {

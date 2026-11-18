@@ -1,3 +1,4 @@
+import { LeftoversButton } from './LeftoversButton';
 import { useEffect, useRef, useState } from 'react';
 import { useMutation } from '@tanstack/react-query';
 import { BookOpen, Code2, ExternalLink, Globe, ListChecks, Play, ScrollText, Skull, SquareTerminal, TerminalSquare, X } from 'lucide-react';
@@ -79,6 +80,7 @@ export function ProjectPanel({ project, webApps = [], tab: wanted, onTab, onClos
             {rt.url.replace('http://', '')} <ExternalLink className="size-3" />
           </a>
         )}
+        <LeftoversButton projectDir={project.dir} />
         <IconButton title={t('projects.action.openVsCode')} onClick={() => api.open(project.dir, 'editor').catch((e) => toast('err', e.message))}><VsCodeIcon className="size-3.5" /></IconButton>
         <IconButton title={t('projects.action.openIde')} onClick={() => openInIde(project.id)}><Code2 className="size-4" /></IconButton>
         <IconButton title={t('projects.action.closeEsc')} onClick={onClose}><X className="size-4" /></IconButton>

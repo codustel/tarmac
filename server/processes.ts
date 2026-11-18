@@ -78,6 +78,11 @@ class ProcessManager extends EventEmitter {
     return r;
   }
 
+  /** Pids des projets lancés (`running` / `starting`). */
+  pids(): number[] {
+    return [...this.rt.values()].flatMap((r) => ((r.status === 'running' || r.status === 'starting') && r.pid ? [r.pid] : []));
+  }
+
   summary(id: string): RuntimeSummary {
     const r = this.get(id);
     return {

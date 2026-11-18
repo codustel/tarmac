@@ -15,12 +15,13 @@ import { cachedGithubRepos, invalidateGithubCache, listGithubRepos } from './git
 import { listSupabase } from './supabase.js';
 import { dockerAct, dockerOverview, dockerStats, isComposeProject, isContainerId, isDockerAction, openDockerApp, setDockerProjects } from './docker.js';
 import { processes } from './processes.js';
+import { BOOT_ID } from './bootId.js';
 import { SYSTEM_ID, terminals } from './terminals.js';
 import { EDITOR_APPS, matchOpen, openEditorFolders } from './editors.js';
 import crypto from 'node:crypto';
 import { assignSessions, claudeCommand, claudeDir, claudeProcs, claudeTurnState, listClaudeSessions, transcriptFile } from './claude.js';
 import { buildRunningAgents, type RunningAgent } from './agents.js';
-import { codexCommand, codexProcs, codexTranscriptFile, codexTurnState, listCodexSessions, readCodexUsage, type CodexUsage } from './codex.js';
+import { codexCommand, codexProcs, codexProcsWithSession, readSessionIndex, codexTranscriptFile, codexTurnState, listCodexSessions, readCodexUsage, type CodexUsage } from './codex.js';
 import type { AgentKind } from './agentProcs.js';
 import { RepoEventsCache, TIMELINE_DAYS, mergeTimeline, type TimelineEvent, type TimelineRepo } from './timeline.js';
 import { ClaudeUsageService, readCredentials } from './claudeUsage.js';
@@ -46,7 +47,7 @@ import { demo, demoBinDir, demoClaudeUsage, isDemo } from './demo/index.js';
 import { crossOriginFetch, originAllowed } from './originGuard.js';
 import { loadModules, parseModuleDirs } from './modules/loader.js';
 import { makeLaunchConsole } from './modules/console.js';
-import { buildCoreExtensions } from './modules/extensions.js';
+import { allAgentProcs, buildCoreExtensions } from './modules/extensions.js';
 import { SessionBadges, withBadges } from './modules/badges.js';
 import { AgentTurnTracker, CoreEvents, ProcessStatusTracker, TaskStatusTracker, type AgentSnapshot } from './modules/events.js';
 import { envVar } from './dataDir.js';
@@ -1318,6 +1319,16 @@ await loadModules(app, {
     claudeUsage: () => claudeUsage.get(),
     codexUsage: () => (!settings.agents.codex || !settings.showCodexUsage ? null : (() => { try { return readCodexUsage(); } catch { return { status: 'error', plan: null, limits: [], fetchedAt: null } as CodexUsage; } })()),
     terminals: () => terminals.list(),
+    tarmacPid: process.pid,
+    bootId: BOOT_ID,
+    projectPids: () => processes.pids(),
+    projectDirOf: (id) => lastScan.projects.find((p) => p.id === id)?.dir ?? null,
+    agents: () => allAgentProcs(() => claudeProcs(true), () => codexProcsWithSession(true)),
+    sessionTitle: async (agent, sessionId) => {
+      if (agent === 'claude') return (await listClaudeSessions().catch(() => [])).find((x) => x.id === sessionId)?.title || null;
+      return readSessionIndex().get(sessionId) ?? (await listCodexSessions().catch(() => [])).find((x) => x.id === sessionId)?.title ?? null;
+    },
+    isDemo: () => isDemo(),
   }),
   badges: sessionBadges,
 });

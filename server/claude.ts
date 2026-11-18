@@ -127,7 +127,7 @@ function readIndex(dir: string): Map<string, any> {
 }
 
 /** Process `claude` en cours (mode démo : seulement ceux du HOME factice, sans app parente). */
-export const claudeProcs = () => scanAgentProcs({ claudeDir: claudeDir(), onlyUnder: isDemo() ? realHome() : null });
+export const claudeProcs = (strict = false) => scanAgentProcs({ claudeDir: claudeDir(), onlyUnder: isDemo() ? realHome() : null, strict });
 const realHome = () => { try { return fs.realpathSync(os.homedir()); } catch { return os.homedir(); } };
 
 let cache: { at: number; sessions: Omit<ClaudeSession, 'terminalId'>[] } = { at: 0, sessions: [] };

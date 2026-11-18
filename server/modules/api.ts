@@ -156,6 +156,19 @@ export interface ModuleTerminal {
   exitCode: number | null;
 }
 
+/** Process que Tarmac possède : lui-même, ses projets lancés et ses consoles. */
+export interface ModuleOwnedPids {
+  tarmacPid: number; bootId: string; projectPids: number[];
+  terminals: Array<{ id: string; shellPid: number | null; status: 'running' | 'exited';
+    agent: 'claude' | 'codex' | null; sessionId: string | null; projectDir: string }>;
+}
+
+/** Process d'agent (Claude Code, Codex) vivant sur la machine. */
+export interface ModuleAgentProc {
+  agent: 'claude' | 'codex'; pid: number; startedAt: string; cwd: string | null;
+  sessionId: string | null; status: 'working' | 'idle' | null; statusSince: string | null;
+}
+
 /** Événements auxquels un module peut s'abonner par `ctx.core.on(event, cb)`. */
 export interface ModuleCoreEvents {
   'agent:turn': ModuleAgentTurnEvent;
@@ -248,6 +261,14 @@ export interface ModuleContext {
     usage(): Promise<ModuleUsage>;
     /** Consoles de Tarmac (lecture seule). */
     terminals(): ModuleTerminal[];
+    /** Process possédés par Tarmac (lui, ses projets, ses consoles) et marqueur de ce démarrage. */
+    ownedPids(): ModuleOwnedPids;
+    /** Process d'agents (Claude Code, Codex) en cours sur la machine ; rejette si la liste n'a pas pu être lue. */
+    agents(): Promise<ModuleAgentProc[]>;
+    /** Titre d'une session d'agent, null s'il est inconnu. */
+    sessionTitle(agent: 'claude' | 'codex', sessionId: string): Promise<string | null>;
+    /** Vrai en mode démo. */
+    isDemo(): boolean;
     /** Pastilles affichées à côté des sessions Claude ; renvoie de quoi se désabonner. */
     sessionBadges(provider: SessionBadgeProvider): () => void;
   };
@@ -259,6 +280,8 @@ export type RegisterModule = (ctx: ModuleContext) => void | Promise<void>;
 export interface ModuleWebContext {
   id: string;
   lang: 'en' | 'fr';
+  /** Paramètres passés à la vue par son hôte (ex. fenêtre ouverte depuis un bouton du cœur) ; vide sinon. */
+  params?: Readonly<Record<string, string>>;
   theme(): 'light' | 'dark';
   /** Appelé à chaque changement de thème ; renvoie de quoi se désabonner. */
   onThemeChange(cb: (theme: 'light' | 'dark') => void): () => void;

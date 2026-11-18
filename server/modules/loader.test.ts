@@ -5,6 +5,7 @@ import os from 'node:os';
 import path from 'node:path';
 import Fastify from 'fastify';
 import { loadModules, parseModuleDirs, type LoadOptions } from './loader.js';
+import { NO_EXTENSIONS } from './extensions.js';
 import { CoreEvents } from './events.js';
 import { SessionBadges } from './badges.js';
 
@@ -190,11 +191,14 @@ test('core.suivi, dispatch, usage, terminals : fournis par le cœur ; valeurs in
   assert.match(a.refused, /not available/);
   await inert.app.close();
 
+  const { ownedPids, agents, sessionTitle, isDemo } = NO_EXTENSIONS;
+  const NO_EXTENSIONS_REST = { ownedPids, agents, sessionTitle, isDemo };
   const extensions = {
     suivi: { projects: () => [{ suiviProjectId: 'p', name: 'P', appProjectId: 'ap' }], tasks: () => [] },
     dispatch: async () => ({ terminalId: 'term', sessionId: null }),
     usage: async () => ({ claude: { status: 'ok' as const, session: { utilization: 7, resetsAt: null } }, codex: null }),
     terminals: () => [{ id: 'term', projectId: 'ap', status: 'running' as const, exitCode: null }],
+    ...NO_EXTENSIONS_REST,
   };
   const real = await setup([m], tmp(), { extensions });
   const b = (await real.app.inject('/api/modules/ext/x')).json();

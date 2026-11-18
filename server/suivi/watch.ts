@@ -4,6 +4,7 @@
  */
 import fs from 'node:fs';
 import path from 'node:path';
+import { execFileSync } from 'node:child_process';
 import { tr, uiLang } from '../i18n.js';
 import { COPY_FILE_RE, type SuiviService, type SuiviFile } from './service.js';
 import { buildTheme, detectPrimary } from './theme.js';
@@ -63,6 +64,16 @@ export function detectDisplayFont(dir: string) {
   return FONTS.find((f) => md.includes(f) && f !== 'Inter');
 }
 
+/** Vrai si `dir` est le worktree principal de son dépôt (pas un worktree lié), via `git rev-parse --git-common-dir`. */
+function isMainWorktree(dir: string): boolean {
+  try {
+    const common = execFileSync('git', ['rev-parse', '--path-format=absolute', '--git-common-dir'], { cwd: dir, stdio: ['ignore', 'pipe', 'ignore'], encoding: 'utf8' }).trim();
+    return fs.realpathSync(path.dirname(common)) === fs.realpathSync(dir);
+  } catch { return false; }
+}
+
+const dirExists = (d: string | undefined): d is string => !!d && fs.existsSync(d) && fs.statSync(d).isDirectory();
+
 export class TodolistWatcher {
   /** projectId → dossier racine, pour la surveillance. */
   private roots = new Map<string, ProjectRoot>();
@@ -78,13 +89,18 @@ export class TodolistWatcher {
   /** Appelé après chaque scan : enregistre les projets qui ont un `Todolist/` et importe leurs copies. */
   sync(roots: ProjectRoot[]) {
     const seen = new Set<string>();
-    for (const root of roots) {
+    const chosen = new Set<string>();
+    // Worktree principal d'abord : les worktrees liés (même projectId) ne le supplantent pas.
+    const ordered = roots.map((r) => ({ r, main: isMainWorktree(r.dir) })).sort((a, b) => Number(b.main) - Number(a.main)).map((x) => x.r);
+    for (const root of ordered) {
       if (seen.has(root.dir)) continue;
       seen.add(root.dir);
       const config = readJson<SuiviConfig>(path.join(root.dir, SUIVI_DIR, 'suivi.config.json'));
       const file = findCopyFile(root.dir, config);
       if (!file && !config) continue;
       const projectId = projectIdOf(root, config);
+      if (chosen.has(projectId)) continue;
+      chosen.add(projectId);
       this.roots.set(projectId, root);
       try {
         this.register(projectId, root, config, file);
@@ -139,7 +155,8 @@ export class TodolistWatcher {
    */
   writeCopy(projectId: string): string {
     const p = this.service.requireProject(projectId);
-    const dir = this.roots.get(projectId)?.dir ?? p.paths[0];
+    // Premier dossier qui existe : jamais de création d'un dossier de projet absent (worktree supprimé).
+    const dir = [this.roots.get(projectId)?.dir, ...p.paths].find(dirExists);
     if (!dir) throw new Error(tr({ en: 'No known folder for this project', fr: 'Aucun dossier connu pour ce projet' }));
     if (!COPY_FILE_RE.test(p.copyFile)) throw new Error(tr({ en: 'Invalid copy name: {file}', fr: 'Nom de copie invalide : {file}' }, { file: p.copyFile }));
     if (!this.allowDir(dir)) throw new Error(tr({ en: 'Folder outside the scanned folders: {dir}', fr: 'Dossier hors des dossiers scannés : {dir}' }, { dir }));

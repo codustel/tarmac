@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { buildCoreExtensions, type ExtensionDeps } from './extensions.js';
+import { allAgentProcs, buildCoreExtensions, NO_EXTENSIONS, type ExtensionDeps } from './extensions.js';
 import { sanitizeTask, type SuiviProject } from '../suivi/types.js';
 import type { ClaudeUsage } from '../claudeUsage.js';
 import type { CodexUsage } from '../codex.js';
@@ -20,6 +20,13 @@ function deps(over: Partial<ExtensionDeps> = {}) {
     claudeUsage: async () => okUsage(),
     codexUsage: () => null,
     terminals: () => [],
+    tarmacPid: 100,
+    bootId: 'ab12cd34',
+    projectPids: () => [],
+    projectDirOf: () => null,
+    agents: async () => [],
+    sessionTitle: async () => null,
+    isDemo: () => false,
     ...over,
   };
   return { core: buildCoreExtensions(d), calls };
@@ -80,4 +87,60 @@ test('usage : aucun jeton, en-tête ni champ inconnu dans le retour, même si la
 test('terminals : seulement id, projet, statut, code de sortie', () => {
   const { core } = deps({ terminals: () => [{ id: 't1', projectId: 'p', status: 'exited', exitCode: 3, command: 'secret --token x', pid: 1 } as any] });
   assert.deepEqual(core.terminals(), [{ id: 't1', projectId: 'p', status: 'exited', exitCode: 3 }]);
+});
+
+test('ownedPids : pid de Tarmac, bootId, pids des projets et consoles mappées', () => {
+  const { core } = deps({
+    projectPids: () => [11, 12],
+    projectDirOf: (id) => (id === 'p1' ? '/work/p1' : null),
+    terminals: () => [
+      { id: 't1', projectId: 'p1', status: 'running', exitCode: null, kind: 'claude', pid: 50, claudeSessionId: 'cs1', codexSessionId: null },
+      { id: 't2', projectId: 'p1', status: 'exited', exitCode: 0, kind: 'codex', pid: null, claudeSessionId: null, codexSessionId: 'xs1' },
+      { id: 't3', projectId: '__system__', status: 'running', exitCode: null, kind: 'shell', pid: 51, claudeSessionId: null, codexSessionId: null },
+    ],
+  });
+  assert.deepEqual(core.ownedPids(), {
+    tarmacPid: 100, bootId: 'ab12cd34', projectPids: [11, 12],
+    terminals: [
+      { id: 't1', shellPid: 50, status: 'running', agent: 'claude', sessionId: 'cs1', projectDir: '/work/p1' },
+      { id: 't2', shellPid: null, status: 'exited', agent: 'codex', sessionId: 'xs1', projectDir: '/work/p1' },
+      { id: 't3', shellPid: 51, status: 'running', agent: null, sessionId: null, projectDir: '' },
+    ],
+  });
+});
+
+test('agents : statut busy→working, idle→idle, statusSince = updatedAt du fichier pid', async () => {
+  const { core } = deps({
+    agents: async () => [
+      { agent: 'claude', pid: 7, startedAt: 's', cwd: '/a', pidFile: { sessionId: 'sx', status: 'busy', updatedAt: 'u' } },
+      { agent: 'codex', pid: 8, startedAt: 's2', cwd: null, pidFile: null },
+    ],
+  });
+  assert.deepEqual(await core.agents(), [
+    { agent: 'claude', pid: 7, startedAt: 's', cwd: '/a', sessionId: 'sx', status: 'working', statusSince: 'u' },
+    { agent: 'codex', pid: 8, startedAt: 's2', cwd: null, sessionId: null, status: null, statusSince: null },
+  ]);
+});
+
+test('agents : sessionId rattaché d\'un agent Codex (sans fichier pid) est repris', async () => {
+  const { core } = deps({
+    agents: async () => [{ agent: 'codex', pid: 8, startedAt: 's2', cwd: '/c', sessionId: 'T1', pidFile: null }],
+  });
+  assert.equal((await core.agents())[0].sessionId, 'T1');
+});
+
+test('NO_EXTENSIONS : valeurs vides', async () => {
+  assert.deepEqual(NO_EXTENSIONS.ownedPids().projectPids, []);
+  assert.equal(await NO_EXTENSIONS.sessionTitle('claude', 'x'), null);
+  assert.deepEqual(await NO_EXTENSIONS.agents(), []);
+  assert.equal(NO_EXTENSIONS.isDemo(), false);
+});
+
+test('allAgentProcs : Claude et Codex toujours lus, quels que soient les réglages', async () => {
+  assert.deepEqual(await allAgentProcs(async () => [{ pid: 1 }], async () => [{ pid: 2 }]), [{ pid: 1 }, { pid: 2 }]);
+});
+
+test('allAgentProcs : rejette si un des deux scans échoue', async () => {
+  await assert.rejects(allAgentProcs(async () => { throw new Error('ps timeout'); }, async () => [{ pid: 2 }]), /ps timeout/);
+  await assert.rejects(allAgentProcs(async () => [{ pid: 1 }], async () => { throw new Error('ps timeout'); }), /ps timeout/);
 });

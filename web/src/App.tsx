@@ -15,6 +15,7 @@ import { AndroidView } from './views/AndroidView';
 import { SettingsView } from './views/SettingsView';
 import { ModuleIcon, ModuleView } from './views/ModuleView';
 import { TodolistView } from './views/TodolistView';
+import { LeftoversModal } from './views/LeftoversButton';
 import { ClaudeIcon, ClaudeSessionsView, StandaloneTerminal } from './views/ClaudeSessions';
 import { ClaudeUsagePanel, CodexUsagePanel } from './views/ClaudeUsagePanel';
 import { TimelineView } from './views/TimelineView';
@@ -105,6 +106,14 @@ export default function App() {
 }
 
 function Main({ terminals }: { terminals: import('./api').TerminalSession[] }) {
+  // Fenêtre « Restes » ouverte par une adresse (#leftovers/claude ou #leftovers/codex), ex. depuis Tarmac Desktop.
+  const leftoversOf = () => (location.hash.match(/^#leftovers\/(claude|codex)$/)?.[1] ?? null) as 'claude' | 'codex' | null;
+  const [leftoversRoute, setLeftoversRoute] = useState(leftoversOf);
+  useEffect(() => {
+    const on = () => setLeftoversRoute(leftoversOf());
+    window.addEventListener('hashchange', on);
+    return () => window.removeEventListener('hashchange', on);
+  }, []);
   const [claudeTab, setClaudeTab] = useState<string | null>(null);
   const [codexTab, setCodexTab] = useState<string | null>(null);
   const [tab, setTab] = useState<Tab>(tabFromHash);
@@ -161,9 +170,9 @@ function Main({ terminals }: { terminals: import('./api').TerminalSession[] }) {
   const toast = useToast();
   const connected = useConnected();
 
-  useEffect(() => { if (location.hash.slice(1) !== tab) location.hash = tab; }, [tab]);
+  useEffect(() => { if (location.hash.slice(1) !== tab && !location.hash.startsWith('#leftovers/')) location.hash = tab; }, [tab]);
   useEffect(() => {
-    const onHash = () => { if (!location.hash.startsWith('#term/')) setTab(tabFromHash()); };
+    const onHash = () => { if (!location.hash.startsWith('#term/') && !location.hash.startsWith('#leftovers/')) setTab(tabFromHash()); };
     const onKey = (e: KeyboardEvent) => {
       if (e.key === '/' && location.hash !== '#ide' && !['INPUT', 'TEXTAREA', 'SELECT'].includes(document.activeElement?.tagName ?? '') && !(e.target as HTMLElement).closest('.xterm')) {
         e.preventDefault();
@@ -385,6 +394,7 @@ function Main({ terminals }: { terminals: import('./api').TerminalSession[] }) {
       </aside>
       <ToolsWelcome />
       <ToolGateModal />
+      {leftoversRoute && <LeftoversModal agent={leftoversRoute} onClose={() => { location.hash = tab; }} />}
       {proFeature && <ProUpsellModal feature={proFeature} onClose={() => setProFeature(null)} />}
       {licenseOpen && <LicenseModal onClose={() => setLicenseOpen(false)} />}
 

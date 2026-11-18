@@ -11,7 +11,7 @@ import type { SuiviProject, Task } from '../suivi/types.js';
 import { taskStatus } from './events.js';
 import type { ModuleContext, ModuleUsage, ModuleUsageWindow } from './api.js';
 
-export type CoreExtensions = Pick<ModuleContext['core'], 'suivi' | 'dispatch' | 'usage' | 'terminals'>;
+export type CoreExtensions = Pick<ModuleContext['core'], 'suivi' | 'dispatch' | 'usage' | 'terminals' | 'ownedPids' | 'agents' | 'sessionTitle' | 'isDemo'>;
 
 export interface ExtensionDeps {
   projects(): SuiviProject[];
@@ -24,7 +24,20 @@ export interface ExtensionDeps {
   claudeUsage(): Promise<ClaudeUsage>;
   /** Usage Codex, null si Codex n'est pas coché ou si l'affichage est coupé. */
   codexUsage(): CodexUsage | null;
-  terminals(): Array<{ id: string; projectId: string; status: 'running' | 'exited'; exitCode: number | null }>;
+  terminals(): Array<{ id: string; projectId: string; status: 'running' | 'exited'; exitCode: number | null;
+    kind?: string; pid?: number | null; claudeSessionId?: string | null; codexSessionId?: string | null }>;
+  tarmacPid: number;
+  bootId: string;
+  /** Pids des projets lancés par Tarmac (`running` / `starting`). */
+  projectPids(): number[];
+  /** Dossier d'un projet scanné, null s'il est inconnu. */
+  projectDirOf(projectId: string): string | null;
+  agents(): Promise<Array<{ agent: 'claude' | 'codex'; pid: number; startedAt: string; cwd: string | null;
+    /** Session rattachée hors fichier pid (Codex : transcript du dossier, argument `resume`). */
+    sessionId?: string | null;
+    pidFile: { sessionId: string | null; status: 'busy' | 'idle' | null; updatedAt: string | null } | null }>>;
+  sessionTitle(agent: 'claude' | 'codex', sessionId: string): Promise<string | null>;
+  isDemo(): boolean;
 }
 
 const window = (limits: Array<{ kind: string; utilization: number; resetsAt: string | null }>): ModuleUsageWindow | null => {
@@ -54,6 +67,25 @@ export function buildCoreExtensions(deps: ExtensionDeps): CoreExtensions {
       };
     },
     terminals: () => deps.terminals().map((t) => ({ id: t.id, projectId: t.projectId, status: t.status, exitCode: t.exitCode })),
+    ownedPids: () => ({
+      tarmacPid: deps.tarmacPid,
+      bootId: deps.bootId,
+      projectPids: deps.projectPids(),
+      terminals: deps.terminals().map((t) => ({
+        id: t.id, shellPid: t.pid ?? null, status: t.status,
+        agent: t.kind === 'claude' || t.kind === 'codex' ? t.kind : null,
+        sessionId: t.claudeSessionId ?? t.codexSessionId ?? null,
+        projectDir: deps.projectDirOf(t.projectId) ?? '',
+      })),
+    }),
+    agents: async () => (await deps.agents()).map((a) => ({
+      agent: a.agent, pid: a.pid, startedAt: a.startedAt, cwd: a.cwd,
+      sessionId: a.pidFile?.sessionId ?? a.sessionId ?? null,
+      status: a.pidFile?.status === 'busy' ? 'working' : a.pidFile?.status === 'idle' ? 'idle' : null,
+      statusSince: a.pidFile?.updatedAt ?? null,
+    })),
+    sessionTitle: (agent, sessionId) => deps.sessionTitle(agent, sessionId),
+    isDemo: () => deps.isDemo(),
   };
 }
 
@@ -63,4 +95,18 @@ export const NO_EXTENSIONS: CoreExtensions = {
   dispatch: async () => { throw new Error('core.dispatch is not available'); },
   usage: async () => ({ claude: { status: 'error', session: null }, codex: null }),
   terminals: () => [],
+  ownedPids: () => ({ tarmacPid: process.pid, bootId: '', projectPids: [], terminals: [] }),
+  agents: async () => [],
+  sessionTitle: async () => null,
+  isDemo: () => false,
 };
+
+/**
+ * Tous les process d'agents vivants (Claude Code puis Codex), sans tenir compte des agents cochés dans les
+ * réglages : un module qui croirait une session morte pourrait arrêter les enfants d'un agent encore vivant.
+ * Rejette si un des deux scans échoue : une liste incomplète ferait croire des agents morts.
+ */
+export async function allAgentProcs<T>(claude: () => Promise<T[]>, codex: () => Promise<T[]>): Promise<T[]> {
+  const [c, x] = await Promise.all([claude(), codex()]);
+  return [...c, ...x];
+}

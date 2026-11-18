@@ -15,10 +15,11 @@ export function ModuleIcon({ svg, className }: { svg: string | null; className?:
 }
 
 /** Vue d'un module : charge son module ES (`webUrl`) et appelle `mount(el, ctx)` ; remontée au changement de langue. */
-export function ModuleView({ module }: { module: ModuleInfo | undefined }) {
+export function ModuleView({ module, params }: { module: ModuleInfo | undefined; params?: Record<string, string> }) {
   const t = useT();
   const el = useRef<HTMLDivElement>(null);
   const [state, setState] = useState<'loading' | 'ready' | string>('loading');
+  const paramsKey = JSON.stringify(params ?? {});
 
   useEffect(() => {
     if (!module?.webUrl || module.status !== 'loaded' || !el.current) return;
@@ -30,6 +31,7 @@ export function ModuleView({ module }: { module: ModuleInfo | undefined }) {
     const ctx: ModuleWebContext = {
       id,
       lang: t.lang,
+      params: JSON.parse(paramsKey),
       theme: currentTheme,
       onThemeChange(cb) {
         const obs = new MutationObserver(() => cb(currentTheme()));
@@ -54,7 +56,7 @@ export function ModuleView({ module }: { module: ModuleInfo | undefined }) {
       cancelled = true;
       try { cleanup?.(); } finally { target.replaceChildren(); }
     };
-  }, [module?.id, module?.webUrl, module?.status, t.lang]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [module?.id, module?.webUrl, module?.status, t.lang, paramsKey]); // eslint-disable-line react-hooks/exhaustive-deps
 
   if (!module) return <p className="text-[13px] text-muted">{t('common.moduleNotFound')}</p>;
   if (module.status !== 'loaded') return <p className="text-[13px] text-red-600 dark:text-red-400">{t('common.moduleUnavailable', { error: module.error ?? module.status })}</p>;
