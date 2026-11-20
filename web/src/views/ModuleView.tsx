@@ -3,6 +3,7 @@ import type { ModuleInfo } from '../api';
 import type { ModuleWebContext, MountModule } from '../../../server/modules/api';
 import { cx } from '../ui';
 import { useT } from '../i18n';
+import { moduleFillClass } from '../moduleRoute';
 import { mountConsole } from '../tools/mountConsole';
 
 const currentTheme = (): 'light' | 'dark' => (document.documentElement.classList.contains('dark') ? 'dark' : 'light');
@@ -15,7 +16,7 @@ export function ModuleIcon({ svg, className }: { svg: string | null; className?:
 }
 
 /** Vue d'un module : charge son module ES (`webUrl`) et appelle `mount(el, ctx)` ; remontée au changement de langue. */
-export function ModuleView({ module, params }: { module: ModuleInfo | undefined; params?: Record<string, string> }) {
+export function ModuleView({ module, params, fill }: { module: ModuleInfo | undefined; params?: Record<string, string>; fill?: boolean }) {
   const t = useT();
   const el = useRef<HTMLDivElement>(null);
   const [state, setState] = useState<'loading' | 'ready' | string>('loading');
@@ -64,7 +65,7 @@ export function ModuleView({ module, params }: { module: ModuleInfo | undefined;
     <>
       {state === 'loading' && <p className="text-[13px] text-faint">{t('common.moduleLoading')}</p>}
       {state !== 'loading' && state !== 'ready' && <p className="text-[13px] text-red-600 dark:text-red-400">{t('common.moduleUnavailable', { error: state })}</p>}
-      <div ref={el} />
+      <div ref={el} className={fill ? moduleFillClass : undefined} />
     </>
   );
 }

@@ -35,6 +35,8 @@ export default {
   'ide.projects.openVsCode': 'Ouvrir dans VS Code',
   'ide.projects.emptyTitle': 'Aucun projet ouvert dans l’IDE.',
   'ide.projects.emptyHint': 'Clique sur le bouton {icon} d’un projet (onglet Projets) pour l’ouvrir ici.',
+  'ide.projects.pickTitle': 'Ouvrir un projet dans l’IDE',
+  'ide.projects.pickNone': 'Aucun projet disponible.',
   'ide.projects.close': 'Fermer le projet',
   // Diff
   'ide.diff.index': 'Index',

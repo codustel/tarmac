@@ -18,6 +18,7 @@ import { TodolistView } from './views/TodolistView';
 import { LeftoversModal } from './views/LeftoversButton';
 import { ClaudeIcon, ClaudeSessionsView, StandaloneTerminal } from './views/ClaudeSessions';
 import { ClaudeUsagePanel, CodexUsagePanel } from './views/ClaudeUsagePanel';
+import { FoldChevron, useCompactSidebar, useFold } from './views/SidebarFold';
 import { TimelineView } from './views/TimelineView';
 import { AgentLed, CodexIcon, useEnabledAgents, useRunningAgents } from './views/Agents';
 import type { AgentKind } from './api';
@@ -28,6 +29,7 @@ import { PRO_FEATURES, lockedProFeatures, type ProFeature } from './pro/features
 import { ProBadge, ProUpsellModal } from './pro/ProUpsellModal';
 import { InstallButton, UpdateBanner } from './pwa';
 import { onIdeOpen } from './ide/store';
+import { moduleRouteId, standaloneModuleClass } from './moduleRoute';
 
 /** Version affichée en bas de la barre latérale : celle de Tarmac Desktop dans l'app, sinon celle du cœur. */
 const appVersion = (core?: string) => navigator.userAgent.match(/TarmacDesktop\/([\w.-]+)/)?.[1] ?? core;
@@ -100,9 +102,28 @@ export default function App() {
     window.addEventListener('hashchange', on);
     return () => window.removeEventListener('hashchange', on);
   }, []);
+  // Vue de module seule, plein cadre : #module/<id> (ex. fenêtre Tarmac Desktop).
+  const [moduleRoute, setModuleRoute] = useState(() => moduleRouteId(location.hash));
+  useEffect(() => {
+    const on = () => setModuleRoute(moduleRouteId(location.hash));
+    window.addEventListener('hashchange', on);
+    return () => window.removeEventListener('hashchange', on);
+  }, []);
   const terminalsQ = useQuery({ queryKey: ['terminals'], queryFn: api.terminals });
+  if (moduleRoute) return <StandaloneModule id={moduleRoute} />;
   if (termRoute) return <StandaloneTerminal sid={termRoute} terminals={terminalsQ.data ?? []} />;
   return <Main terminals={terminalsQ.data ?? []} />;
+}
+
+function StandaloneModule({ id }: { id: string }) {
+  const t = useT();
+  const modules = useQuery({ queryKey: ['modules'], queryFn: api.modules });
+  if (modules.isLoading) return null;
+  const mod = modules.data?.find((m) => m.id === id);
+  if (!mod || mod.status !== 'loaded') {
+    return <div className="grid h-screen place-items-center text-sm text-neutral-500">{t.lang === 'fr' ? 'Module indisponible' : 'Module unavailable'}</div>;
+  }
+  return <div className={standaloneModuleClass}><ModuleView module={mod} fill /></div>;
 }
 
 function Main({ terminals }: { terminals: import('./api').TerminalSession[] }) {
@@ -170,9 +191,9 @@ function Main({ terminals }: { terminals: import('./api').TerminalSession[] }) {
   const toast = useToast();
   const connected = useConnected();
 
-  useEffect(() => { if (location.hash.slice(1) !== tab && !location.hash.startsWith('#leftovers/')) location.hash = tab; }, [tab]);
+  useEffect(() => { if (location.hash.slice(1) !== tab && !location.hash.startsWith('#leftovers/') && !location.hash.startsWith('#module/')) location.hash = tab; }, [tab]);
   useEffect(() => {
-    const onHash = () => { if (!location.hash.startsWith('#term/') && !location.hash.startsWith('#leftovers/')) setTab(tabFromHash()); };
+    const onHash = () => { if (!location.hash.startsWith('#term/') && !location.hash.startsWith('#leftovers/') && !location.hash.startsWith('#module/')) setTab(tabFromHash()); };
     const onKey = (e: KeyboardEvent) => {
       if (e.key === '/' && location.hash !== '#ide' && !['INPUT', 'TEXTAREA', 'SELECT'].includes(document.activeElement?.tagName ?? '') && !(e.target as HTMLElement).closest('.xterm')) {
         e.preventDefault();
@@ -278,6 +299,9 @@ function Main({ terminals }: { terminals: import('./api').TerminalSession[] }) {
   const [proFeature, setProFeature] = useState<ProFeature | null>(null);
   const proSettings = useQuery({ queryKey: ['settings'], queryFn: api.settings, staleTime: 60_000 });
   const proLocked = lockedProFeatures(PRO_FEATURES, modules.data ?? [], { isDesktop: /TarmacDesktop/.test(navigator.userAgent), hidden: !!proSettings.data?.hideProTeasers });
+  // Petit écran (fenêtre basse) : navigation défilante, groupes du pied repliables (sidebarFold.ts).
+  const compact = useCompactSidebar();
+  const [rootsFolded, toggleRoots] = useFold('roots', compact);
 
   const NavButton = ({ n }: { n: (typeof nav)[number] }) => (
     <button
@@ -320,7 +344,8 @@ function Main({ terminals }: { terminals: import('./api').TerminalSession[] }) {
             )}
           </div>
         </div>
-        <nav className="shrink-0 p-2 space-y-0.5">
+        {/* Navigation : défile quand la fenêtre est trop basse ; Réglages et le pied restent visibles. */}
+        <nav className="min-h-0 overflow-y-auto p-2 pb-0 space-y-0.5 [scrollbar-width:thin]" data-testid="sidebar-nav">
           {nav.map((n) => <NavButton key={n.id} n={n} />)}
           {proLocked.length > 0 && (
             <div className="pt-2" data-testid="pro-section">
@@ -335,15 +360,18 @@ function Main({ terminals }: { terminals: import('./api').TerminalSession[] }) {
               ))}
             </div>
           )}
+        </nav>
+        <div className="shrink-0 px-2 pb-2">
           <div className="my-2 border-t border-line" />
           <NavButton n={{ id: 'settings', label: t('common.nav.settings'), icon: <Settings2 className="size-4" /> }} />
-        </nav>
+        </div>
         {/* Espace libre : utilisation Claude au-dessus du logo discret. Quand la fenêtre est trop basse, le logo
-            puis le panneau s'effacent (règles de hauteur dans index.css) : rien ne déborde ni ne défile. */}
+            puis le panneau s'effacent (règles de hauteur dans index.css) : rien ne déborde ni ne défile.
+            Petit écran (compact) : les panneaux passent dans le pied, repliables ; seul le logo reste ici. */}
         <div className="sidebar-free min-h-0 flex-1 overflow-hidden">
           <div className="sidebar-free-inner flex h-full flex-col justify-end">
-            {enabledAgents.includes('claude') && <ClaudeUsagePanel />}
-            {enabledAgents.includes('codex') && <CodexUsagePanel />}
+            {!compact && enabledAgents.includes('claude') && <ClaudeUsagePanel />}
+            {!compact && enabledAgents.includes('codex') && <CodexUsagePanel />}
             <div className="sidebar-logo flex shrink-0 justify-center px-6" aria-hidden="true">
               <img src="/tarmac-logo-light.svg" alt="" draggable={false} className="mb-4 w-[116px] select-none opacity-35 dark:hidden" />
               <img src="/tarmac-logo-dark.svg" alt="" draggable={false} className="mb-4 hidden w-[116px] select-none opacity-30 dark:block" />
@@ -351,15 +379,30 @@ function Main({ terminals }: { terminals: import('./api').TerminalSession[] }) {
           </div>
         </div>
         <div className="border-t border-line p-3 space-y-3">
+          {compact && enabledAgents.includes('claude') && <ClaudeUsagePanel compact />}
+          {compact && enabledAgents.includes('codex') && <CodexUsagePanel compact />}
           <div className="space-y-1 text-[11px] text-faint">
-            {meta.data?.roots.map((r) => (
-              <div key={r} className="flex items-center gap-1.5 truncate" title={r}><FolderTree className="size-3 shrink-0" /><span className="font-mono truncate">{tildify(r, meta.data?.home)}</span></div>
-            ))}
-            <div>{t('common.lastScan', { scan: timeAgo(meta.data?.scannedAt), fetch: timeAgo(meta.data?.lastFetchAt) })}</div>
-            <div className="flex items-center gap-1.5">
-              <span className={cx('size-1.5 rounded-full', connected ? 'bg-emerald-500' : 'bg-amber-500')} />
-              {connected ? t('common.connected') : t('common.connecting')}
-            </div>
+            {compact && (
+              <button type="button" onClick={toggleRoots} aria-expanded={!rootsFolded} data-testid="roots-fold"
+                title={rootsFolded ? t('common.fold.expand') : t('common.fold.collapse')}
+                className="flex w-full items-center gap-1.5 text-left hover:text-fg">
+                <FolderTree className="size-3 shrink-0" />
+                <span className="min-w-0 flex-1 truncate">{t('common.roots.count', { count: meta.data?.roots.length ?? 0 })}</span>
+                {rootsFolded && <span className={cx('size-1.5 shrink-0 rounded-full', connected ? 'bg-emerald-500' : 'bg-amber-500')}
+                  title={connected ? t('common.connected') : t('common.connecting')} />}
+                <FoldChevron folded={rootsFolded} />
+              </button>
+            )}
+            {!rootsFolded && (<>
+              {meta.data?.roots.map((r) => (
+                <div key={r} className="flex items-center gap-1.5 truncate" title={r}><FolderTree className="size-3 shrink-0" /><span className="font-mono truncate">{tildify(r, meta.data?.home)}</span></div>
+              ))}
+              <div>{t('common.lastScan', { scan: timeAgo(meta.data?.scannedAt), fetch: timeAgo(meta.data?.lastFetchAt) })}</div>
+              <div className="flex items-center gap-1.5">
+                <span className={cx('size-1.5 rounded-full', connected ? 'bg-emerald-500' : 'bg-amber-500')} />
+                {connected ? t('common.connected') : t('common.connecting')}
+              </div>
+            </>)}
           </div>
           <InstallButton />
           <div className="grid grid-cols-2 gap-2">

@@ -91,11 +91,25 @@ export default function IdeView({ projects, tabs, pinned, active, onActive, onCl
 
   if (order.length === 0) {
     return (
-      <div className="grid h-full place-items-center bg-bg text-[13px] text-muted">
-        <div className="max-w-sm space-y-2 text-center">
-          <Code2 className="mx-auto size-10 opacity-50" />
-          <div>{t('ide.projects.emptyTitle')}</div>
-          <div className="text-[12px]">{t.node('ide.projects.emptyHint', { icon: <Code2 className="inline size-3.5 -mt-0.5" /> })}</div>
+      <div className="grid h-full place-items-center bg-bg p-4 text-[13px] text-muted">
+        <div role="dialog" aria-label={t('ide.projects.pickTitle')} className="flex max-h-[70vh] w-full max-w-sm flex-col rounded-lg border border-line bg-panel shadow-xl">
+          <div className="flex items-center gap-2 border-b border-line px-4 py-3 font-medium text-fg">
+            <Code2 className="size-4 text-accent" />
+            {t('ide.projects.pickTitle')}
+          </div>
+          <div className="ide-scroll min-h-0 flex-1 overflow-y-auto p-1.5">
+            {projects.length === 0 && <div className="px-3 py-6 text-center">{t('ide.projects.pickNone')}</div>}
+            {projects.map((p) => (
+              <button
+                key={p.id}
+                onClick={() => { onTabs(tabs.includes(p.id) ? tabs : [...tabs, p.id]); onActive(p.id); }}
+                className="flex w-full flex-col items-start rounded-md px-3 py-2 text-left hover:bg-panel-2"
+              >
+                <span className="text-fg">{p.name}</span>
+                <span className="max-w-full truncate text-[11px]">{p.dir}</span>
+              </button>
+            ))}
+          </div>
         </div>
       </div>
     );

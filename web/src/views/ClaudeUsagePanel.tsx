@@ -1,10 +1,13 @@
-import { useLayoutEffect, useRef } from 'react';
+import { useLayoutEffect, useRef, type ReactNode } from 'react';
 import { useQuery } from '@tanstack/react-query';
+import { AlertTriangle } from 'lucide-react';
 import { api, type ClaudeUsageLimit } from '../api';
 import { CodexIcon } from './Agents';
 import { cx } from '../ui';
 import { fmtDateTime, fmtNumber, fmtTime, timeAgo, useT } from '../i18n';
 import { ClaudeIcon } from './ClaudeSessions';
+import { peakUsage } from '../sidebarFold';
+import { FoldChevron, useFold } from './SidebarFold';
 
 /** Couleur d'une jauge selon le niveau : vert < 70 %, orange < 90 %, rouge au-delà. */
 export const usageTone = (u: number) => (u < 70 ? 'green' : u < 90 ? 'orange' : 'red');
@@ -18,13 +21,50 @@ function shortReset(iso: string) {
 }
 
 /**
+ * En-tête d'un panneau d'utilisation. Grand écran : ligne fixe (icône, titre, plan). Petit écran (`compact`) :
+ * ligne cliquable qui replie ou déplie le panneau ; repliée, elle montre la plus forte jauge (ou une alerte).
+ */
+function UsageHeader({ icon, title, plan, peak, alert, compact, folded, onToggle }: {
+  icon: ReactNode; title: string; plan?: string | null; peak: number | null; alert: boolean;
+  compact: boolean; folded: boolean; onToggle: () => void;
+}) {
+  const t = useT();
+  const planBadge = plan && <span className="ml-auto shrink-0 rounded bg-panel px-1.5 text-[10px] font-semibold text-fg ring-1 ring-line">{plan}</span>;
+  if (!compact) {
+    return (
+      <div className="flex items-center gap-1.5 text-[11px] leading-4">
+        {icon}
+        <span className="truncate font-medium text-muted">{title}</span>
+        {planBadge}
+      </div>
+    );
+  }
+  return (
+    <button type="button" onClick={onToggle} aria-expanded={!folded} title={folded ? t('common.fold.expand') : t('common.fold.collapse')}
+      className="group flex w-full items-center gap-1.5 text-left text-[11px] leading-4">
+      {icon}
+      <span className="min-w-0 flex-1 truncate font-medium text-muted group-hover:text-fg">{title}</span>
+      {!folded ? planBadge : alert ? <AlertTriangle className="size-3 shrink-0 text-amber-500" aria-hidden="true" /> : peak != null && (
+        <span className={cx('shrink-0 font-semibold tabular-nums', PCT[usageTone(peak)])}>{fmtNumber(peak / 100, { style: 'percent' })}</span>
+      )}
+      <FoldChevron folded={folded} />
+    </button>
+  );
+}
+
+/** Classes du cadre d'un panneau : espace libre (grand écran) ou pied de la sidebar (petit écran, ligne repliée). */
+const panelClass = (compact: boolean, folded: boolean) =>
+  cx('usage-panel shrink-0 rounded-lg border border-line bg-panel-2/50 px-2.5', compact ? (folded ? 'py-1.5' : 'py-2') : 'mx-3 mb-3 py-2');
+
+/**
  * Utilisation de l'abonnement Claude dans l'espace libre de la sidebar : plan, puis une jauge par limite
  * (session de 5 h si le plan en a une, semaine, limites hebdomadaires par modèle comme Fable).
  * Interrogé toutes les minutes tant que la fenêtre est visible ; masqué si le réglage est désactivé.
  * `data-rows` sert aux règles de hauteur (index.css) : le logo puis le panneau s'effacent si la place manque.
  */
-export function ClaudeUsagePanel() {
+export function ClaudeUsagePanel({ compact = false }: { compact?: boolean }) {
   const t = useT();
+  const [folded, toggle] = useFold('claude-usage', compact);
   const settings = useQuery({ queryKey: ['settings'], queryFn: api.settings, staleTime: 60_000 });
   const enabled = settings.data?.showClaudeUsage !== false && !!settings.data;
   const q = useQuery({ queryKey: ['claude-usage'], queryFn: api.claudeUsage, enabled, refetchInterval: 60_000, staleTime: 55_000, retry: false });
@@ -38,15 +78,12 @@ export function ClaudeUsagePanel() {
   return (
     <div
       data-rows={rows}
-      className="usage-panel mx-3 mb-3 shrink-0 rounded-lg border border-line bg-panel-2/50 px-2.5 py-2"
+      className={panelClass(compact, folded)}
       title={ok && u.fetchedAt ? t('claude.usage.source', { when: timeAgo(u.fetchedAt) }) : undefined}
     >
-      <div className="flex items-center gap-1.5 text-[11px] leading-4">
-        <ClaudeIcon size={12} className="shrink-0" />
-        <span className="truncate font-medium text-muted">{t('claude.usage.title')}</span>
-        {u.plan && <span className="ml-auto shrink-0 rounded bg-panel px-1.5 text-[10px] font-semibold text-fg ring-1 ring-line">{u.plan}</span>}
-      </div>
-      {ok ? (
+      <UsageHeader icon={<ClaudeIcon size={12} className="shrink-0" />} title={t('claude.usage.title')} plan={u.plan}
+        peak={ok ? peakUsage(limits) : null} alert={!ok} compact={compact} folded={folded} onToggle={toggle} />
+      {folded ? null : ok ? (
         <div className="mt-1.5 space-y-1.5">
           {limits.map((l) => {
             const tone = usageTone(l.utilization);
@@ -114,9 +151,10 @@ function useSidebarFit() {
  * plan, fenêtres d'usage (5 h, semaine) en %, remise à zéro. Source : dernières limites que Codex a enregistrées
  * dans ses transcripts locaux (`/api/codex/usage`, aucun jeton lu ni appel réseau) ; rien n'est deviné.
  */
-export function CodexUsagePanel() {
+export function CodexUsagePanel({ compact = false }: { compact?: boolean }) {
   const t = useT();
   const fitRef = useSidebarFit();
+  const [folded, toggle] = useFold('codex-usage', compact);
   const settings = useQuery({ queryKey: ['settings'], queryFn: api.settings, staleTime: 60_000 });
   const enabled = !!settings.data?.agents?.codex && settings.data?.showCodexUsage !== false;
   const q = useQuery({ queryKey: ['codex-usage'], queryFn: api.codexUsage, enabled, refetchInterval: 60_000, staleTime: 55_000, retry: false });
@@ -130,15 +168,12 @@ export function CodexUsagePanel() {
       ref={fitRef}
       data-agent="codex"
       data-rows={ok ? limits.length : 1}
-      className="usage-panel mx-3 mb-3 shrink-0 rounded-lg border border-line bg-panel-2/50 px-2.5 py-2"
+      className={panelClass(compact, folded)}
       title={u.status === 'ok' && u.fetchedAt ? t('codex.usage.source', { when: timeAgo(u.fetchedAt) }) : u.status === 'none' ? t('codex.usage.noneTitle') : undefined}
     >
-      <div className="flex items-center gap-1.5 text-[11px] leading-4">
-        <CodexIcon size={12} className="shrink-0" />
-        <span className="truncate font-medium text-muted">{t('codex.usage.title')}</span>
-        {u.plan && <span className="ml-auto shrink-0 rounded bg-panel px-1.5 text-[10px] font-semibold text-fg ring-1 ring-line">{u.plan}</span>}
-      </div>
-      {ok ? (
+      <UsageHeader icon={<CodexIcon size={12} className="shrink-0" />} title={t('codex.usage.title')} plan={u.plan}
+        peak={ok ? peakUsage(limits) : null} alert={u.status === 'error'} compact={compact} folded={folded} onToggle={toggle} />
+      {folded ? null : ok ? (
         <div className="mt-1.5 space-y-1.5">
           {limits.map((l) => {
             const tone = usageTone(l.utilization);

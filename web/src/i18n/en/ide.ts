@@ -33,6 +33,8 @@ const en: typeof fr = {
   'ide.projects.openVsCode': 'Open in VS Code',
   'ide.projects.emptyTitle': 'No project open in the IDE.',
   'ide.projects.emptyHint': 'Click a project’s {icon} button (Projects tab) to open it here.',
+  'ide.projects.pickTitle': 'Open a project in the IDE',
+  'ide.projects.pickNone': 'No project available.',
   'ide.projects.close': 'Close project',
   'ide.diff.index': 'Index',
   'ide.diff.workingTree': 'Working tree',
